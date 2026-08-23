@@ -652,13 +652,32 @@
         }
 
         .addnew-form .form-group label {
-            font-size: 1rem;
+            font-size: 0.9rem;
             font-weight: 600;
             color: #444;
         }
 
         .addnew-form .form-group small {
             margin-bottom: 0.5rem;
+        }
+
+        .addnew-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            align-items: start;
+        }
+
+        .na-checkbox {
+            margin-left: 0.5rem;
+            cursor: pointer;
+            vertical-align: middle;
+        }
+
+        .form-control.na-disabled {
+            background: #f0f0f0;
+            color: #999;
+            cursor: not-allowed;
         }
 
         /* Bulk Upload Tab */
@@ -729,9 +748,148 @@
             color: #666;
             font-size: 0.9rem;
         }
+
+        /* Login Screen */
+        .login-screen {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .login-box {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .login-box h2 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: #333;
+        }
+
+        /* User Bar */
+        .user-bar {
+            background: #2d3748;
+            color: white;
+            padding: 0.5rem 2rem;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 1rem;
+            font-size: 0.85rem;
+        }
+
+        .user-bar span {
+            color: #a0aec0;
+        }
+
+        .user-bar strong {
+            color: #fff;
+        }
+
+        .user-bar .role-badge {
+            padding: 0.2rem 0.6rem;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .role-badge.admin {
+            background: #f56565;
+            color: white;
+        }
+
+        .role-badge.user {
+            background: #48bb78;
+            color: white;
+        }
+
+        .logout-btn {
+            background: none;
+            border: 1px solid #a0aec0;
+            color: #a0aec0;
+            padding: 0.3rem 0.8rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        .logout-btn:hover {
+            background: #a0aec0;
+            color: #2d3748;
+        }
+
+        /* History Tab */
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .history-table th, .history-table td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 0.85rem;
+        }
+
+        .history-table thead {
+            background: #f8f9fa;
+        }
+
+        .history-action {
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .history-action.added { background: #dcfce7; color: #16a34a; }
+        .history-action.edited { background: #fef3c7; color: #d97706; }
+        .history-action.deleted { background: #fee2e2; color: #dc2626; }
+        .history-action.imported { background: #e0e7ff; color: #4f46e5; }
     </style>
 </head>
 <body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-box">
+            <h2>🏀 Basketball League & Team Mapper</h2>
+            <p style="color:#666; margin-bottom:1.5rem;">Sign in to continue</p>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="loginUsername" class="form-control" placeholder="Enter your username">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="loginPassword" class="form-control" placeholder="Enter your password" onkeydown="if(event.key==='Enter')handleLogin()">
+            </div>
+            <div id="loginError" style="color:#f56565; margin-bottom:1rem; display:none;"></div>
+            <button class="btn btn-primary" onclick="handleLogin()" style="width:100%; padding:0.85rem; font-size:1rem;">Sign In</button>
+        </div>
+    </div>
+
+    <!-- Main App (hidden until login) -->
+    <div id="mainApp" style="display:none;">
+
+    <!-- User Bar -->
+    <div class="user-bar">
+        <span>Logged in as: <strong id="currentUsername"></strong></span>
+        <span class="role-badge" id="roleBadge"></span>
+        <button class="logout-btn" onclick="handleLogout()">Logout</button>
+    </div>
+
     <!-- Header -->
     <header class="header">
         <div class="header-content">
@@ -793,6 +951,9 @@
             </button>
             <button class="tab-btn" data-tab="bulk">
                 📤 Bulk Upload
+            </button>
+            <button class="tab-btn admin-only" data-tab="history">
+                📜 History
             </button>
         </div>
 
@@ -868,7 +1029,7 @@
 
         <!-- Add New Tab -->
         <div id="addnewTab" class="tab-content">
-            <div class="addnew-container">
+            <div class="addnew-container" style="max-width:1200px;">
                 <!-- Toggle between League and Team -->
                 <div class="addnew-toggle">
                     <button class="btn btn-primary addnew-toggle-btn active" onclick="showAddForm('league')">🏆 Add League</button>
@@ -878,62 +1039,72 @@
                 <!-- Add League Form -->
                 <div id="addLeagueForm" class="addnew-form">
                     <h3>Add New League Mapping</h3>
-                    <div class="form-group">
-                        <label>1. Country *</label>
-                        <input type="text" id="addLeagueCountry" class="form-control" placeholder="e.g., England" list="addCountryList">
-                        <datalist id="addCountryList"></datalist>
+                    <div class="addnew-row">
+                        <div class="form-group">
+                            <label>Country *</label>
+                            <input type="text" id="addLeagueCountry" class="form-control" placeholder="e.g., England" list="addCountryList">
+                            <datalist id="addCountryList"></datalist>
+                        </div>
+                        <div class="form-group">
+                            <label>BCM Competition *</label>
+                            <input type="text" id="addLeagueBCM" class="form-control" placeholder="e.g., Premier League">
+                        </div>
+                        <div class="form-group">
+                            <label>Betradar Names <input type="checkbox" class="na-checkbox" onchange="toggleNA(this, 'addLeagueBetradar')"> N/A</label>
+                            <textarea id="addLeagueBetradar" class="form-control" rows="2" placeholder="One per line"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Betgenius Names <input type="checkbox" class="na-checkbox" onchange="toggleNA(this, 'addLeagueBetgenius')"> N/A</label>
+                            <textarea id="addLeagueBetgenius" class="form-control" rows="2" placeholder="One per line"></textarea>
+                        </div>
+                        <div class="form-group" style="align-self:end;">
+                            <button class="btn btn-success" onclick="submitNewLeague()" style="width:100%;padding:0.75rem;">✅ Save</button>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>2. BCM Competition Name *</label>
-                        <input type="text" id="addLeagueBCM" class="form-control" placeholder="e.g., Premier League">
-                    </div>
-                    <div class="form-group">
-                        <label>3. What is this league called in Betradar?</label>
-                        <small>Enter one or multiple names (one per line). Leave empty if N/A.</small>
-                        <textarea id="addLeagueBetradar" class="form-control" rows="3" placeholder="e.g., England Premier League&#10;England Premier League Playoffs"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>4. What is this league called in Betgenius?</label>
-                        <small>Enter one or multiple names (one per line). Leave empty if N/A.</small>
-                        <textarea id="addLeagueBetgenius" class="form-control" rows="3" placeholder="e.g., EPL"></textarea>
-                    </div>
-                    <button class="btn btn-success" onclick="submitNewLeague()" style="width:100%; padding:1rem; font-size:1.1rem;">✅ Save League to Database</button>
                 </div>
 
                 <!-- Add Team Form -->
                 <div id="addTeamForm" class="addnew-form" style="display:none;">
                     <h3>Add New Team Mapping</h3>
-                    <div class="form-group">
-                        <label>1. Country *</label>
-                        <input type="text" id="addTeamCountry" class="form-control" placeholder="e.g., England" list="addTeamCountryList">
-                        <datalist id="addTeamCountryList"></datalist>
+                    <div class="addnew-row">
+                        <div class="form-group">
+                            <label>Country *</label>
+                            <input type="text" id="addTeamCountry" class="form-control" placeholder="e.g., England" list="addTeamCountryList" oninput="filterTeamCompetitions()">
+                            <datalist id="addTeamCountryList"></datalist>
+                        </div>
+                        <div class="form-group">
+                            <label>BCM Competition *</label>
+                            <input type="text" id="addTeamBCMComp" class="form-control" placeholder="e.g., Premier League" list="addTeamBCMList" oninput="onTeamCompetitionChange()">
+                            <datalist id="addTeamBCMList"></datalist>
+                        </div>
+                        <div class="form-group">
+                            <label>BCM Team *</label>
+                            <input type="text" id="addTeamBCMName" class="form-control" placeholder="e.g., Man Utd">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>2. BCM Competition *</label>
-                        <input type="text" id="addTeamBCMComp" class="form-control" placeholder="e.g., Premier League" list="addTeamBCMList">
-                        <datalist id="addTeamBCMList"></datalist>
+                    <div class="addnew-row" style="margin-top:1rem;">
+                        <div class="form-group">
+                            <label>Betradar Competition <input type="checkbox" id="naCheckBRComp" class="na-checkbox" onchange="toggleNA(this, 'addTeamBRComp')"> N/A</label>
+                            <input type="text" id="addTeamBRComp" class="form-control" placeholder="e.g., England - Premier League" list="addTeamBRCompList">
+                            <datalist id="addTeamBRCompList"></datalist>
+                        </div>
+                        <div class="form-group">
+                            <label>Betradar Team <input type="checkbox" id="naCheckBRName" class="na-checkbox" onchange="toggleNA(this, 'addTeamBRName')"> N/A</label>
+                            <input type="text" id="addTeamBRName" class="form-control" placeholder="e.g., Man Utd">
+                        </div>
+                        <div class="form-group">
+                            <label>BG Competition <input type="checkbox" id="naCheckBGComp" class="na-checkbox" onchange="toggleNA(this, 'addTeamBGComp')"> N/A</label>
+                            <input type="text" id="addTeamBGComp" class="form-control" placeholder="e.g., EPL" list="addTeamBGCompList">
+                            <datalist id="addTeamBGCompList"></datalist>
+                        </div>
+                        <div class="form-group">
+                            <label>BG Team <input type="checkbox" id="naCheckBGName" class="na-checkbox" onchange="toggleNA(this, 'addTeamBGName')"> N/A</label>
+                            <input type="text" id="addTeamBGName" class="form-control" placeholder="e.g., Manchester United FC">
+                        </div>
+                        <div class="form-group" style="align-self:end;">
+                            <button class="btn btn-success" onclick="submitNewTeam()" style="width:100%;padding:0.75rem;">✅ Save</button>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>3. BCM Team Name *</label>
-                        <input type="text" id="addTeamBCMName" class="form-control" placeholder="e.g., Manchester United">
-                    </div>
-                    <div class="form-group">
-                        <label>4. What is the Betradar competition for this team?</label>
-                        <input type="text" id="addTeamBRComp" class="form-control" placeholder="e.g., England - Premier League">
-                    </div>
-                    <div class="form-group">
-                        <label>5. What is the Betradar team name?</label>
-                        <input type="text" id="addTeamBRName" class="form-control" placeholder="e.g., Man Utd">
-                    </div>
-                    <div class="form-group">
-                        <label>6. What is the Betgenius competition for this team?</label>
-                        <input type="text" id="addTeamBGComp" class="form-control" placeholder="e.g., EPL">
-                    </div>
-                    <div class="form-group">
-                        <label>7. What is the Betgenius team name?</label>
-                        <input type="text" id="addTeamBGName" class="form-control" placeholder="e.g., Manchester United FC">
-                    </div>
-                    <button class="btn btn-success" onclick="submitNewTeam()" style="width:100%; padding:1rem; font-size:1.1rem;">✅ Save Team to Database</button>
                 </div>
             </div>
         </div>
@@ -961,6 +1132,17 @@
                     <input type="file" id="bulkTeamFile" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleBulkTeamUpload(event)">
                     <div id="bulkTeamResults" style="margin-top:1.5rem;"></div>
                 </div>
+            </div>
+        </div>
+
+        <!-- History Tab (Admin only) -->
+        <div id="historyTab" class="tab-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                <h3>📜 Activity History</h3>
+                <button class="btn btn-secondary" onclick="loadHistory()">🔄 Refresh</button>
+            </div>
+            <div id="historyContent">
+                <div class="empty-state"><p>Loading history...</p></div>
             </div>
         </div>
     </main>
@@ -1059,6 +1241,176 @@
         const SUPABASE_URL = 'https://ywfvifcityihcfvyeisd.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_Oym01Q8PYn7Xp8kuWLmRNQ_H3RI4B5l';
 
+        // Current user session
+        let currentUser = null;
+
+        // ============================================
+        // LOGIN / AUTH
+        // ============================================
+
+        async function handleLogin() {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+            const errorEl = document.getElementById('loginError');
+
+            if (!username || !password) {
+                errorEl.textContent = 'Please enter username and password';
+                errorEl.style.display = 'block';
+                return;
+            }
+
+            try {
+                const data = await supabaseRequest('users', 'GET', null, 
+                    `?username=eq.${encodeURIComponent(username)}&password=eq.${encodeURIComponent(password)}`);
+                
+                if (data.length === 0) {
+                    errorEl.textContent = 'Invalid username or password';
+                    errorEl.style.display = 'block';
+                    return;
+                }
+
+                currentUser = data[0];
+                sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+                showMainApp();
+            } catch (error) {
+                errorEl.textContent = 'Login failed: ' + error.message;
+                errorEl.style.display = 'block';
+            }
+        }
+
+        function handleLogout() {
+            currentUser = null;
+            sessionStorage.removeItem('currentUser');
+            document.getElementById('mainApp').style.display = 'none';
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('loginUsername').value = '';
+            document.getElementById('loginPassword').value = '';
+            document.getElementById('loginError').style.display = 'none';
+        }
+
+        function showMainApp() {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'block';
+
+            // Update user bar
+            document.getElementById('currentUsername').textContent = currentUser.username;
+            const badge = document.getElementById('roleBadge');
+            badge.textContent = currentUser.role;
+            badge.className = 'role-badge ' + currentUser.role;
+
+            // Apply role-based visibility
+            applyRoleAccess();
+
+            // Initialize app if not already done
+            if (leagues.length === 0 && teams.length === 0) {
+                setupEventListeners();
+                loadFromSupabase().then(() => {
+                    renderLeagues();
+                    renderTeams();
+                    updateStats();
+                });
+            }
+        }
+
+        function applyRoleAccess() {
+            const isAdmin = currentUser.role === 'admin';
+
+            // Admin-only elements
+            document.querySelectorAll('.admin-only').forEach(el => {
+                el.style.display = isAdmin ? '' : 'none';
+            });
+
+            // Hide buttons for non-admins
+            const adminButtons = ['importLeaguesBtn', 'importTeamsBtn', 'clearDataBtn'];
+            adminButtons.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = isAdmin ? '' : 'none';
+            });
+
+            // Hide file inputs
+            if (!isAdmin) {
+                document.getElementById('leagueFileInput').disabled = true;
+                document.getElementById('teamFileInput').disabled = true;
+            }
+
+            // Hide edit/delete buttons in tables for users
+            if (!isAdmin) {
+                // We'll handle this in render functions
+            }
+
+            // Hide Bulk Upload tab for users
+            const bulkTab = document.querySelector('[data-tab="bulk"]');
+            if (bulkTab) bulkTab.style.display = isAdmin ? '' : 'none';
+        }
+
+        function checkSession() {
+            const stored = sessionStorage.getItem('currentUser');
+            if (stored) {
+                currentUser = JSON.parse(stored);
+                showMainApp();
+                return true;
+            }
+            return false;
+        }
+
+        // ============================================
+        // AUDIT LOG
+        // ============================================
+
+        async function logAction(action, tableName, details) {
+            if (!currentUser) return;
+            try {
+                await supabaseRequest('history', 'POST', {
+                    username: currentUser.username,
+                    action: action,
+                    table_name: tableName,
+                    record_details: details
+                });
+            } catch (e) {
+                console.warn('Failed to log action:', e);
+            }
+        }
+
+        async function loadHistory() {
+            try {
+                const data = await supabaseRequest('history', 'GET', null, '?order=created_at.desc&limit=200');
+                renderHistory(data);
+            } catch (error) {
+                document.getElementById('historyContent').innerHTML = `<p style="color:#f56565;">Error loading history: ${error.message}</p>`;
+            }
+        }
+
+        function renderHistory(data) {
+            const container = document.getElementById('historyContent');
+            if (data.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>No activity yet.</p></div>';
+                return;
+            }
+
+            let html = `<div style="max-height:600px; overflow-y:auto;">
+            <table class="history-table"><thead><tr>
+                <th>Time</th><th>User</th><th>Action</th><th>Table</th><th>Details</th>
+            </tr></thead><tbody>`;
+
+            data.forEach(row => {
+                const time = new Date(row.created_at).toLocaleString();
+                const actionClass = row.action.toLowerCase().includes('add') ? 'added' :
+                    row.action.toLowerCase().includes('edit') || row.action.toLowerCase().includes('update') ? 'edited' :
+                    row.action.toLowerCase().includes('delete') ? 'deleted' : 'imported';
+                
+                html += `<tr>
+                    <td>${escapeHtml(time)}</td>
+                    <td>${escapeHtml(row.username)}</td>
+                    <td><span class="history-action ${actionClass}">${escapeHtml(row.action)}</span></td>
+                    <td>${escapeHtml(row.table_name)}</td>
+                    <td style="max-width:300px; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(row.record_details || '')}">${escapeHtml(row.record_details || '')}</td>
+                </tr>`;
+            });
+
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        }
+
         // Supabase REST API helper
         async function supabaseRequest(table, method = 'GET', body = null, query = '') {
             const url = `${SUPABASE_URL}/rest/v1/${table}${query}`;
@@ -1090,6 +1442,9 @@
 
         // Initialize App
         document.addEventListener('DOMContentLoaded', async () => {
+            // Check if already logged in
+            if (!checkSession()) return; // Stay on login screen
+            
             setupEventListeners();
             await loadFromSupabase();
             renderLeagues();
@@ -1159,7 +1514,7 @@
             
             // Show/hide regular search and add button based on tab
             const searchContainer = document.querySelector('.search-container');
-            if (tab === 'master' || tab === 'addnew' || tab === 'bulk') {
+            if (tab === 'master' || tab === 'addnew' || tab === 'bulk' || tab === 'history') {
                 searchContainer.style.display = 'none';
             } else {
                 searchContainer.style.display = 'flex';
@@ -1169,6 +1524,11 @@
                 } else {
                     renderTeams();
                 }
+            }
+
+            // Load history when switching to history tab
+            if (tab === 'history') {
+                loadHistory();
             }
         }
 
@@ -1360,8 +1720,8 @@
                     <td>${betgeniusDisplay}</td>
                     <td>
                         <div class="action-buttons">
-                            <button class="btn btn-primary btn-small" onclick="editLeague(${index})">✏️ Edit</button>
-                            <button class="btn btn-danger btn-small" onclick="deleteLeague(${index})">🗑️ Delete</button>
+                            ${currentUser && currentUser.role === 'admin' ? `<button class="btn btn-primary btn-small" onclick="editLeague(${index})">✏️ Edit</button>
+                            <button class="btn btn-danger btn-small" onclick="deleteLeague(${index})">🗑️ Delete</button>` : ''}
                         </div>
                     </td>
                 `;
@@ -1404,8 +1764,8 @@
                     <td>${escapeHtml(team.bgTeam)}</td>
                     <td>
                         <div class="action-buttons">
-                            <button class="btn btn-primary btn-small" onclick="editTeam(${index})">✏️ Edit</button>
-                            <button class="btn btn-danger btn-small" onclick="deleteTeam(${index})">🗑️ Delete</button>
+                            ${currentUser && currentUser.role === 'admin' ? `<button class="btn btn-primary btn-small" onclick="editTeam(${index})">✏️ Edit</button>
+                            <button class="btn btn-danger btn-small" onclick="deleteTeam(${index})">🗑️ Delete</button>` : ''}
                         </div>
                     </td>
                 `;
@@ -1538,6 +1898,7 @@
                     
                     leagues[currentEditIndex] = mapLeagueFromDb(updated[0]);
                     showToast('League mapping updated successfully', 'success');
+                    await logAction('Edited League', 'leagues', `${country} - ${bcmCompetition}`);
                 } else {
                     const inserted = await supabaseRequest('leagues', 'POST', {
                         country,
@@ -1548,6 +1909,7 @@
                     
                     leagues.push(mapLeagueFromDb(inserted[0]));
                     showToast('League mapping added successfully', 'success');
+                    await logAction('Added League', 'leagues', `${country} - ${bcmCompetition}`);
                 }
                 
                 renderLeagues();
@@ -1566,8 +1928,10 @@
         async function deleteLeague(index) {
             if (confirm('Are you sure you want to delete this league mapping?')) {
                 try {
-                    const id = leagues[index].id;
+                    const league = leagues[index];
+                    const id = league.id;
                     if (id) await supabaseRequest('leagues', 'DELETE', null, `?id=eq.${id}`);
+                    await logAction('Deleted League', 'leagues', `${league.country} - ${league.bcmCompetition}`);
                     leagues.splice(index, 1);
                     renderLeagues();
                     updateStats();
@@ -1678,8 +2042,10 @@
         async function deleteTeam(index) {
             if (confirm('Are you sure you want to delete this team mapping?')) {
                 try {
-                    const id = teams[index].id;
+                    const team = teams[index];
+                    const id = team.id;
                     if (id) await supabaseRequest('teams', 'DELETE', null, `?id=eq.${id}`);
+                    await logAction('Deleted Team', 'teams', `${team.country} - ${team.bcmCompetition} - ${team.bcmTeam}`);
                     teams.splice(index, 1);
                     renderTeams();
                     updateStats();
@@ -1904,6 +2270,120 @@
             document.getElementById('addTeamBCMList').innerHTML = bcmComps.map(c => `<option value="${escapeHtml(c)}">`).join('');
         }
 
+        function toggleNA(checkbox, inputId) {
+            const input = document.getElementById(inputId);
+            if (checkbox.checked) {
+                input.value = 'N/A';
+                input.disabled = true;
+                input.classList.add('na-disabled');
+            } else {
+                input.value = '';
+                input.disabled = false;
+                input.classList.remove('na-disabled');
+            }
+        }
+
+        function filterTeamCompetitions() {
+            const country = document.getElementById('addTeamCountry').value.trim().toLowerCase();
+            let filtered;
+            if (country) {
+                filtered = leagues.filter(l => l.country.toLowerCase() === country).map(l => l.bcmCompetition);
+            } else {
+                filtered = leagues.map(l => l.bcmCompetition);
+            }
+            const unique = [...new Set(filtered)].sort();
+            document.getElementById('addTeamBCMList').innerHTML = unique.map(c => `<option value="${escapeHtml(c)}">`).join('');
+        }
+
+        function onTeamCompetitionChange() {
+            const country = document.getElementById('addTeamCountry').value.trim();
+            const bcmComp = document.getElementById('addTeamBCMComp').value.trim();
+
+            if (!country || !bcmComp) return;
+
+            // Find the league mapping
+            const league = leagues.find(l => 
+                l.country.toLowerCase() === country.toLowerCase() && 
+                l.bcmCompetition.toLowerCase() === bcmComp.toLowerCase()
+            );
+
+            if (!league) return;
+
+            // Handle Betradar
+            const brComp = document.getElementById('addTeamBRComp');
+            const brName = document.getElementById('addTeamBRName');
+            const naCheckBRComp = document.getElementById('naCheckBRComp');
+            const naCheckBRName = document.getElementById('naCheckBRName');
+
+            if (!league.betradar || league.betradar.toUpperCase() === 'N/A') {
+                // Betradar is N/A at league level — auto-disable
+                brComp.value = 'N/A';
+                brComp.disabled = true;
+                brComp.classList.add('na-disabled');
+                naCheckBRComp.checked = true;
+                brName.value = 'N/A';
+                brName.disabled = true;
+                brName.classList.add('na-disabled');
+                naCheckBRName.checked = true;
+            } else {
+                // Populate Betradar competition dropdown from league mapping
+                brComp.disabled = false;
+                brComp.classList.remove('na-disabled');
+                naCheckBRComp.checked = false;
+                brName.value = '';
+                brName.disabled = false;
+                brName.classList.remove('na-disabled');
+                naCheckBRName.checked = false;
+
+                const brNames = league.betradar.split('&').map(s => s.trim()).filter(s => s && s.toUpperCase() !== 'N/A');
+                document.getElementById('addTeamBRCompList').innerHTML = brNames.map(c => `<option value="${escapeHtml(c)}">`).join('');
+                
+                // If only one Betradar league, auto-fill it
+                if (brNames.length === 1) {
+                    brComp.value = brNames[0];
+                } else {
+                    brComp.value = '';
+                }
+            }
+
+            // Handle Betgenius
+            const bgComp = document.getElementById('addTeamBGComp');
+            const bgName = document.getElementById('addTeamBGName');
+            const naCheckBGComp = document.getElementById('naCheckBGComp');
+            const naCheckBGName = document.getElementById('naCheckBGName');
+
+            if (!league.betgenius || league.betgenius.toUpperCase() === 'N/A') {
+                // Betgenius is N/A at league level — auto-disable
+                bgComp.value = 'N/A';
+                bgComp.disabled = true;
+                bgComp.classList.add('na-disabled');
+                naCheckBGComp.checked = true;
+                bgName.value = 'N/A';
+                bgName.disabled = true;
+                bgName.classList.add('na-disabled');
+                naCheckBGName.checked = true;
+            } else {
+                // Populate BG competition dropdown from league mapping
+                bgComp.disabled = false;
+                bgComp.classList.remove('na-disabled');
+                naCheckBGComp.checked = false;
+                bgName.value = '';
+                bgName.disabled = false;
+                bgName.classList.remove('na-disabled');
+                naCheckBGName.checked = false;
+
+                const bgNames = league.betgenius.split('&').map(s => s.trim()).filter(s => s && s.toUpperCase() !== 'N/A');
+                document.getElementById('addTeamBGCompList').innerHTML = bgNames.map(c => `<option value="${escapeHtml(c)}">`).join('');
+                
+                // If only one BG league, auto-fill it
+                if (bgNames.length === 1) {
+                    bgComp.value = bgNames[0];
+                } else {
+                    bgComp.value = '';
+                }
+            }
+        }
+
         async function submitNewLeague() {
             const country = document.getElementById('addLeagueCountry').value.trim();
             const bcm = document.getElementById('addLeagueBCM').value.trim();
@@ -1930,6 +2410,7 @@
                 });
                 leagues.push(mapLeagueFromDb(inserted[0]));
                 showToast('League added to database!', 'success');
+                await logAction('Added League', 'leagues', `${country} - ${bcm} | BR: ${betradar} | BG: ${betgenius}`);
                 updateStats();
                 document.getElementById('addLeagueCountry').value = '';
                 document.getElementById('addLeagueBCM').value = '';
@@ -1968,6 +2449,7 @@
                 });
                 teams.push(mapTeamFromDb(inserted[0]));
                 showToast('Team added to database!', 'success');
+                await logAction('Added Team', 'teams', `${country} - ${bcmComp} - ${bcmTeam}`);
                 updateStats();
                 document.getElementById('addTeamBCMName').value = '';
                 document.getElementById('addTeamBRComp').value = '';
@@ -2276,5 +2758,6 @@
             return div.innerHTML;
         }
     </script>
+    </div><!-- End mainApp -->
 </body>
 </html>
