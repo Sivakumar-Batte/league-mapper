@@ -1,0 +1,1375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>League & Team Mapper — League &amp; Team Mapping Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+/* ============================= THEME TOKENS ============================= */
+:root{
+  --bg:#1E1B2E;
+  --surface:#2A2640;
+  --surface-alt:#332F4A;
+  --surface-raised:#3D3856;
+  --border:#4A4563;
+  --text:#F0ECF9;
+  --text-dim:#B8B0D0;
+  --text-faint:#8A80A8;
+  --accent:#A855F7;
+  --accent-hover:#C084FC;
+  --accent-soft:rgba(168,85,247,.18);
+  --warn:#F59E0B;
+  --warn-soft:rgba(245,158,11,.15);
+  --danger:#EF4444;
+  --danger-soft:rgba(239,68,68,.12);
+  --success:#10B981;
+  --success-soft:rgba(16,185,129,.12);
+  --shadow:0 2px 4px rgba(0,0,0,.3);
+  --shadow-lg:0 12px 32px rgba(0,0,0,.5);
+  --radius:10px;
+  --font-display:'Space Grotesk',sans-serif;
+  --font-body:'Inter',sans-serif;
+  --font-mono:'IBM Plex Mono',monospace;
+}
+html.dark{
+  --bg:#0D0B14;
+  --surface:#161225;
+  --surface-alt:#1E1930;
+  --surface-raised:#26203D;
+  --border:#352F50;
+  --text:#F5F0FF;
+  --text-dim:#C4B8E0;
+  --text-faint:#7A6FA0;
+  --accent:#C084FC;
+  --accent-hover:#D8B4FE;
+  --accent-soft:rgba(192,132,252,.15);
+  --warn:#FBBF24;
+  --warn-soft:rgba(251,191,36,.12);
+  --danger:#F87171;
+  --danger-soft:rgba(248,113,113,.12);
+  --success:#34D399;
+  --success-soft:rgba(52,211,153,.12);
+  --shadow:0 2px 4px rgba(0,0,0,.5);
+  --shadow-lg:0 12px 32px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);transition:background .15s,color .15s;font-size:16px;}
+h1,h2,h3,h4{font-family:var(--font-display);margin:0;letter-spacing:-.01em;}
+.mono{font-family:var(--font-mono);}
+button{font-family:var(--font-body);cursor:pointer;}
+input,select,textarea{font-family:var(--font-body);}
+::selection{background:var(--accent-soft);}
+a{color:var(--accent);}
+
+/* ============================= LAYOUT ============================= */
+#app{display:none;min-height:100vh;flex-direction:column;}
+#app.show{display:flex;}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:40;}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand-mark{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent-hover));display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;color:#fff;font-size:15px;flex-shrink:0;}
+.brand-title{font-size:21px;font-weight:700;}
+.brand-sub{font-size:11px;color:var(--text-faint);font-family:var(--font-mono);letter-spacing:.04em;}
+.user-bar{display:flex;align-items:center;gap:10px;}
+.user-chip{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--surface-alt);border-radius:999px;font-size:14px;}
+.role-pill{font-size:10px;font-family:var(--font-mono);text-transform:uppercase;padding:2px 7px;border-radius:999px;letter-spacing:.05em;}
+.role-pill.admin{background:var(--accent-soft);color:var(--accent);}
+.role-pill.user{background:var(--surface-alt);color:var(--text-dim);border:1px solid var(--border);}
+.icon-btn{width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text-dim);display:flex;align-items:center;justify-content:center;font-size:16px;transition:.15s;}
+.icon-btn:hover{background:var(--surface-alt);color:var(--text);}
+
+.tabs{display:flex;gap:2px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--border);overflow-x:auto;}
+.tab-btn{padding:14px 18px;border:none;background:none;color:var(--text-dim);font-size:15.5px;font-weight:500;border-bottom:2px solid transparent;white-space:nowrap;transition:.15s;}
+.tab-btn:hover{color:var(--text);}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
+
+.content{flex:1;padding:24px;max-width:1360px;width:100%;margin:0 auto;}
+.tab-panel{display:none;}
+.tab-panel.active{display:block;animation:fadeIn .18s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+
+/* ============================= LOGIN ============================= */
+#login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:
+  radial-gradient(circle at 20% 20%, var(--accent-soft), transparent 40%),
+  radial-gradient(circle at 80% 80%, var(--accent-soft), transparent 40%), var(--bg);}
+.login-card{width:380px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:36px;box-shadow:var(--shadow-lg);}
+.login-mark{width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent-hover));display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;color:#fff;font-size:22px;margin-bottom:16px;}
+.login-card h1{font-size:26px;margin-bottom:4px;}
+.login-card p{color:var(--text-dim);font-size:15px;margin:0 0 22px;}
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:.03em;}
+.field input,.field select{width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:15px;transition:.15s;}
+.field input:focus,.field select:focus{outline:none;border-color:var(--accent);background:var(--surface);}
+.btn{padding:11px 18px;border-radius:8px;border:1px solid transparent;font-size:15px;font-weight:600;transition:.15s;display:inline-flex;align-items:center;gap:6px;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{background:var(--accent-hover);}
+.btn-block{width:100%;justify-content:center;padding:11px;}
+.btn-secondary{background:var(--surface-alt);color:var(--text);border-color:var(--border);}
+.btn-secondary:hover{background:var(--border);}
+.btn-danger{background:var(--danger-soft);color:var(--danger);}
+.btn-danger:hover{background:var(--danger);color:#fff;}
+.btn-ghost{background:none;color:var(--text-dim);border:1px solid var(--border);}
+.btn-ghost:hover{background:var(--surface-alt);color:var(--text);}
+.btn-sm{padding:6px 10px;font-size:12px;}
+.btn:disabled{opacity:.45;cursor:not-allowed;}
+.error-msg{color:var(--danger);font-size:13px;margin-top:10px;display:none;background:var(--danger-soft);padding:9px 12px;border-radius:8px;}
+
+/* ============================= CARDS / GRID ============================= */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:22px;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;}
+.stat-card .num{font-family:var(--font-display);font-size:38px;font-weight:700;}
+.stat-card .label{color:var(--text-dim);font-size:13px;margin-top:4px;text-transform:uppercase;letter-spacing:.04em;}
+
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:18px;}
+.panel-title{font-size:16px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;}
+
+.bar-row{margin-bottom:12px;}
+.bar-row .bar-label{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px;color:var(--text-dim);}
+.bar-row .bar-label b{color:var(--text);font-family:var(--font-mono);}
+.bar-track{height:8px;background:var(--surface-alt);border-radius:99px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:99px;transition:width .4s ease;}
+.bar-fill.accent{background:var(--accent);}
+.bar-fill.warn{background:var(--warn);}
+
+.country-row{display:flex;align-items:center;gap:10px;margin-bottom:9px;font-size:13px;}
+.country-row .name{width:120px;flex-shrink:0;color:var(--text);}
+.country-row .track{flex:1;height:7px;background:var(--surface-alt);border-radius:99px;overflow:hidden;}
+.country-row .fill{height:100%;background:var(--accent);border-radius:99px;}
+.country-row .count{width:28px;text-align:right;font-family:var(--font-mono);color:var(--text-dim);}
+
+.hist-line{display:flex;gap:10px;font-size:12.5px;padding:8px 0;border-bottom:1px dashed var(--border);}
+.hist-line:last-child{border-bottom:none;}
+.hist-line .t{color:var(--text-faint);font-family:var(--font-mono);width:70px;flex-shrink:0;}
+.hist-line .who{font-weight:600;}
+
+/* ============================= SEARCH / CARDS ============================= */
+.search-hero{margin-bottom:20px;}
+.search-input-wrap{position:relative;}
+.search-input-wrap input{width:100%;padding:16px 18px 16px 46px;border-radius:12px;border:1px solid var(--border);background:var(--surface);font-size:17px;color:var(--text);}
+.search-input-wrap input:focus{outline:none;border-color:var(--accent);}
+.search-input-wrap .sic{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-faint);}
+
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;}
+.rcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;}
+.rcard .kind{font-size:10px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em;padding:2px 8px;border-radius:99px;display:inline-block;margin-bottom:8px;}
+.rcard .kind.league{background:var(--accent-soft);color:var(--accent);}
+.rcard .kind.team{background:var(--warn-soft);color:var(--warn);}
+.rcard .country{font-size:11px;color:var(--text-dim);margin-bottom:2px;}
+.rcard .main{font-weight:700;font-size:15px;margin-bottom:2px;}
+.rcard .sub{font-size:12.5px;color:var(--text-dim);margin-bottom:8px;}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.badge{font-family:var(--font-mono);font-size:11px;padding:3px 8px;border-radius:6px;background:var(--surface-alt);border:1px solid var(--border);color:var(--text-dim);}
+.badge.na{color:var(--text-faint);font-style:italic;}
+.empty-state{text-align:center;padding:60px 20px;color:var(--text-faint);}
+.empty-state .ic{font-size:34px;margin-bottom:10px;}
+
+/* ============================= TABLES ============================= */
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px;}
+.toolbar select,.toolbar input[type=text]{padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:15px;}
+.toolbar input[type=text]{flex:1;min-width:180px;}
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);}
+table{width:100%;border-collapse:collapse;font-size:15px;}
+thead th{text-align:left;padding:12px 14px;background:var(--surface-alt);color:var(--text-dim);font-size:13px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;white-space:nowrap;cursor:pointer;user-select:none;border-bottom:1px solid var(--border);}
+thead th:hover{color:var(--text);}
+thead th .arrow{opacity:.6;margin-left:3px;}
+tbody td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:middle;font-size:15px;}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr:hover{background:var(--surface-alt);}
+td.na,span.na-tag{color:var(--text-faint);font-style:italic;font-size:12px;}
+.row-actions{display:flex;gap:6px;}
+.pagination{display:flex;align-items:center;justify-content:space-between;margin-top:14px;font-size:12.5px;color:var(--text-dim);}
+.page-btns{display:flex;gap:5px;}
+.page-btns button{width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--text-dim);font-size:12.5px;}
+.page-btns button.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700;}
+.page-btns button:disabled{opacity:.35;}
+
+/* ============================= FORMS ============================= */
+.form-row{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;}
+.form-row .fld{flex:1;min-width:160px;}
+.form-row .fld label{display:flex;align-items:center;justify-content:space-between;font-size:11.5px;font-weight:600;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:.03em;}
+.form-row .fld label .na-check{display:flex;align-items:center;gap:4px;font-size:10.5px;text-transform:none;font-weight:500;color:var(--text-faint);cursor:pointer;}
+.form-row .fld input,.form-row .fld select{width:100%;padding:11px 13px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:15px;}
+.form-row .fld input:disabled{opacity:.5;background:var(--surface);}
+.form-row .fld input:focus,.form-row .fld select:focus{outline:none;border-color:var(--accent);}
+.type-toggle{display:flex;gap:8px;margin-bottom:20px;}
+.type-toggle button{padding:9px 18px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text-dim);font-weight:600;font-size:13px;}
+.type-toggle button.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);}
+.form-actions{margin-top:20px;display:flex;gap:10px;}
+.hint{font-size:12px;color:var(--text-faint);margin-top:6px;}
+
+/* ============================= BULK UPLOAD ============================= */
+.drop-zone{border:2px dashed var(--border);border-radius:12px;padding:36px;text-align:center;color:var(--text-dim);background:var(--surface-alt);margin-bottom:18px;}
+.drop-zone.drag{border-color:var(--accent);background:var(--accent-soft);}
+.drop-zone input{display:none;}
+.section-count{font-family:var(--font-mono);font-size:12px;padding:2px 8px;border-radius:99px;}
+.section-count.dup{background:var(--danger-soft);color:var(--danger);}
+.section-count.new{background:var(--success-soft);color:var(--success);}
+
+/* ============================= MODAL ============================= */
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(8,12,20,.55);z-index:100;align-items:center;justify-content:center;padding:20px;}
+.modal-backdrop.show{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;max-width:560px;width:100%;max-height:88vh;overflow-y:auto;padding:24px;box-shadow:var(--shadow-lg);}
+.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
+.modal-head h3{font-size:16px;}
+
+/* toast */
+#toast-wrap{position:fixed;bottom:20px;right:20px;z-index:200;display:flex;flex-direction:column;gap:8px;}
+.toast{background:var(--surface-raised);border:1px solid var(--border);border-left:3px solid var(--accent);padding:12px 16px;border-radius:8px;font-size:13px;box-shadow:var(--shadow-lg);min-width:240px;animation:slideIn .2s ease;}
+.toast.err{border-left-color:var(--danger);}
+@keyframes slideIn{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:none;}}
+
+.loading-overlay{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;z-index:300;}
+.spinner{width:34px;height:34px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--accent);animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+.checkbox-cell{text-align:center;}
+input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;}
+
+@media(max-width:720px){
+  .content{padding:14px;}
+  .form-row .fld{min-width:100%;}
+  .country-row .name{width:80px;font-size:11.5px;}
+}
+</style>
+</head>
+<body>
+
+<div id="loading-overlay" class="loading-overlay">
+  <div class="spinner"></div>
+  <div style="color:var(--text-dim);font-size:13px;font-family:var(--font-mono);">Loading League & Team Mapper…</div>
+</div>
+
+<!-- ======================= LOGIN SCREEN ======================= -->
+<div id="login-screen" style="display:none;">
+  <div class="login-card">
+    <div class="login-mark">🏀</div>
+    <h1>League & Team Mapper</h1>
+    <p>League &amp; team name mapping console</p>
+    <div class="field">
+      <label>Username</label>
+      <input type="text" id="login-username" autocomplete="username" placeholder="e.g. jdoe">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="login-password" autocomplete="current-password" placeholder="••••••••">
+    </div>
+    <button class="btn btn-primary btn-block" id="login-btn" onclick="Auth.login()">Sign in</button>
+    <div class="error-msg" id="login-error"></div>
+  </div>
+</div>
+
+<!-- ======================= APP SHELL ======================= -->
+<div id="app">
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">🏀</div>
+      <div>
+        <div class="brand-title">League & Team Mapper</div>
+        <div class="brand-sub">BCM • BETRADAR • BETGENIUS</div>
+      </div>
+    </div>
+    <div class="user-bar">
+      <div class="user-chip">
+        <span id="user-chip-name"></span>
+        <span class="role-pill" id="user-role-pill"></span>
+      </div>
+      <button class="icon-btn" id="dark-toggle" title="Toggle dark mode" onclick="UI.toggleDark()">🌙</button>
+      <button class="icon-btn" title="Log out" onclick="Auth.logout()">⎋</button>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs-row"></div>
+
+  <div class="content">
+
+    <!-- ---------- MASTER SEARCH ---------- -->
+    <div class="tab-panel" data-panel="search">
+      <div class="search-hero">
+        <div class="search-input-wrap">
+          <span class="sic">🔎</span>
+          <input type="text" id="search-input" placeholder="Search any league or team, in any source system…" oninput="SearchTab.run()">
+        </div>
+      </div>
+      <div id="search-results" class="card-grid"></div>
+    </div>
+
+    <!-- ---------- DASHBOARD ---------- -->
+    <div class="tab-panel" data-panel="dashboard">
+      <div class="stat-grid" id="dash-stats"></div>
+      <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:18px;" id="dash-grid-top">
+        <div class="panel">
+          <div class="panel-title">Mapping coverage</div>
+          <div id="dash-coverage"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Top countries by league count</div>
+          <div id="dash-countries"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Recently added</div>
+        <div id="dash-recent"></div>
+      </div>
+    </div>
+
+    <!-- ---------- LEAGUE MAPPINGS ---------- -->
+    <div class="tab-panel" data-panel="leagues">
+      <div class="toolbar">
+        <select id="lg-country-filter" onchange="LeagueTab.refresh()"><option value="">All countries</option></select>
+        <select id="lg-mapped-filter" onchange="LeagueTab.refresh()">
+          <option value="all">All</option>
+          <option value="unmapped_br">Unmapped Betradar</option>
+          <option value="unmapped_bg">Unmapped Betgenius</option>
+          <option value="unmapped_any">Any unmapped</option>
+          <option value="fully_mapped">Fully mapped</option>
+        </select>
+        <input type="text" id="lg-search" placeholder="Search leagues…" oninput="LeagueTab.refresh()">
+        <span style="margin-left:auto;color:var(--text-dim);font-size:12.5px;" id="lg-count"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr id="lg-thead"></tr></thead>
+          <tbody id="lg-tbody"></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="lg-pagination"></div>
+    </div>
+
+    <!-- ---------- TEAM MAPPINGS ---------- -->
+    <div class="tab-panel" data-panel="teams">
+      <div class="toolbar">
+        <select id="tm-country-filter" onchange="TeamTab.refresh()"><option value="">All countries</option></select>
+        <select id="tm-mapped-filter" onchange="TeamTab.refresh()">
+          <option value="all">All</option>
+          <option value="unmapped_br">Unmapped Betradar</option>
+          <option value="unmapped_bg">Unmapped Betgenius</option>
+          <option value="unmapped_any">Any unmapped</option>
+          <option value="fully_mapped">Fully mapped</option>
+        </select>
+        <input type="text" id="tm-search" placeholder="Search teams…" oninput="TeamTab.refresh()">
+        <span style="margin-left:auto;color:var(--text-dim);font-size:12.5px;" id="tm-count"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr id="tm-thead"></tr></thead>
+          <tbody id="tm-tbody"></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="tm-pagination"></div>
+    </div>
+
+    <!-- ---------- ADD NEW ---------- -->
+    <div class="tab-panel" data-panel="add">
+      <div class="type-toggle">
+        <button id="add-toggle-league" class="active" onclick="AddTab.setType('league')">+ League</button>
+        <button id="add-toggle-team" onclick="AddTab.setType('team')">+ Team</button>
+      </div>
+
+      <div class="panel" id="add-league-panel">
+        <div class="panel-title">Add league mapping</div>
+        <div class="form-row">
+          <div class="fld"><label>Country</label><input type="text" id="al-country" oninput="UI.dirty=true"></div>
+          <div class="fld"><label>BCM Competition</label><input type="text" id="al-bcm" oninput="UI.dirty=true"></div>
+          <div class="fld"><label>Betradar <span class="na-check"><input type="checkbox" id="al-br-na" onchange="AddTab.toggleNA('al-br')"> N/A</span></label><input type="text" id="al-br" oninput="UI.dirty=true"></div>
+          <div class="fld"><label>Betgenius <span class="na-check"><input type="checkbox" id="al-bg-na" onchange="AddTab.toggleNA('al-bg')"> N/A</span></label><input type="text" id="al-bg" oninput="UI.dirty=true"></div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" onclick="AddTab.submitLeague()">Save league</button>
+          <button class="btn btn-ghost" onclick="AddTab.resetLeague()">Clear</button>
+        </div>
+      </div>
+
+      <div class="panel" id="add-team-panel" style="display:none;">
+        <div class="panel-title">Add team mapping</div>
+        <div class="form-row">
+          <div class="fld"><label>Country</label><select id="at-country" onchange="AddTab.onCountryChange()"><option value="">Select…</option></select></div>
+          <div class="fld"><label>BCM Competition</label><select id="at-bcm" onchange="AddTab.onCompChange()"><option value="">Select country first</option></select></div>
+          <div class="fld"><label>BCM Team <span class="na-check"><input type="checkbox" id="at-bcmteam-na" onchange="AddTab.toggleNA('at-bcmteam')"> N/A</span></label><input type="text" id="at-bcmteam" oninput="UI.dirty=true"></div>
+        </div>
+        <div class="form-row" style="margin-top:14px;">
+          <div class="fld"><label>Betradar Competition <span class="na-check"><input type="checkbox" id="at-brcomp-na" onchange="AddTab.toggleNA('at-brcomp')"> N/A</span></label><input type="text" id="at-brcomp" oninput="UI.dirty=true"></div>
+          <div class="fld"><label>Betradar Team <span class="na-check"><input type="checkbox" id="at-brteam-na" onchange="AddTab.toggleNA('at-brteam')"> N/A</span></label><input type="text" id="at-brteam" oninput="UI.dirty=true"></div>
+        </div>
+        <div class="form-row" style="margin-top:14px;">
+          <div class="fld"><label>Betgenius Competition <span class="na-check"><input type="checkbox" id="at-bgcomp-na" onchange="AddTab.toggleNA('at-bgcomp')"> N/A</span></label><input type="text" id="at-bgcomp" oninput="UI.dirty=true"></div>
+          <div class="fld"><label>Betgenius Team <span class="na-check"><input type="checkbox" id="at-bgteam-na" onchange="AddTab.toggleNA('at-bgteam')"> N/A</span></label><input type="text" id="at-bgteam" oninput="UI.dirty=true"></div>
+        </div>
+        <div class="hint">Betradar/Betgenius competition fields auto-fill from the league's mapping once a BCM Competition is selected.</div>
+        <div class="form-actions">
+          <button class="btn btn-primary" onclick="AddTab.submitTeam()">Save team</button>
+          <button class="btn btn-ghost" onclick="AddTab.resetTeam()">Clear</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- BULK UPLOAD ---------- -->
+    <div class="tab-panel" data-panel="bulk">
+      <div class="panel">
+        <div class="panel-title">Bulk upload
+          <span style="display:flex;gap:8px;">
+            <select id="bulk-type"><option value="league">Leagues</option><option value="team">Teams</option></select>
+            <button class="btn btn-secondary btn-sm" onclick="BulkTab.exportAll()">⬇ Export all data</button>
+          </span>
+        </div>
+        <div class="drop-zone" id="bulk-drop">
+          <div style="font-size:26px;margin-bottom:6px;">📄</div>
+          <div>Drop an Excel file here, or <label for="bulk-file" style="color:var(--accent);cursor:pointer;text-decoration:underline;">browse</label></div>
+          <div class="hint" id="bulk-hint">Leagues: columns A–D = Country, BCM Competition, Betradar, Betgenius (row 1 header skipped)</div>
+          <input type="file" id="bulk-file" accept=".xlsx,.xls,.csv">
+        </div>
+        <div id="bulk-preview"></div>
+      </div>
+    </div>
+
+    <!-- ---------- HISTORY (admin) ---------- -->
+    <div class="tab-panel" data-panel="history">
+      <div class="toolbar">
+        <span style="color:var(--text-dim);font-size:12.5px;">Last 500 actions</span>
+        <button class="btn btn-secondary btn-sm" style="margin-left:auto;" onclick="HistoryTab.exportExcel()">⬇ Export history</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Table</th><th>Details</th></tr></thead>
+          <tbody id="hist-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ---------- USERS (admin) ---------- -->
+    <div class="tab-panel" data-panel="users">
+      <div class="panel">
+        <div class="panel-title">Add user</div>
+        <div class="form-row">
+          <div class="fld"><label>Username</label><input type="text" id="nu-username"></div>
+          <div class="fld"><label>Password</label><input type="text" id="nu-password"></div>
+          <div class="fld"><label>Role</label><select id="nu-role"><option value="user">User</option><option value="admin">Admin</option></select></div>
+        </div>
+        <div class="form-actions"><button class="btn btn-primary" onclick="UsersTab.add()">Add user</button></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Username</th><th>Role</th><th>Created</th><th>Actions</th></tr></thead>
+          <tbody id="users-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ======================= EDIT MODAL ======================= -->
+<div class="modal-backdrop" id="edit-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="edit-modal-title">Edit</h3>
+      <button class="icon-btn" onclick="EditModal.close()">✕</button>
+    </div>
+    <div id="edit-modal-body"></div>
+    <div class="form-actions">
+      <button class="btn btn-primary" onclick="EditModal.save()">Save changes</button>
+      <button class="btn btn-ghost" onclick="EditModal.close()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-wrap"></div>
+
+<script>
+/* ==========================================================================
+   League & Team Mapper — League & Team Mapping Console
+   Vanilla JS + Supabase REST API (no SDK)
+   ========================================================================== */
+
+const SUPABASE_URL = "https://ywfvifcityihcfvyeisd.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Oym01Q8PYn7Xp8kuWLmRNQ_H3RI4B5l";
+const REST = SUPABASE_URL + "/rest/v1/";
+
+const state = {
+  user: null,
+  leagues: [],
+  teams: [],
+  users: [],
+  history: [],
+  darkMode: false,
+  currentTab: 'search',
+  addType: 'league',
+  lg: { country:'', mapped:'all', search:'', sortCol:null, sortDir:1, page:1 },
+  tm: { country:'', mapped:'all', search:'', sortCol:null, sortDir:1, page:1 },
+  bulkParsed: null, // {type, rows:[{data,isDup,checked}]}
+};
+const PAGE_SIZE = 50;
+
+/* ============================= SUPABASE HELPERS ============================= */
+async function sb(table, { method='GET', query='', body=null, prefer=null } = {}) {
+  const headers = {
+    'apikey': SUPABASE_KEY,
+    'Authorization': 'Bearer ' + SUPABASE_KEY,
+    'Content-Type': 'application/json'
+  };
+  if (prefer) headers['Prefer'] = prefer;
+  const res = await fetch(REST + table + query, {
+    method, headers, body: body ? JSON.stringify(body) : undefined
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(()=>res.statusText);
+    throw new Error(`Supabase ${method} ${table} failed: ${res.status} ${t}`);
+  }
+  if (res.status === 204) return null;
+  const txt = await res.text();
+  return txt ? JSON.parse(txt) : null;
+}
+
+async function sbLoadAll(table, order='id') {
+  let out = [];
+  let offset = 0;
+  const LIMIT = 1000;
+  while (true) {
+    const rows = await sb(table, { query: `?select=*&order=${order}&limit=${LIMIT}&offset=${offset}` });
+    if (!rows || rows.length === 0) break;
+    out = out.concat(rows);
+    if (rows.length < LIMIT) break;
+    offset += LIMIT;
+  }
+  return out;
+}
+
+async function logHistory(action, table_name, record_details) {
+  try {
+    await sb('history', {
+      method: 'POST',
+      body: [{ username: state.user.username, action, table_name, record_details }]
+    });
+  } catch (e) { console.warn('history log failed', e); }
+  try {
+    const h = await sb('history', { query: '?select=*&order=created_at.desc&limit=500' });
+    state.history = h || [];
+  } catch (e) {}
+}
+
+/* ============================= UTIL ============================= */
+function isNA(v){ return !v || String(v).trim() === '' || String(v).trim().toUpperCase() === 'N/A'; }
+function disp(v){ return isNA(v) ? '<span class="na-tag">N/A</span>' : escapeHtml(v); }
+function escapeHtml(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtTime(ts){ if(!ts) return ''; const d = new Date(ts); return d.toLocaleString(undefined,{month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'}); }
+function uniqueCountries(arr){ return [...new Set(arr.map(r=>r.country).filter(Boolean))].sort(); }
+function toast(msg, isErr=false){
+  const wrap = document.getElementById('toast-wrap');
+  const el = document.createElement('div');
+  el.className = 'toast' + (isErr ? ' err' : '');
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }, 3200);
+}
+
+/* ============================= UI / SHELL ============================= */
+const UI = {
+  dirty: false,
+  toggleDark(){
+    state.darkMode = !state.darkMode;
+    document.documentElement.classList.toggle('dark', state.darkMode);
+    localStorage.setItem('League & Team Mapper_dark', state.darkMode ? '1' : '0');
+    document.getElementById('dark-toggle').textContent = state.darkMode ? '☀️' : '🌙';
+  },
+  initDark(){
+    state.darkMode = localStorage.getItem('League & Team Mapper_dark') === '1';
+    document.documentElement.classList.toggle('dark', state.darkMode);
+    document.getElementById('dark-toggle').textContent = state.darkMode ? '☀️' : '🌙';
+  },
+  buildTabs(){
+    const isAdmin = state.user.role === 'admin';
+    const tabs = [
+      ['search','Master Search'],['dashboard','Dashboard'],['leagues','League Mappings'],
+      ['teams','Team Mappings'],['add','Add New'],['bulk','Bulk Upload']
+    ];
+    if (isAdmin) { tabs.push(['history','History'],['users','Users']); }
+    const row = document.getElementById('tabs-row');
+    row.innerHTML = tabs.map(([id,label]) =>
+      `<button class="tab-btn${id===state.currentTab?' active':''}" data-tab="${id}" onclick="UI.switchTab('${id}')">${label}</button>`
+    ).join('');
+    // hide admin-only panels for non-admins
+    ['history','users'].forEach(id=>{
+      const p = document.querySelector(`.tab-panel[data-panel="${id}"]`);
+      if (p) p.style.display = isAdmin ? '' : 'none';
+    });
+    // hide edit/delete affordances handled per-render
+  },
+  switchTab(id){
+    state.currentTab = id;
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===id));
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active', p.dataset.panel===id));
+    if (id==='dashboard') DashboardTab.render();
+    if (id==='leagues') LeagueTab.refresh();
+    if (id==='teams') TeamTab.refresh();
+    if (id==='history') HistoryTab.render();
+    if (id==='users') UsersTab.render();
+    if (id==='add') AddTab.populateCountry();
+    if (id==='search') SearchTab.run();
+  }
+};
+
+window.onbeforeunload = function(e){
+  if (UI.dirty) { e.preventDefault(); e.returnValue=''; return ''; }
+};
+
+/* ============================= AUTH ============================= */
+const Auth = {
+  async login(){
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    const errEl = document.getElementById('login-error');
+    errEl.style.display = 'none';
+    if (!username || !password) { errEl.textContent = 'Enter a username and password.'; errEl.style.display='block'; return; }
+    const btn = document.getElementById('login-btn');
+    btn.disabled = true; btn.textContent = 'Signing in…';
+    try {
+      const rows = await sb('users', { query: `?username=eq.${encodeURIComponent(username)}&password=eq.${encodeURIComponent(password)}&select=*` });
+      if (!rows || rows.length === 0) {
+        errEl.textContent = 'Invalid username or password.'; errEl.style.display='block';
+        btn.disabled=false; btn.textContent='Sign in'; return;
+      }
+      const u = rows[0];
+      state.user = { id:u.id, username:u.username, role:u.role };
+      sessionStorage.setItem('League & Team Mapper_session', JSON.stringify(state.user));
+      await App.boot();
+    } catch(e){
+      errEl.textContent = 'Login failed: ' + e.message; errEl.style.display='block';
+      btn.disabled=false; btn.textContent='Sign in';
+    }
+  },
+  logout(){
+    sessionStorage.removeItem('League & Team Mapper_session');
+    location.reload();
+  },
+  restore(){
+    const raw = sessionStorage.getItem('League & Team Mapper_session');
+    if (raw) { try { state.user = JSON.parse(raw); return true; } catch(e){ return false; } }
+    return false;
+  }
+};
+
+/* ============================= MASTER SEARCH ============================= */
+const SearchTab = {
+  run(){
+    const q = (document.getElementById('search-input').value || '').trim().toLowerCase();
+    const box = document.getElementById('search-results');
+    if (q.length < 2) { box.innerHTML = `<div class="empty-state"><div class="ic">🏀</div>Type at least 2 characters to search leagues and teams across all sources.</div>`; return; }
+
+    const matchLeague = l => [l.country,l.bcm_competition,l.betradar,l.betgenius].some(v=>String(v||'').toLowerCase().includes(q));
+    const matchTeam = t => [t.country,t.bcm_competition,t.bcm_team,t.betradar_competition,t.betradar_team,t.bg_competition,t.bg_team].some(v=>String(v||'').toLowerCase().includes(q));
+
+    const leagues = state.leagues.filter(matchLeague).slice(0,40);
+    const teams = state.teams.filter(matchTeam).slice(0,40);
+
+    if (leagues.length===0 && teams.length===0) {
+      box.innerHTML = `<div class="empty-state"><div class="ic">🔍</div>No matches for "${escapeHtml(q)}"</div>`; return;
+    }
+
+    let html = '';
+
+    // League results - detailed cards
+    leagues.forEach(l=>{
+      const brNames = isNA(l.betradar) ? [] : l.betradar.split('&').map(s=>s.trim()).filter(Boolean);
+      const bgNames = isNA(l.betgenius) ? [] : l.betgenius.split('&').map(s=>s.trim()).filter(Boolean);
+      html += `<div class="rcard" style="border-left:4px solid var(--accent);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <span class="kind league">League</span>
+          <span style="font-size:11px;color:var(--text-faint);">${escapeHtml(l.country||'')}</span>
+        </div>
+        <div class="main" style="font-size:16px;margin-bottom:12px;">${escapeHtml(l.bcm_competition||'')}</div>
+        <div style="display:grid;grid-template-columns:100px 1fr;gap:6px;font-size:13px;">
+          <span style="font-weight:600;color:var(--text-dim);text-transform:uppercase;font-size:11px;">Country</span>
+          <span>${escapeHtml(l.country||'')}</span>
+          <span style="font-weight:600;color:var(--text-dim);text-transform:uppercase;font-size:11px;">BCM Name</span>
+          <span><strong>${escapeHtml(l.bcm_competition||'')}</strong></span>
+          <span style="font-weight:600;color:var(--text-dim);text-transform:uppercase;font-size:11px;">Betradar</span>
+          <span>${brNames.length > 0 ? brNames.map(n=>`<span class="badge">${escapeHtml(n)}</span>`).join(' ') : '<span class="badge na">N/A</span>'}</span>
+          <span style="font-weight:600;color:var(--text-dim);text-transform:uppercase;font-size:11px;">Betgenius</span>
+          <span>${bgNames.length > 0 ? bgNames.map(n=>`<span class="badge">${escapeHtml(n)}</span>`).join(' ') : '<span class="badge na">N/A</span>'}</span>
+        </div>
+      </div>`;
+    });
+
+    // Team results - detailed cards
+    teams.forEach(t=>{
+      html += `<div class="rcard" style="border-left:4px solid var(--warn);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <span class="kind team">Team</span>
+          <span style="font-size:11px;color:var(--text-faint);">${escapeHtml(t.country||'')}</span>
+        </div>
+        <div class="main" style="font-size:16px;margin-bottom:12px;">${escapeHtml(t.bcm_team||t.betradar_team||t.bg_team||'')}</div>
+        <div style="display:grid;grid-template-columns:120px 1fr;gap:6px;font-size:13px;">
+          <span style="font-weight:600;color:var(--text-dim);text-transform:uppercase;font-size:11px;">Country</span>
+          <span>${escapeHtml(t.country||'')}</span>
+          <span style="font-weight:600;color:var(--text-dim);text-transform:uppercase;font-size:11px;">BCM League</span>
+          <span><strong>${escapeHtml(t.bcm_competition||'')}</strong></span>
+          <span style="font-weight:600;color:var(--text-dim);text-transform:uppercase;font-size:11px;border-top:1px dashed var(--border);padding-top:6px;">BCM Team</span>
+          <span style="border-top:1px dashed var(--border);padding-top:6px;"><strong>${escapeHtml(t.bcm_team||'')}</strong></span>
+          <span style="font-weight:600;color:var(--text-dim);text-transform:uppercase;font-size:11px;">BR Competition</span>
+          <span>${t.betradar_competition && !isNA(t.betradar_competition) ? escapeHtml(t.betradar_competition) : '<span class="na-tag">N/A</span>'}</span>
+          <span style="font-weight:600;color:var(--text-dim);text-transform:uppercase;font-size:11px;">BR Team</span>
+          <span>${t.betradar_team && !isNA(t.betradar_team) ? escapeHtml(t.betradar_team) : '<span class="na-tag">N/A</span>'}</span>
+          <span style="font-weight:600;color:var(--text-dim);text-transform:uppercase;font-size:11px;">BG Competition</span>
+          <span>${t.bg_competition && !isNA(t.bg_competition) ? escapeHtml(t.bg_competition) : '<span class="na-tag">N/A</span>'}</span>
+          <span style="font-weight:600;color:var(--text-dim);text-transform:uppercase;font-size:11px;">BG Team</span>
+          <span>${t.bg_team && !isNA(t.bg_team) ? escapeHtml(t.bg_team) : '<span class="na-tag">N/A</span>'}</span>
+        </div>
+      </div>`;
+    });
+    box.innerHTML = html;
+  }
+};
+
+/* ============================= DASHBOARD ============================= */
+const DashboardTab = {
+  render(){
+    const leagues = state.leagues, teams = state.teams;
+    const countries = new Set(leagues.map(l=>l.country).filter(Boolean));
+    teams.forEach(t=>{ if(t.country) countries.add(t.country); });
+
+    document.getElementById('dash-stats').innerHTML = `
+      <div class="stat-card"><div class="num">${leagues.length}</div><div class="label">Total leagues</div></div>
+      <div class="stat-card"><div class="num">${teams.length}</div><div class="label">Total teams</div></div>
+      <div class="stat-card"><div class="num">${countries.size}</div><div class="label">Countries</div></div>
+      <div class="stat-card"><div class="num">${state.users.length}</div><div class="label">Users</div></div>
+    `;
+
+    const pct = (num,den)=> den ? Math.round((num/den)*100) : 0;
+    const lgBR = leagues.filter(l=>!isNA(l.betradar)).length;
+    const lgBG = leagues.filter(l=>!isNA(l.betgenius)).length;
+    const tmBR = teams.filter(t=>!isNA(t.betradar_team)).length;
+    const tmBG = teams.filter(t=>!isNA(t.bg_team)).length;
+
+    document.getElementById('dash-coverage').innerHTML = `
+      ${bar('Leagues mapped — Betradar', lgBR, leagues.length)}
+      ${bar('Leagues mapped — Betgenius', lgBG, leagues.length, 'warn')}
+      ${bar('Teams mapped — Betradar', tmBR, teams.length)}
+      ${bar('Teams mapped — Betgenius', tmBG, teams.length, 'warn')}
+    `;
+    function bar(label,num,den,cls='accent'){
+      const p = pct(num,den);
+      return `<div class="bar-row"><div class="bar-label"><span>${label}</span><b>${p}% (${num}/${den})</b></div><div class="bar-track"><div class="bar-fill ${cls}" style="width:${p}%"></div></div></div>`;
+    }
+
+    const counts = {};
+    leagues.forEach(l=>{ if(l.country) counts[l.country]=(counts[l.country]||0)+1; });
+    const top = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    const maxC = top.length ? top[0][1] : 1;
+    document.getElementById('dash-countries').innerHTML = top.length ? top.map(([c,n])=>`
+      <div class="country-row"><span class="name">${escapeHtml(c)}</span><div class="track"><div class="fill" style="width:${(n/maxC)*100}%"></div></div><span class="count">${n}</span></div>
+    `).join('') : `<div class="empty-state" style="padding:20px;"><div class="ic">📊</div>No data yet</div>`;
+
+    const recent = state.history.slice(0,10);
+    document.getElementById('dash-recent').innerHTML = recent.length ? recent.map(h=>`
+      <div class="hist-line"><span class="t">${fmtTime(h.created_at)}</span><span class="who">${escapeHtml(h.username)}</span><span>${escapeHtml(h.action)} — ${escapeHtml(h.table_name)}</span></div>
+    `).join('') : `<div class="empty-state" style="padding:20px;"><div class="ic">🕒</div>No recent activity</div>`;
+  }
+};
+
+/* ============================= GENERIC SORT/FILTER/PAGINATE ============================= */
+function applyMappedFilter(rows, mode, brField, bgField){
+  if (mode==='all') return rows;
+  if (mode==='unmapped_br') return rows.filter(r=>isNA(r[brField]));
+  if (mode==='unmapped_bg') return rows.filter(r=>isNA(r[bgField]));
+  if (mode==='unmapped_any') return rows.filter(r=>isNA(r[brField])||isNA(r[bgField]));
+  if (mode==='fully_mapped') return rows.filter(r=>!isNA(r[brField])&&!isNA(r[bgField]));
+  return rows;
+}
+function applySort(rows, col, dir){
+  if (!col) return rows;
+  return [...rows].sort((a,b)=>{
+    const av = String(a[col]||'').toLowerCase(), bv = String(b[col]||'').toLowerCase();
+    if (av<bv) return -1*dir; if (av>bv) return 1*dir; return 0;
+  });
+}
+function renderPagination(elId, total, page, onPage){
+  const pages = Math.max(1, Math.ceil(total/PAGE_SIZE));
+  page = Math.min(page, pages);
+  let btns = '';
+  const start = Math.max(1, page-2), end = Math.min(pages, start+4);
+  for (let p=start; p<=end; p++){
+    btns += `<button class="${p===page?'active':''}" onclick="(${onPage})(${p})">${p}</button>`;
+  }
+  document.getElementById(elId).innerHTML = `
+    <span>${total} results — page ${page} of ${pages}</span>
+    <div class="page-btns">
+      <button ${page<=1?'disabled':''} onclick="(${onPage})(${page-1})">‹</button>
+      ${btns}
+      <button ${page>=pages?'disabled':''} onclick="(${onPage})(${page+1})">›</button>
+    </div>`;
+  return page;
+}
+
+/* ============================= LEAGUE MAPPINGS TAB ============================= */
+const LeagueTab = {
+  populateFilters(){
+    const sel = document.getElementById('lg-country-filter');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">All countries</option>' + uniqueCountries(state.leagues).map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    sel.value = cur;
+  },
+  refresh(){
+    this.populateFilters();
+    const f = state.lg;
+    f.country = document.getElementById('lg-country-filter').value;
+    f.mapped = document.getElementById('lg-mapped-filter').value;
+    f.search = document.getElementById('lg-search').value.trim().toLowerCase();
+    f.page = 1;
+    this.render();
+  },
+  render(){
+    const f = state.lg;
+    let rows = state.leagues;
+    if (f.country) rows = rows.filter(r=>r.country===f.country);
+    rows = applyMappedFilter(rows, f.mapped, 'betradar', 'betgenius');
+    if (f.search) rows = rows.filter(r=>[r.country,r.bcm_competition,r.betradar,r.betgenius].some(v=>String(v||'').toLowerCase().includes(f.search)));
+    rows = applySort(rows, f.sortCol, f.sortDir);
+
+    document.getElementById('lg-count').textContent = `${rows.length} leagues`;
+
+    const cols = [['country','Country'],['bcm_competition','BCM Competition'],['betradar','Betradar'],['betgenius','Betgenius']];
+    const isAdmin = state.user.role === 'admin';
+    document.getElementById('lg-thead').innerHTML = cols.map(([k,l])=>`
+      <th onclick="LeagueTab.sort('${k}')">${l}${f.sortCol===k?` <span class="arrow">${f.sortDir===1?'▲':'▼'}</span>`:''}</th>
+    `).join('') + (isAdmin ? '<th>Actions</th>' : '');
+
+    const page = renderPagination('lg-pagination', rows.length, f.page, 'LeagueTab.goPage');
+    f.page = page;
+    const pageRows = rows.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+
+    document.getElementById('lg-tbody').innerHTML = pageRows.length ? pageRows.map(r=>`
+      <tr>
+        <td>${escapeHtml(r.country||'')}</td>
+        <td>${escapeHtml(r.bcm_competition||'')}</td>
+        <td>${disp(r.betradar)}</td>
+        <td>${disp(r.betgenius)}</td>
+        ${isAdmin ? `<td class="row-actions">
+          <button class="btn btn-ghost btn-sm" onclick="EditModal.openLeague(${r.id})">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="LeagueTab.remove(${r.id})">Delete</button>
+        </td>` : ''}
+      </tr>
+    `).join('') : `<tr><td colspan="${isAdmin?5:4}"><div class="empty-state">No leagues match your filters</div></td></tr>`;
+  },
+  sort(col){
+    const f = state.lg;
+    if (f.sortCol===col) f.sortDir *= -1; else { f.sortCol=col; f.sortDir=1; }
+    this.render();
+  },
+  goPage(p){ state.lg.page = p; LeagueTab.render(); },
+  async remove(id){
+    if (!confirm('Delete this league mapping? This cannot be undone.')) return;
+    const rec = state.leagues.find(l=>l.id===id);
+    try {
+      await sb('leagues', { method:'DELETE', query:`?id=eq.${id}` });
+      state.leagues = state.leagues.filter(l=>l.id!==id);
+      await logHistory('Delete','leagues', `${rec.country} / ${rec.bcm_competition}`);
+      toast('League deleted');
+      this.render(); DashboardTab.render();
+    } catch(e){ toast('Delete failed: '+e.message, true); }
+  }
+};
+
+/* ============================= TEAM MAPPINGS TAB ============================= */
+const TeamTab = {
+  populateFilters(){
+    const sel = document.getElementById('tm-country-filter');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">All countries</option>' + uniqueCountries(state.teams).map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    sel.value = cur;
+  },
+  refresh(){
+    this.populateFilters();
+    const f = state.tm;
+    f.country = document.getElementById('tm-country-filter').value;
+    f.mapped = document.getElementById('tm-mapped-filter').value;
+    f.search = document.getElementById('tm-search').value.trim().toLowerCase();
+    f.page = 1;
+    this.render();
+  },
+  render(){
+    const f = state.tm;
+    let rows = state.teams;
+    if (f.country) rows = rows.filter(r=>r.country===f.country);
+    rows = applyMappedFilter(rows, f.mapped, 'betradar_team', 'bg_team');
+    if (f.search) rows = rows.filter(r=>[r.country,r.bcm_competition,r.bcm_team,r.betradar_competition,r.betradar_team,r.bg_competition,r.bg_team].some(v=>String(v||'').toLowerCase().includes(f.search)));
+    rows = applySort(rows, f.sortCol, f.sortDir);
+
+    document.getElementById('tm-count').textContent = `${rows.length} teams`;
+
+    const cols = [['country','Country'],['bcm_competition','BCM League'],['bcm_team','BCM Team'],['betradar_competition','BR Comp'],['betradar_team','BR Team'],['bg_competition','BG Comp'],['bg_team','BG Team']];
+    const isAdmin = state.user.role === 'admin';
+    document.getElementById('tm-thead').innerHTML = cols.map(([k,l])=>`
+      <th onclick="TeamTab.sort('${k}')">${l}${f.sortCol===k?` <span class="arrow">${f.sortDir===1?'▲':'▼'}</span>`:''}</th>
+    `).join('') + (isAdmin ? '<th>Actions</th>' : '');
+
+    const page = renderPagination('tm-pagination', rows.length, f.page, 'TeamTab.goPage');
+    f.page = page;
+    const pageRows = rows.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+
+    document.getElementById('tm-tbody').innerHTML = pageRows.length ? pageRows.map(r=>`
+      <tr>
+        <td>${escapeHtml(r.country||'')}</td>
+        <td><b>${escapeHtml(r.bcm_competition||'')}</b></td>
+        <td><b>${escapeHtml(r.bcm_team||'')}</b></td>
+        <td>${disp(r.betradar_competition)}</td>
+        <td>${disp(r.betradar_team)}</td>
+        <td>${disp(r.bg_competition)}</td>
+        <td>${disp(r.bg_team)}</td>
+        ${isAdmin ? `<td class="row-actions">
+          <button class="btn btn-ghost btn-sm" onclick="EditModal.openTeam(${r.id})">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="TeamTab.remove(${r.id})">Delete</button>
+        </td>` : ''}
+      </tr>
+    `).join('') : `<tr><td colspan="${isAdmin?8:7}"><div class="empty-state">No teams match your filters</div></td></tr>`;
+  },
+  sort(col){
+    const f = state.tm;
+    if (f.sortCol===col) f.sortDir *= -1; else { f.sortCol=col; f.sortDir=1; }
+    this.render();
+  },
+  goPage(p){ state.tm.page = p; TeamTab.render(); },
+  async remove(id){
+    if (!confirm('Delete this team mapping? This cannot be undone.')) return;
+    const rec = state.teams.find(t=>t.id===id);
+    try {
+      await sb('teams', { method:'DELETE', query:`?id=eq.${id}` });
+      state.teams = state.teams.filter(t=>t.id!==id);
+      await logHistory('Delete','teams', `${rec.country} / ${rec.bcm_competition} / ${rec.bcm_team}`);
+      toast('Team deleted');
+      this.render(); DashboardTab.render();
+    } catch(e){ toast('Delete failed: '+e.message, true); }
+  }
+};
+
+/* ============================= ADD NEW TAB ============================= */
+const AddTab = {
+  setType(t){
+    state.addType = t;
+    document.getElementById('add-toggle-league').classList.toggle('active', t==='league');
+    document.getElementById('add-toggle-team').classList.toggle('active', t==='team');
+    document.getElementById('add-league-panel').style.display = t==='league' ? '' : 'none';
+    document.getElementById('add-team-panel').style.display = t==='team' ? '' : 'none';
+    if (t==='team') this.populateCountry();
+  },
+  toggleNA(prefix){
+    const chk = document.getElementById(prefix+'-na');
+    const inp = document.getElementById(prefix);
+    inp.disabled = chk.checked;
+    if (chk.checked) inp.value = 'N/A'; else inp.value = '';
+    UI.dirty = true;
+  },
+  populateCountry(){
+    if (state.addType!=='team') return;
+    const sel = document.getElementById('at-country');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Select…</option>' + uniqueCountries(state.leagues).map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    sel.value = cur;
+  },
+  onCountryChange(){
+    const country = document.getElementById('at-country').value;
+    const bcmSel = document.getElementById('at-bcm');
+    const leagues = state.leagues.filter(l=>l.country===country);
+    bcmSel.innerHTML = leagues.length
+      ? '<option value="">Select…</option>' + leagues.map(l=>`<option value="${l.id}">${escapeHtml(l.bcm_competition)}</option>`).join('')
+      : '<option value="">No leagues for this country</option>';
+    UI.dirty = true;
+  },
+  onCompChange(){
+    const leagueId = document.getElementById('at-bcm').value;
+    const league = state.leagues.find(l=>String(l.id)===String(leagueId));
+    const brComp = document.getElementById('at-brcomp'), brTeam = document.getElementById('at-brteam');
+    const bgComp = document.getElementById('at-bgcomp'), bgTeam = document.getElementById('at-bgteam');
+    const brCompNa = document.getElementById('at-brcomp-na'), bgCompNa = document.getElementById('at-bgcomp-na');
+    const brTeamNa = document.getElementById('at-brteam-na'), bgTeamNa = document.getElementById('at-bgteam-na');
+    if (!league) return;
+    if (isNA(league.betradar)) {
+      brComp.value = 'N/A'; brComp.disabled = true; brCompNa.checked = true;
+      brTeam.value = 'N/A'; brTeam.disabled = true; brTeamNa.checked = true;
+    } else {
+      brComp.value = league.betradar; brComp.disabled = true; brCompNa.checked = false; brCompNa.disabled = true;
+      brTeam.value = ''; brTeam.disabled = false; brTeamNa.checked = false;
+    }
+    if (isNA(league.betgenius)) {
+      bgComp.value = 'N/A'; bgComp.disabled = true; bgCompNa.checked = true;
+      bgTeam.value = 'N/A'; bgTeam.disabled = true; bgTeamNa.checked = true;
+    } else {
+      bgComp.value = league.betgenius; bgComp.disabled = true; bgCompNa.checked = false; bgCompNa.disabled = true;
+      bgTeam.value = ''; bgTeam.disabled = false; bgTeamNa.checked = false;
+    }
+    UI.dirty = true;
+  },
+  resetLeague(){
+    ['al-country','al-bcm','al-br','al-bg'].forEach(id=>document.getElementById(id).value='');
+    ['al-br-na','al-bg-na'].forEach(id=>document.getElementById(id).checked=false);
+    document.getElementById('al-br').disabled=false; document.getElementById('al-bg').disabled=false;
+  },
+  async submitLeague(){
+    const country = document.getElementById('al-country').value.trim();
+    const bcm = document.getElementById('al-bcm').value.trim();
+    const br = document.getElementById('al-br-na').checked ? 'N/A' : document.getElementById('al-br').value.trim();
+    const bg = document.getElementById('al-bg-na').checked ? 'N/A' : document.getElementById('al-bg').value.trim();
+    if (!country || !bcm) { toast('Country and BCM Competition are required', true); return; }
+    const dup = state.leagues.find(l=>l.country.toLowerCase()===country.toLowerCase() && l.bcm_competition.toLowerCase()===bcm.toLowerCase());
+    if (dup) { toast('This league already exists', true); return; }
+    try {
+      const rows = await sb('leagues', { method:'POST', prefer:'return=representation', body:[{country,bcm_competition:bcm,betradar:br||'N/A',betgenius:bg||'N/A'}] });
+      state.leagues.push(rows[0]);
+      await logHistory('Add','leagues', `${country} / ${bcm}`);
+      toast('League added');
+      UI.dirty = false;
+      this.resetLeague();
+      LeagueTab.render(); DashboardTab.render();
+    } catch(e){ toast('Failed to add league: '+e.message, true); }
+  },
+  resetTeam(){
+    ['at-bcmteam','at-brcomp','at-brteam','at-bgcomp','at-bgteam'].forEach(id=>{ document.getElementById(id).value=''; document.getElementById(id).disabled=false; });
+    ['at-bcmteam-na','at-brcomp-na','at-brteam-na','at-bgcomp-na','at-bgteam-na'].forEach(id=>{ const el=document.getElementById(id); el.checked=false; el.disabled=false; });
+    document.getElementById('at-country').value='';
+    document.getElementById('at-bcm').innerHTML = '<option value="">Select country first</option>';
+  },
+  async submitTeam(){
+    const country = document.getElementById('at-country').value;
+    const leagueId = document.getElementById('at-bcm').value;
+    const league = state.leagues.find(l=>String(l.id)===String(leagueId));
+    if (!country || !league) { toast('Select a country and BCM competition', true); return; }
+    const bcmTeam = document.getElementById('at-bcmteam-na').checked ? 'N/A' : document.getElementById('at-bcmteam').value.trim();
+    if (!bcmTeam) { toast('BCM Team is required', true); return; }
+    const brComp = document.getElementById('at-brcomp').value.trim() || 'N/A';
+    const brTeam = document.getElementById('at-brteam-na').checked ? 'N/A' : document.getElementById('at-brteam').value.trim() || 'N/A';
+    const bgComp = document.getElementById('at-bgcomp').value.trim() || 'N/A';
+    const bgTeam = document.getElementById('at-bgteam-na').checked ? 'N/A' : document.getElementById('at-bgteam').value.trim() || 'N/A';
+
+    const dup = state.teams.find(t=>t.country.toLowerCase()===country.toLowerCase() && t.bcm_competition.toLowerCase()===league.bcm_competition.toLowerCase() && (t.bcm_team||'').toLowerCase()===bcmTeam.toLowerCase());
+    if (dup) { toast('This team already exists', true); return; }
+
+    try {
+      const rows = await sb('teams', { method:'POST', prefer:'return=representation', body:[{
+        country, bcm_competition: league.bcm_competition, bcm_team: bcmTeam,
+        betradar_competition: brComp, betradar_team: brTeam,
+        bg_competition: bgComp, bg_team: bgTeam
+      }]});
+      state.teams.push(rows[0]);
+      await logHistory('Add','teams', `${country} / ${league.bcm_competition} / ${bcmTeam}`);
+      toast('Team added');
+      UI.dirty = false;
+      this.resetTeam();
+      TeamTab.render(); DashboardTab.render();
+    } catch(e){ toast('Failed to add team: '+e.message, true); }
+  }
+};
+
+/* ============================= EDIT MODAL (admin) ============================= */
+const EditModal = {
+  mode: null, id: null,
+  openLeague(id){
+    const r = state.leagues.find(l=>l.id===id);
+    this.mode='league'; this.id=id;
+    document.getElementById('edit-modal-title').textContent = 'Edit league';
+    document.getElementById('edit-modal-body').innerHTML = `
+      <div class="field"><label>Country</label><input id="em-country" value="${escapeHtml(r.country)}"></div>
+      <div class="field"><label>BCM Competition</label><input id="em-bcm" value="${escapeHtml(r.bcm_competition)}"></div>
+      <div class="field"><label>Betradar</label><input id="em-br" value="${escapeHtml(r.betradar)}"></div>
+      <div class="field"><label>Betgenius</label><input id="em-bg" value="${escapeHtml(r.betgenius)}"></div>
+    `;
+    document.getElementById('edit-modal').classList.add('show');
+  },
+  openTeam(id){
+    const r = state.teams.find(t=>t.id===id);
+    this.mode='team'; this.id=id;
+    document.getElementById('edit-modal-title').textContent = 'Edit team';
+    document.getElementById('edit-modal-body').innerHTML = `
+      <div class="field"><label>Country</label><input id="em-country" value="${escapeHtml(r.country)}"></div>
+      <div class="field"><label>BCM Competition</label><input id="em-bcm" value="${escapeHtml(r.bcm_competition)}"></div>
+      <div class="field"><label>BCM Team</label><input id="em-bcmteam" value="${escapeHtml(r.bcm_team)}"></div>
+      <div class="field"><label>Betradar Competition</label><input id="em-brcomp" value="${escapeHtml(r.betradar_competition)}"></div>
+      <div class="field"><label>Betradar Team</label><input id="em-brteam" value="${escapeHtml(r.betradar_team)}"></div>
+      <div class="field"><label>Betgenius Competition</label><input id="em-bgcomp" value="${escapeHtml(r.bg_competition)}"></div>
+      <div class="field"><label>Betgenius Team</label><input id="em-bgteam" value="${escapeHtml(r.bg_team)}"></div>
+    `;
+    document.getElementById('edit-modal').classList.add('show');
+  },
+  close(){ document.getElementById('edit-modal').classList.remove('show'); },
+  async save(){
+    try {
+      if (this.mode==='league') {
+        const body = {
+          country: document.getElementById('em-country').value.trim(),
+          bcm_competition: document.getElementById('em-bcm').value.trim(),
+          betradar: document.getElementById('em-br').value.trim() || 'N/A',
+          betgenius: document.getElementById('em-bg').value.trim() || 'N/A',
+          updated_at: new Date().toISOString()
+        };
+        const rows = await sb('leagues', { method:'PATCH', query:`?id=eq.${this.id}`, prefer:'return=representation', body });
+        const idx = state.leagues.findIndex(l=>l.id===this.id);
+        state.leagues[idx] = rows[0];
+        await logHistory('Edit','leagues', `${body.country} / ${body.bcm_competition}`);
+        LeagueTab.render();
+      } else {
+        const body = {
+          country: document.getElementById('em-country').value.trim(),
+          bcm_competition: document.getElementById('em-bcm').value.trim(),
+          bcm_team: document.getElementById('em-bcmteam').value.trim(),
+          betradar_competition: document.getElementById('em-brcomp').value.trim() || 'N/A',
+          betradar_team: document.getElementById('em-brteam').value.trim() || 'N/A',
+          bg_competition: document.getElementById('em-bgcomp').value.trim() || 'N/A',
+          bg_team: document.getElementById('em-bgteam').value.trim() || 'N/A',
+          updated_at: new Date().toISOString()
+        };
+        const rows = await sb('teams', { method:'PATCH', query:`?id=eq.${this.id}`, prefer:'return=representation', body });
+        const idx = state.teams.findIndex(t=>t.id===this.id);
+        state.teams[idx] = rows[0];
+        await logHistory('Edit','teams', `${body.country} / ${body.bcm_competition} / ${body.bcm_team}`);
+        TeamTab.render();
+      }
+      DashboardTab.render();
+      toast('Changes saved');
+      this.close();
+    } catch(e){ toast('Save failed: '+e.message, true); }
+  }
+};
+
+/* ============================= BULK UPLOAD TAB ============================= */
+const BulkTab = {
+  init(){
+    const drop = document.getElementById('bulk-drop');
+    const fileInput = document.getElementById('bulk-file');
+    const typeSel = document.getElementById('bulk-type');
+    typeSel.addEventListener('change', ()=>{
+      document.getElementById('bulk-hint').textContent = typeSel.value==='league'
+        ? 'Leagues: columns A–D = Country, BCM Competition, Betradar, Betgenius (row 1 header skipped)'
+        : 'Teams: columns A–G = Country, BCM Competition, BCM Team, Betradar Competition, Betradar Team, BG Competition, BG Team (row 1 header skipped)';
+      state.bulkParsed = null;
+      document.getElementById('bulk-preview').innerHTML = '';
+    });
+    fileInput.addEventListener('change', e=>{ if (e.target.files[0]) this.handleFile(e.target.files[0]); });
+    drop.addEventListener('dragover', e=>{ e.preventDefault(); drop.classList.add('drag'); });
+    drop.addEventListener('dragleave', ()=>drop.classList.remove('drag'));
+    drop.addEventListener('drop', e=>{
+      e.preventDefault(); drop.classList.remove('drag');
+      if (e.dataTransfer.files[0]) this.handleFile(e.dataTransfer.files[0]);
+    });
+  },
+  handleFile(file){
+    const type = document.getElementById('bulk-type').value;
+    const reader = new FileReader();
+    reader.onload = evt => {
+      try {
+        const wb = XLSX.read(evt.target.result, { type:'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header:1, defval:'' });
+        const dataRows = rows.slice(1).filter(r=>r.some(c=>String(c).trim()!==''));
+        const parsed = dataRows.map(r=>{
+          if (type==='league') {
+            return { country:String(r[0]||'').trim(), bcm_competition:String(r[1]||'').trim(), betradar:String(r[2]||'').trim()||'N/A', betgenius:String(r[3]||'').trim()||'N/A' };
+          }
+          return {
+            country:String(r[0]||'').trim(), bcm_competition:String(r[1]||'').trim(), bcm_team:String(r[2]||'').trim(),
+            betradar_competition:String(r[3]||'').trim()||'N/A', betradar_team:String(r[4]||'').trim()||'N/A',
+            bg_competition:String(r[5]||'').trim()||'N/A', bg_team:String(r[6]||'').trim()||'N/A'
+          };
+        });
+        this.preview(type, parsed);
+      } catch(e){ toast('Could not parse file: '+e.message, true); }
+    };
+    reader.readAsArrayBuffer(file);
+  },
+  preview(type, rows){
+    const existing = type==='league' ? state.leagues : state.teams;
+    const withFlags = rows.map(r=>{
+      let isDup;
+      if (type==='league') {
+        isDup = existing.some(e=>e.country.toLowerCase()===r.country.toLowerCase() && e.bcm_competition.toLowerCase()===r.bcm_competition.toLowerCase());
+      } else {
+        isDup = existing.some(e=>e.country.toLowerCase()===r.country.toLowerCase() && e.bcm_competition.toLowerCase()===r.bcm_competition.toLowerCase() && (e.bcm_team||'').toLowerCase()===(r.bcm_team||'').toLowerCase());
+      }
+      return { data:r, isDup, checked: !isDup };
+    });
+    state.bulkParsed = { type, rows: withFlags };
+    this.renderPreview();
+  },
+  renderPreview(){
+    const p = state.bulkParsed;
+    if (!p) return;
+    const dups = p.rows.filter(r=>r.isDup);
+    const news = p.rows.filter(r=>!r.isDup);
+    const cols = p.type==='league'
+      ? [['country','Country'],['bcm_competition','BCM Competition'],['betradar','Betradar'],['betgenius','Betgenius']]
+      : [['country','Country'],['bcm_competition','BCM Competition'],['bcm_team','BCM Team'],['betradar_competition','BR Comp'],['betradar_team','BR Team'],['bg_competition','BG Comp'],['bg_team','BG Team']];
+
+    let html = `<div style="margin:20px 0 10px;display:flex;align-items:center;gap:10px;">
+      <span class="section-count dup">🔴 ${dups.length} duplicates</span>
+      <span class="section-count new">🟢 ${news.length} new</span>
+      <button class="btn btn-primary btn-sm" style="margin-left:auto;" onclick="BulkTab.uploadSelected()">Upload selected</button>
+    </div>`;
+
+    if (news.length) {
+      html += `<div style="font-size:12.5px;font-weight:700;margin:10px 0 6px;color:var(--success);">New entries</div>
+      <div class="table-wrap"><table><thead><tr><th class="checkbox-cell"><input type="checkbox" checked onchange="BulkTab.toggleAll(this.checked)"></th>${cols.map(c=>`<th>${c[1]}</th>`).join('')}</tr></thead><tbody>`;
+      p.rows.forEach((r,i)=>{ if (r.isDup) return; html += `<tr><td class="checkbox-cell"><input type="checkbox" ${r.checked?'checked':''} onchange="BulkTab.toggleRow(${i}, this.checked)"></td>${cols.map(c=>`<td>${escapeHtml(r.data[c[0]])}</td>`).join('')}</tr>`; });
+      html += `</tbody></table></div>`;
+    }
+    if (dups.length) {
+      html += `<div style="font-size:12.5px;font-weight:700;margin:16px 0 6px;color:var(--danger);">Duplicates (will be skipped)</div>
+      <div class="table-wrap"><table><thead><tr>${cols.map(c=>`<th>${c[1]}</th>`).join('')}</tr></thead><tbody>`;
+      dups.forEach(r=>{ html += `<tr style="opacity:.6;">${cols.map(c=>`<td>${escapeHtml(r.data[c[0]])}</td>`).join('')}</tr>`; });
+      html += `</tbody></table></div>`;
+    }
+    document.getElementById('bulk-preview').innerHTML = html;
+  },
+  toggleRow(i, checked){ state.bulkParsed.rows[i].checked = checked; },
+  toggleAll(checked){ state.bulkParsed.rows.forEach(r=>{ if(!r.isDup) r.checked = checked; }); this.renderPreview(); },
+  async uploadSelected(){
+    const p = state.bulkParsed;
+    if (!p) return;
+    const toUpload = p.rows.filter(r=>!r.isDup && r.checked).map(r=>r.data);
+    if (toUpload.length===0) { toast('No entries selected', true); return; }
+    const table = p.type==='league' ? 'leagues' : 'teams';
+    try {
+      const BATCH = 200;
+      let inserted = [];
+      for (let i=0;i<toUpload.length;i+=BATCH){
+        const chunk = toUpload.slice(i,i+BATCH);
+        const rows = await sb(table, { method:'POST', prefer:'return=representation', body:chunk });
+        inserted = inserted.concat(rows);
+      }
+      if (table==='leagues') state.leagues = state.leagues.concat(inserted);
+      else state.teams = state.teams.concat(inserted);
+      await logHistory('Bulk Upload', table, `${inserted.length} entries added via bulk upload`);
+      toast(`${inserted.length} ${table} uploaded`);
+      state.bulkParsed = null;
+      document.getElementById('bulk-preview').innerHTML = '';
+      document.getElementById('bulk-file').value = '';
+      LeagueTab.render(); TeamTab.render(); DashboardTab.render();
+    } catch(e){ toast('Upload failed: '+e.message, true); }
+  },
+  exportAll(){
+    const wb = XLSX.utils.book_new();
+    const lgSheet = XLSX.utils.json_to_sheet(state.leagues.map(l=>({Country:l.country,'BCM Competition':l.bcm_competition,Betradar:l.betradar,Betgenius:l.betgenius})));
+    const tmSheet = XLSX.utils.json_to_sheet(state.teams.map(t=>({Country:t.country,'BCM Competition':t.bcm_competition,'BCM Team':t.bcm_team,'Betradar Competition':t.betradar_competition,'Betradar Team':t.betradar_team,'BG Competition':t.bg_competition,'BG Team':t.bg_team})));
+    XLSX.utils.book_append_sheet(wb, lgSheet, 'League Names V2');
+    XLSX.utils.book_append_sheet(wb, tmSheet, 'BCMSourceTeams');
+    XLSX.writeFile(wb, `League & Team Mapper_export_${new Date().toISOString().slice(0,10)}.xlsx`);
+    logHistory('Export','leagues+teams', `Exported ${state.leagues.length} leagues, ${state.teams.length} teams`);
+  }
+};
+
+/* ============================= HISTORY TAB (admin) ============================= */
+const HistoryTab = {
+  render(){
+    document.getElementById('hist-tbody').innerHTML = state.history.length ? state.history.map(h=>`
+      <tr><td class="mono" style="white-space:nowrap;">${fmtTime(h.created_at)}</td><td>${escapeHtml(h.username)}</td><td>${escapeHtml(h.action)}</td><td>${escapeHtml(h.table_name)}</td><td>${escapeHtml(h.record_details||'')}</td></tr>
+    `).join('') : `<tr><td colspan="5"><div class="empty-state">No history yet</div></td></tr>`;
+  },
+  exportExcel(){
+    const wb = XLSX.utils.book_new();
+    const sheet = XLSX.utils.json_to_sheet(state.history.map(h=>({Time:fmtTime(h.created_at),User:h.username,Action:h.action,Table:h.table_name,Details:h.record_details})));
+    XLSX.utils.book_append_sheet(wb, sheet, 'History');
+    XLSX.writeFile(wb, `League & Team Mapper_history_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+};
+
+/* ============================= USERS TAB (admin) ============================= */
+const UsersTab = {
+  render(){
+    document.getElementById('users-tbody').innerHTML = state.users.length ? state.users.map(u=>`
+      <tr>
+        <td>${escapeHtml(u.username)}</td>
+        <td><span class="role-pill ${u.role}">${u.role}</span></td>
+        <td class="mono">${fmtTime(u.created_at)}</td>
+        <td class="row-actions">
+          <button class="btn btn-ghost btn-sm" onclick="UsersTab.resetPassword(${u.id})">Reset password</button>
+          <button class="btn btn-danger btn-sm" onclick="UsersTab.remove(${u.id})">Delete</button>
+        </td>
+      </tr>
+    `).join('') : `<tr><td colspan="4"><div class="empty-state">No users yet</div></td></tr>`;
+  },
+  async add(){
+    const username = document.getElementById('nu-username').value.trim();
+    const password = document.getElementById('nu-password').value;
+    const role = document.getElementById('nu-role').value;
+    if (!username || !password) { toast('Username and password required', true); return; }
+    if (state.users.some(u=>u.username.toLowerCase()===username.toLowerCase())) { toast('Username already exists', true); return; }
+    try {
+      const rows = await sb('users', { method:'POST', prefer:'return=representation', body:[{username,password,role}] });
+      state.users.push(rows[0]);
+      await logHistory('Add','users', `Created user ${username} (${role})`);
+      toast('User added');
+      document.getElementById('nu-username').value=''; document.getElementById('nu-password').value='';
+      this.render();
+    } catch(e){ toast('Failed to add user: '+e.message, true); }
+  },
+  async resetPassword(id){
+    const newPass = prompt('Enter new password for this user:');
+    if (!newPass) return;
+    try {
+      await sb('users', { method:'PATCH', query:`?id=eq.${id}`, body:{password:newPass} });
+      const u = state.users.find(x=>x.id===id);
+      await logHistory('Reset Password','users', `Password reset for ${u.username}`);
+      toast('Password reset');
+    } catch(e){ toast('Failed: '+e.message, true); }
+  },
+  async remove(id){
+    const u = state.users.find(x=>x.id===id);
+    if (u.username === state.user.username) { toast("You can't delete your own account", true); return; }
+    if (!confirm(`Delete user "${u.username}"?`)) return;
+    try {
+      await sb('users', { method:'DELETE', query:`?id=eq.${id}` });
+      state.users = state.users.filter(x=>x.id!==id);
+      await logHistory('Delete','users', `Deleted user ${u.username}`);
+      toast('User deleted');
+      this.render();
+    } catch(e){ toast('Delete failed: '+e.message, true); }
+  }
+};
+
+/* ============================= APP BOOT ============================= */
+const App = {
+  async boot(){
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('loading-overlay').style.display = 'flex';
+    try {
+      const [leagues, teams, users, history] = await Promise.all([
+        sbLoadAll('leagues'),
+        sbLoadAll('teams'),
+        sbLoadAll('users'),
+        sb('history', { query:'?select=*&order=created_at.desc&limit=500' })
+      ]);
+      state.leagues = leagues; state.teams = teams; state.users = users; state.history = history || [];
+
+      document.getElementById('user-chip-name').textContent = state.user.username;
+      const pill = document.getElementById('user-role-pill');
+      pill.textContent = state.user.role;
+      pill.className = 'role-pill ' + state.user.role;
+
+      UI.buildTabs();
+      UI.switchTab('search');
+      BulkTab.init();
+
+      document.getElementById('app').classList.add('show');
+      document.getElementById('loading-overlay').style.display = 'none';
+    } catch (e) {
+      document.getElementById('loading-overlay').style.display = 'none';
+      alert('Failed to load data: ' + e.message);
+      Auth.logout();
+    }
+  },
+  async init(){
+    UI.initDark();
+    if (Auth.restore()) {
+      await this.boot();
+    } else {
+      document.getElementById('loading-overlay').style.display = 'none';
+      document.getElementById('login-screen').style.display = 'flex';
+    }
+  }
+};
+
+document.getElementById('login-password').addEventListener('keydown', e=>{ if (e.key==='Enter') Auth.login(); });
+document.getElementById('login-username').addEventListener('keydown', e=>{ if (e.key==='Enter') Auth.login(); });
+
+App.init();
+</script>
+</body>
+</html>
