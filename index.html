@@ -203,7 +203,7 @@
             display: block;
         }
 
-        /* Table Name */
+        /* Table */
         .table-container {
             background: white;
             border-radius: 12px;
@@ -627,6 +627,108 @@
             padding: 3rem;
             color: #999;
         }
+
+        /* Add New Tab */
+        .addnew-container {
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .addnew-toggle, .bulk-toggle {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .addnew-toggle-btn.active, .bulk-toggle-btn.active {
+            background: #667eea !important;
+            color: white !important;
+        }
+
+        .addnew-form h3, .bulk-section h3 {
+            font-size: 1.3rem;
+            margin-bottom: 1.5rem;
+            color: #333;
+        }
+
+        .addnew-form .form-group label {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #444;
+        }
+
+        .addnew-form .form-group small {
+            margin-bottom: 0.5rem;
+        }
+
+        /* Bulk Upload Tab */
+        .bulk-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .bulk-results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .bulk-results-table th, .bulk-results-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 0.85rem;
+        }
+
+        .bulk-results-table thead {
+            background: #f8f9fa;
+        }
+
+        .bulk-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .bulk-section-header.duplicates {
+            background: #fff5f5;
+            border: 1px solid #feb2b2;
+        }
+
+        .bulk-section-header.new-entries {
+            background: #f0fff4;
+            border: 1px solid #9ae6b4;
+        }
+
+        .bulk-section-header h4 {
+            font-size: 1rem;
+        }
+
+        .bulk-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .bulk-actions {
+            margin-top: 1.5rem;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .bulk-count {
+            color: #666;
+            font-size: 0.9rem;
+        }
     </style>
 </head>
 <body>
@@ -685,6 +787,12 @@
             </button>
             <button class="tab-btn" data-tab="teams">
                 👥 Team Mappings
+            </button>
+            <button class="tab-btn" data-tab="addnew">
+                ➕ Add New
+            </button>
+            <button class="tab-btn" data-tab="bulk">
+                📤 Bulk Upload
             </button>
         </div>
 
@@ -754,6 +862,104 @@
                 <div class="empty-state">
                     <p>🔎 Search for a league or team name above</p>
                     <p style="font-size:0.9rem; margin-top:0.5rem;">Results will show as cards with all mapping details</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add New Tab -->
+        <div id="addnewTab" class="tab-content">
+            <div class="addnew-container">
+                <!-- Toggle between League and Team -->
+                <div class="addnew-toggle">
+                    <button class="btn btn-primary addnew-toggle-btn active" onclick="showAddForm('league')">🏆 Add League</button>
+                    <button class="btn btn-secondary addnew-toggle-btn" onclick="showAddForm('team')">👥 Add Team</button>
+                </div>
+
+                <!-- Add League Form -->
+                <div id="addLeagueForm" class="addnew-form">
+                    <h3>Add New League Mapping</h3>
+                    <div class="form-group">
+                        <label>1. Country *</label>
+                        <input type="text" id="addLeagueCountry" class="form-control" placeholder="e.g., England" list="addCountryList">
+                        <datalist id="addCountryList"></datalist>
+                    </div>
+                    <div class="form-group">
+                        <label>2. BCM Competition Name *</label>
+                        <input type="text" id="addLeagueBCM" class="form-control" placeholder="e.g., Premier League">
+                    </div>
+                    <div class="form-group">
+                        <label>3. What is this league called in Betradar?</label>
+                        <small>Enter one or multiple names (one per line). Leave empty if N/A.</small>
+                        <textarea id="addLeagueBetradar" class="form-control" rows="3" placeholder="e.g., England Premier League&#10;England Premier League Playoffs"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>4. What is this league called in Betgenius?</label>
+                        <small>Enter one or multiple names (one per line). Leave empty if N/A.</small>
+                        <textarea id="addLeagueBetgenius" class="form-control" rows="3" placeholder="e.g., EPL"></textarea>
+                    </div>
+                    <button class="btn btn-success" onclick="submitNewLeague()" style="width:100%; padding:1rem; font-size:1.1rem;">✅ Save League to Database</button>
+                </div>
+
+                <!-- Add Team Form -->
+                <div id="addTeamForm" class="addnew-form" style="display:none;">
+                    <h3>Add New Team Mapping</h3>
+                    <div class="form-group">
+                        <label>1. Country *</label>
+                        <input type="text" id="addTeamCountry" class="form-control" placeholder="e.g., England" list="addTeamCountryList">
+                        <datalist id="addTeamCountryList"></datalist>
+                    </div>
+                    <div class="form-group">
+                        <label>2. BCM Competition *</label>
+                        <input type="text" id="addTeamBCMComp" class="form-control" placeholder="e.g., Premier League" list="addTeamBCMList">
+                        <datalist id="addTeamBCMList"></datalist>
+                    </div>
+                    <div class="form-group">
+                        <label>3. BCM Team Name *</label>
+                        <input type="text" id="addTeamBCMName" class="form-control" placeholder="e.g., Manchester United">
+                    </div>
+                    <div class="form-group">
+                        <label>4. What is the Betradar competition for this team?</label>
+                        <input type="text" id="addTeamBRComp" class="form-control" placeholder="e.g., England - Premier League">
+                    </div>
+                    <div class="form-group">
+                        <label>5. What is the Betradar team name?</label>
+                        <input type="text" id="addTeamBRName" class="form-control" placeholder="e.g., Man Utd">
+                    </div>
+                    <div class="form-group">
+                        <label>6. What is the Betgenius competition for this team?</label>
+                        <input type="text" id="addTeamBGComp" class="form-control" placeholder="e.g., EPL">
+                    </div>
+                    <div class="form-group">
+                        <label>7. What is the Betgenius team name?</label>
+                        <input type="text" id="addTeamBGName" class="form-control" placeholder="e.g., Manchester United FC">
+                    </div>
+                    <button class="btn btn-success" onclick="submitNewTeam()" style="width:100%; padding:1rem; font-size:1.1rem;">✅ Save Team to Database</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bulk Upload Tab -->
+        <div id="bulkTab" class="tab-content">
+            <div class="bulk-container">
+                <div class="bulk-toggle">
+                    <button class="btn btn-primary bulk-toggle-btn active" onclick="showBulkForm('league')">🏆 Bulk Leagues</button>
+                    <button class="btn btn-secondary bulk-toggle-btn" onclick="showBulkForm('team')">👥 Bulk Teams</button>
+                </div>
+
+                <div id="bulkLeagueSection" class="bulk-section">
+                    <h3>Bulk Upload Leagues</h3>
+                    <p style="color:#666; margin-bottom:1rem;">Upload a fresh Excel file. The app will compare against the database and show duplicates vs new entries.</p>
+                    <button class="btn btn-primary" onclick="document.getElementById('bulkLeagueFile').click()">📂 Select Leagues File</button>
+                    <input type="file" id="bulkLeagueFile" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleBulkLeagueUpload(event)">
+                    <div id="bulkLeagueResults" style="margin-top:1.5rem;"></div>
+                </div>
+
+                <div id="bulkTeamSection" class="bulk-section" style="display:none;">
+                    <h3>Bulk Upload Teams</h3>
+                    <p style="color:#666; margin-bottom:1rem;">Upload a fresh Excel file. The app will compare against the database and show duplicates vs new entries.</p>
+                    <button class="btn btn-primary" onclick="document.getElementById('bulkTeamFile').click()">📂 Select Teams File</button>
+                    <input type="file" id="bulkTeamFile" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleBulkTeamUpload(event)">
+                    <div id="bulkTeamResults" style="margin-top:1.5rem;"></div>
                 </div>
             </div>
         </div>
@@ -953,7 +1159,7 @@
             
             // Show/hide regular search and add button based on tab
             const searchContainer = document.querySelector('.search-container');
-            if (tab === 'master') {
+            if (tab === 'master' || tab === 'addnew' || tab === 'bulk') {
                 searchContainer.style.display = 'none';
             } else {
                 searchContainer.style.display = 'flex';
@@ -1672,6 +1878,273 @@
                 toast.style.animation = 'slideInRight 0.3s reverse';
                 setTimeout(() => toast.remove(), 300);
             }, 3000);
+        }
+
+        // ============================================
+        // ADD NEW TAB - Single Entry
+        // ============================================
+
+        function showAddForm(type) {
+            document.getElementById('addLeagueForm').style.display = type === 'league' ? 'block' : 'none';
+            document.getElementById('addTeamForm').style.display = type === 'team' ? 'block' : 'none';
+            document.querySelectorAll('.addnew-toggle-btn').forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-secondary');
+            });
+            event.target.classList.add('active');
+            event.target.classList.remove('btn-secondary');
+            event.target.classList.add('btn-primary');
+
+            // Populate datalists
+            const countries = [...new Set(leagues.map(l => l.country))].sort();
+            document.getElementById('addCountryList').innerHTML = countries.map(c => `<option value="${escapeHtml(c)}">`).join('');
+            document.getElementById('addTeamCountryList').innerHTML = countries.map(c => `<option value="${escapeHtml(c)}">`).join('');
+            const bcmComps = [...new Set(leagues.map(l => l.bcmCompetition))].sort();
+            document.getElementById('addTeamBCMList').innerHTML = bcmComps.map(c => `<option value="${escapeHtml(c)}">`).join('');
+        }
+
+        async function submitNewLeague() {
+            const country = document.getElementById('addLeagueCountry').value.trim();
+            const bcm = document.getElementById('addLeagueBCM').value.trim();
+            const betradarRaw = document.getElementById('addLeagueBetradar').value.trim();
+            const betgeniusRaw = document.getElementById('addLeagueBetgenius').value.trim();
+
+            if (!country || !bcm) {
+                showToast('Country and BCM Competition are required', 'error');
+                return;
+            }
+
+            const betradar = parseMappingInput(betradarRaw);
+            const betgenius = parseMappingInput(betgeniusRaw);
+
+            const exists = leagues.some(l => l.country === country && l.bcmCompetition === bcm);
+            if (exists) {
+                showToast('This league already exists in the database!', 'warning');
+                return;
+            }
+
+            try {
+                const inserted = await supabaseRequest('leagues', 'POST', {
+                    country, bcm_competition: bcm, betradar, betgenius
+                });
+                leagues.push(mapLeagueFromDb(inserted[0]));
+                showToast('League added to database!', 'success');
+                updateStats();
+                document.getElementById('addLeagueCountry').value = '';
+                document.getElementById('addLeagueBCM').value = '';
+                document.getElementById('addLeagueBetradar').value = '';
+                document.getElementById('addLeagueBetgenius').value = '';
+            } catch (error) {
+                showToast('Error: ' + error.message, 'error');
+            }
+        }
+
+        async function submitNewTeam() {
+            const country = document.getElementById('addTeamCountry').value.trim();
+            const bcmComp = document.getElementById('addTeamBCMComp').value.trim();
+            const bcmTeam = document.getElementById('addTeamBCMName').value.trim();
+            const brComp = document.getElementById('addTeamBRComp').value.trim();
+            const brTeam = document.getElementById('addTeamBRName').value.trim();
+            const bgComp = document.getElementById('addTeamBGComp').value.trim();
+            const bgTeam = document.getElementById('addTeamBGName').value.trim();
+
+            if (!country || !bcmComp || !bcmTeam) {
+                showToast('Country, BCM Competition, and BCM Team are required', 'error');
+                return;
+            }
+
+            const exists = teams.some(t => t.country === country && t.bcmCompetition === bcmComp && t.bcmTeam === bcmTeam);
+            if (exists) {
+                showToast('This team already exists in the database!', 'warning');
+                return;
+            }
+
+            try {
+                const inserted = await supabaseRequest('teams', 'POST', {
+                    country, bcm_competition: bcmComp, bcm_team: bcmTeam,
+                    betradar_competition: brComp, betradar_team: brTeam,
+                    bg_competition: bgComp, bg_team: bgTeam
+                });
+                teams.push(mapTeamFromDb(inserted[0]));
+                showToast('Team added to database!', 'success');
+                updateStats();
+                document.getElementById('addTeamBCMName').value = '';
+                document.getElementById('addTeamBRComp').value = '';
+                document.getElementById('addTeamBRName').value = '';
+                document.getElementById('addTeamBGComp').value = '';
+                document.getElementById('addTeamBGName').value = '';
+            } catch (error) {
+                showToast('Error: ' + error.message, 'error');
+            }
+        }
+
+        // ============================================
+        // BULK UPLOAD TAB
+        // ============================================
+
+        let bulkNewLeagues = [];
+        let bulkNewTeams = [];
+
+        function showBulkForm(type) {
+            document.getElementById('bulkLeagueSection').style.display = type === 'league' ? 'block' : 'none';
+            document.getElementById('bulkTeamSection').style.display = type === 'team' ? 'block' : 'none';
+            document.querySelectorAll('.bulk-toggle-btn').forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-secondary');
+            });
+            event.target.classList.add('active');
+            event.target.classList.remove('btn-secondary');
+            event.target.classList.add('btn-primary');
+        }
+
+        function handleBulkLeagueUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const data = new Uint8Array(event.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+                    const uploaded = [];
+                    for (let i = 1; i < rows.length; i++) {
+                        const row = rows[i];
+                        if (!row[0] && !row[1]) continue;
+                        uploaded.push({
+                            country: (row[0] || '').toString().trim(),
+                            bcmCompetition: (row[1] || '').toString().trim(),
+                            betradar: (row[2] || '').toString().trim(),
+                            betgenius: (row[3] || '').toString().trim()
+                        });
+                    }
+                    const duplicates = [];
+                    const newEntries = [];
+                    uploaded.forEach(item => {
+                        const isDup = leagues.some(l => l.country.toLowerCase() === item.country.toLowerCase() && l.bcmCompetition.toLowerCase() === item.bcmCompetition.toLowerCase());
+                        if (isDup) duplicates.push(item);
+                        else newEntries.push(item);
+                    });
+                    bulkNewLeagues = newEntries;
+                    renderBulkLeagueResults(duplicates, newEntries);
+                } catch (error) { showToast('Error reading file: ' + error.message, 'error'); }
+            };
+            reader.readAsArrayBuffer(file);
+            e.target.value = '';
+        }
+
+        function renderBulkLeagueResults(duplicates, newEntries) {
+            const container = document.getElementById('bulkLeagueResults');
+            let html = `<div class="bulk-section-header duplicates"><h4>🔴 Duplicates (${duplicates.length} already in database)</h4></div>`;
+            if (duplicates.length > 0) {
+                html += `<div style="max-height:300px;overflow-y:auto;"><table class="bulk-results-table"><thead><tr><th>Country</th><th>BCM Competition</th><th>Betradar</th><th>Betgenius</th></tr></thead><tbody>`;
+                duplicates.forEach(d => { html += `<tr style="background:#fff5f5;"><td>${escapeHtml(d.country)}</td><td>${escapeHtml(d.bcmCompetition)}</td><td>${escapeHtml(d.betradar)}</td><td>${escapeHtml(d.betgenius)}</td></tr>`; });
+                html += `</tbody></table></div>`;
+            } else { html += `<p style="color:#999;padding:0.5rem;">No duplicates found.</p>`; }
+            html += `<div class="bulk-section-header new-entries"><h4>🟢 New Entries (${newEntries.length} not in database)</h4><label><input type="checkbox" id="selectAllLeagues" onchange="toggleAllBulkLeagues()" checked> Select All</label></div>`;
+            if (newEntries.length > 0) {
+                html += `<div style="max-height:400px;overflow-y:auto;"><table class="bulk-results-table"><thead><tr><th>✓</th><th>Country</th><th>BCM Competition</th><th>Betradar</th><th>Betgenius</th></tr></thead><tbody>`;
+                newEntries.forEach((d, i) => { html += `<tr><td><input type="checkbox" class="bulk-checkbox bulk-league-cb" data-index="${i}" checked></td><td>${escapeHtml(d.country)}</td><td>${escapeHtml(d.bcmCompetition)}</td><td>${escapeHtml(d.betradar)}</td><td>${escapeHtml(d.betgenius)}</td></tr>`; });
+                html += `</tbody></table></div><div class="bulk-actions"><button class="btn btn-success" onclick="uploadSelectedLeagues()">✅ Upload Selected to Database</button><span class="bulk-count">${newEntries.length} selected</span></div>`;
+            } else { html += `<p style="color:#999;padding:0.5rem;">No new entries to add.</p>`; }
+            container.innerHTML = html;
+        }
+
+        function toggleAllBulkLeagues() { const c = document.getElementById('selectAllLeagues').checked; document.querySelectorAll('.bulk-league-cb').forEach(cb => cb.checked = c); }
+
+        async function uploadSelectedLeagues() {
+            const checkboxes = document.querySelectorAll('.bulk-league-cb:checked');
+            const toUpload = Array.from(checkboxes).map(cb => bulkNewLeagues[parseInt(cb.dataset.index)]);
+            if (toUpload.length === 0) { showToast('No entries selected', 'warning'); return; }
+            try {
+                const dbRows = toUpload.map(item => ({ country: item.country, bcm_competition: item.bcmCompetition, betradar: item.betradar, betgenius: item.betgenius }));
+                for (let i = 0; i < dbRows.length; i += 200) {
+                    const batch = dbRows.slice(i, i + 200);
+                    const inserted = await supabaseRequest('leagues', 'POST', batch);
+                    inserted.forEach(row => leagues.push(mapLeagueFromDb(row)));
+                }
+                showToast(`Uploaded ${toUpload.length} new leagues!`, 'success');
+                updateStats(); renderLeagues();
+                document.getElementById('bulkLeagueResults').innerHTML = '<p style="color:#48bb78;font-size:1.1rem;padding:1rem;">✅ Upload complete!</p>';
+            } catch (error) { showToast('Error: ' + error.message, 'error'); }
+        }
+
+        function handleBulkTeamUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const data = new Uint8Array(event.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+                    const uploaded = [];
+                    for (let i = 1; i < rows.length; i++) {
+                        const row = rows[i];
+                        if (!row[0] && !row[1] && !row[2]) continue;
+                        uploaded.push({
+                            country: (row[0] || '').toString().trim(),
+                            bcmCompetition: (row[1] || '').toString().trim(),
+                            bcmTeam: (row[2] || '').toString().trim(),
+                            betradarCompetition: (row[3] || '').toString().trim(),
+                            betradarTeam: (row[4] || '').toString().trim(),
+                            bgCompetition: (row[5] || '').toString().trim(),
+                            bgTeam: (row[6] || '').toString().trim()
+                        });
+                    }
+                    const duplicates = [];
+                    const newEntries = [];
+                    uploaded.forEach(item => {
+                        const isDup = teams.some(t => t.country.toLowerCase() === item.country.toLowerCase() && t.bcmCompetition.toLowerCase() === item.bcmCompetition.toLowerCase() && t.bcmTeam.toLowerCase() === item.bcmTeam.toLowerCase());
+                        if (isDup) duplicates.push(item);
+                        else newEntries.push(item);
+                    });
+                    bulkNewTeams = newEntries;
+                    renderBulkTeamResults(duplicates, newEntries);
+                } catch (error) { showToast('Error reading file: ' + error.message, 'error'); }
+            };
+            reader.readAsArrayBuffer(file);
+            e.target.value = '';
+        }
+
+        function renderBulkTeamResults(duplicates, newEntries) {
+            const container = document.getElementById('bulkTeamResults');
+            let html = `<div class="bulk-section-header duplicates"><h4>🔴 Duplicates (${duplicates.length} already in database)</h4></div>`;
+            if (duplicates.length > 0) {
+                html += `<div style="max-height:300px;overflow-y:auto;"><table class="bulk-results-table"><thead><tr><th>Country</th><th>BCM Comp</th><th>BCM Team</th><th>BR Comp</th><th>BR Team</th><th>BG Comp</th><th>BG Team</th></tr></thead><tbody>`;
+                duplicates.forEach(d => { html += `<tr style="background:#fff5f5;"><td>${escapeHtml(d.country)}</td><td>${escapeHtml(d.bcmCompetition)}</td><td>${escapeHtml(d.bcmTeam)}</td><td>${escapeHtml(d.betradarCompetition)}</td><td>${escapeHtml(d.betradarTeam)}</td><td>${escapeHtml(d.bgCompetition)}</td><td>${escapeHtml(d.bgTeam)}</td></tr>`; });
+                html += `</tbody></table></div>`;
+            } else { html += `<p style="color:#999;padding:0.5rem;">No duplicates found.</p>`; }
+            html += `<div class="bulk-section-header new-entries"><h4>🟢 New Entries (${newEntries.length} not in database)</h4><label><input type="checkbox" id="selectAllTeams" onchange="toggleAllBulkTeams()" checked> Select All</label></div>`;
+            if (newEntries.length > 0) {
+                html += `<div style="max-height:400px;overflow-y:auto;"><table class="bulk-results-table"><thead><tr><th>✓</th><th>Country</th><th>BCM Comp</th><th>BCM Team</th><th>BR Comp</th><th>BR Team</th><th>BG Comp</th><th>BG Team</th></tr></thead><tbody>`;
+                newEntries.forEach((d, i) => { html += `<tr><td><input type="checkbox" class="bulk-checkbox bulk-team-cb" data-index="${i}" checked></td><td>${escapeHtml(d.country)}</td><td>${escapeHtml(d.bcmCompetition)}</td><td>${escapeHtml(d.bcmTeam)}</td><td>${escapeHtml(d.betradarCompetition)}</td><td>${escapeHtml(d.betradarTeam)}</td><td>${escapeHtml(d.bgCompetition)}</td><td>${escapeHtml(d.bgTeam)}</td></tr>`; });
+                html += `</tbody></table></div><div class="bulk-actions"><button class="btn btn-success" onclick="uploadSelectedTeams()">✅ Upload Selected to Database</button><span class="bulk-count">${newEntries.length} selected</span></div>`;
+            } else { html += `<p style="color:#999;padding:0.5rem;">No new entries to add.</p>`; }
+            container.innerHTML = html;
+        }
+
+        function toggleAllBulkTeams() { const c = document.getElementById('selectAllTeams').checked; document.querySelectorAll('.bulk-team-cb').forEach(cb => cb.checked = c); }
+
+        async function uploadSelectedTeams() {
+            const checkboxes = document.querySelectorAll('.bulk-team-cb:checked');
+            const toUpload = Array.from(checkboxes).map(cb => bulkNewTeams[parseInt(cb.dataset.index)]);
+            if (toUpload.length === 0) { showToast('No entries selected', 'warning'); return; }
+            try {
+                const dbRows = toUpload.map(item => ({ country: item.country, bcm_competition: item.bcmCompetition, bcm_team: item.bcmTeam, betradar_competition: item.betradarCompetition, betradar_team: item.betradarTeam, bg_competition: item.bgCompetition, bg_team: item.bgTeam }));
+                for (let i = 0; i < dbRows.length; i += 200) {
+                    const batch = dbRows.slice(i, i + 200);
+                    const inserted = await supabaseRequest('teams', 'POST', batch);
+                    inserted.forEach(row => teams.push(mapTeamFromDb(row)));
+                    showToast(`Uploading... ${Math.min(i + 200, dbRows.length)}/${dbRows.length}`, 'warning');
+                }
+                showToast(`Uploaded ${toUpload.length} new teams!`, 'success');
+                updateStats(); renderTeams();
+                document.getElementById('bulkTeamResults').innerHTML = '<p style="color:#48bb78;font-size:1.1rem;padding:1rem;">✅ Upload complete!</p>';
+            } catch (error) { showToast('Error: ' + error.message, 'error'); }
         }
 
         // Master Search
