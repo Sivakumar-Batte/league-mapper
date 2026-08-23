@@ -1301,15 +1301,13 @@
             // Apply role-based visibility
             applyRoleAccess();
 
-            // Initialize app if not already done
-            if (leagues.length === 0 && teams.length === 0) {
-                setupEventListeners();
-                loadFromSupabase().then(() => {
-                    renderLeagues();
-                    renderTeams();
-                    updateStats();
-                });
-            }
+            // Initialize app (only once)
+            setupEventListeners();
+            loadFromSupabase().then(() => {
+                renderLeagues();
+                renderTeams();
+                updateStats();
+            });
         }
 
         function applyRoleAccess() {
@@ -1443,13 +1441,11 @@
         // Initialize App
         document.addEventListener('DOMContentLoaded', async () => {
             // Check if already logged in
-            if (!checkSession()) return; // Stay on login screen
-            
-            setupEventListeners();
-            await loadFromSupabase();
-            renderLeagues();
-            renderTeams();
-            updateStats();
+            if (checkSession()) {
+                // Session exists, showMainApp will handle loading
+                return;
+            }
+            // Otherwise stay on login screen
         });
 
         // Event Listeners
@@ -2166,7 +2162,7 @@
         }
 
         async function loadLeaguesFromSupabase() {
-            // Paginate to get all rows
+            // Paginate to get all rows - RESET first
             leagues = [];
             let offset = 0;
             const pageSize = 1000;
@@ -2186,7 +2182,7 @@
         }
 
         async function loadTeamsFromSupabase() {
-            // Supabase returns max 1000 rows per request, so paginate
+            // Paginate to get all rows - RESET first
             teams = [];
             let offset = 0;
             const pageSize = 1000;
