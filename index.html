@@ -1709,6 +1709,9 @@
             data.forEach((league, index) => {
                 const row = document.createElement('tr');
                 
+                // Get the REAL index in the leagues array
+                const realIndex = leagues.indexOf(league);
+                
                 // Format multiple mappings
                 const betradarDisplay = formatMappings(league.betradar);
                 const betgeniusDisplay = formatMappings(league.betgenius);
@@ -1720,8 +1723,8 @@
                     <td>${betgeniusDisplay}</td>
                     <td>
                         <div class="action-buttons">
-                            ${currentUser && currentUser.role === 'admin' ? `<button class="btn btn-primary btn-small" onclick="editLeague(${index})">✏️ Edit</button>
-                            <button class="btn btn-danger btn-small" onclick="deleteLeague(${index})">🗑️ Delete</button>` : ''}
+                            ${currentUser && currentUser.role === 'admin' ? `<button class="btn btn-primary btn-small" onclick="editLeague(${realIndex})">✏️ Edit</button>
+                            <button class="btn btn-danger btn-small" onclick="deleteLeague(${realIndex})">🗑️ Delete</button>` : ''}
                         </div>
                     </td>
                 `;
@@ -1748,6 +1751,9 @@
             data.forEach((team, index) => {
                 const row = document.createElement('tr');
                 
+                // Get the REAL index in the teams array
+                const realIndex = teams.indexOf(team);
+                
                 // Check if BCM Competition exists in leagues
                 const leagueExists = leagues.some(l => 
                     l.country === team.country && l.bcmCompetition === team.bcmCompetition
@@ -1764,8 +1770,8 @@
                     <td>${escapeHtml(team.bgTeam)}</td>
                     <td>
                         <div class="action-buttons">
-                            ${currentUser && currentUser.role === 'admin' ? `<button class="btn btn-primary btn-small" onclick="editTeam(${index})">✏️ Edit</button>
-                            <button class="btn btn-danger btn-small" onclick="deleteTeam(${index})">🗑️ Delete</button>` : ''}
+                            ${currentUser && currentUser.role === 'admin' ? `<button class="btn btn-primary btn-small" onclick="editTeam(${realIndex})">✏️ Edit</button>
+                            <button class="btn btn-danger btn-small" onclick="deleteTeam(${realIndex})">🗑️ Delete</button>` : ''}
                         </div>
                     </td>
                 `;
@@ -1933,7 +1939,8 @@
                     if (id) await supabaseRequest('leagues', 'DELETE', null, `?id=eq.${id}`);
                     await logAction('Deleted League', 'leagues', `${league.country} - ${league.bcmCompetition}`);
                     leagues.splice(index, 1);
-                    renderLeagues();
+                    // Re-render with current search
+                    handleSearch({ target: document.getElementById('searchInput') });
                     updateStats();
                     showToast('League mapping deleted', 'success');
                 } catch (error) {
@@ -2047,7 +2054,8 @@
                     if (id) await supabaseRequest('teams', 'DELETE', null, `?id=eq.${id}`);
                     await logAction('Deleted Team', 'teams', `${team.country} - ${team.bcmCompetition} - ${team.bcmTeam}`);
                     teams.splice(index, 1);
-                    renderTeams();
+                    // Re-render with current search
+                    handleSearch({ target: document.getElementById('searchInput') });
                     updateStats();
                     showToast('Team mapping deleted', 'success');
                 } catch (error) {
