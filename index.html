@@ -272,6 +272,10 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
       </div>
     </div>
     <div class="user-bar">
+      <select id="sport-selector" class="icon-btn" style="width:auto;padding:6px 12px;font-size:14px;border-radius:8px;background:var(--surface-alt);color:var(--text);border:1px solid var(--border);cursor:pointer;" onchange="App.switchSport()">
+        <option value="Basketball">🏀 Basketball</option>
+        <option value="Ice Hockey">🏒 Ice Hockey</option>
+      </select>
       <div class="user-chip">
         <span id="user-chip-name"></span>
         <span class="role-pill" id="user-role-pill"></span>
@@ -496,6 +500,7 @@ const state = {
   darkMode: false,
   currentTab: 'search',
   addType: 'league',
+  sport: 'Basketball',
   lg: { country:'', mapped:'all', search:'', sortCol:null, sortDir:1, page:1 },
   tm: { country:'', mapped:'all', search:'', sortCol:null, sortDir:1, page:1 },
   bulkParsed: null, // {type, rows:[{data,isDup,checked}]}
@@ -660,8 +665,8 @@ const SearchTab = {
     const matchLeague = l => [l.country,l.bcm_competition,l.betradar,l.betgenius].some(v=>String(v||'').toLowerCase().includes(q));
     const matchTeam = t => [t.country,t.bcm_competition,t.bcm_team,t.betradar_competition,t.betradar_team,t.bg_competition,t.bg_team].some(v=>String(v||'').toLowerCase().includes(q));
 
-    const leagues = state.leagues.filter(matchLeague).slice(0,40);
-    const teams = state.teams.filter(matchTeam).slice(0,40);
+    const leagues = App.getLeagues().filter(matchLeague).slice(0,40);
+    const teams = App.getTeams().filter(matchTeam).slice(0,40);
 
     if (leagues.length===0 && teams.length===0) {
       box.innerHTML = `<div class="empty-state"><div class="ic">🔍</div>No matches for "${escapeHtml(q)}"</div>`; return;
@@ -725,7 +730,7 @@ const SearchTab = {
 /* ============================= DASHBOARD ============================= */
 const DashboardTab = {
   render(){
-    const leagues = state.leagues, teams = state.teams;
+    const leagues = App.getLeagues(), teams = App.getTeams();
     const countries = new Set(leagues.map(l=>l.country).filter(Boolean));
     teams.forEach(t=>{ if(t.country) countries.add(t.country); });
 
@@ -807,7 +812,7 @@ const LeagueTab = {
   populateFilters(){
     const sel = document.getElementById('lg-country-filter');
     const cur = sel.value;
-    sel.innerHTML = '<option value="">All countries</option>' + uniqueCountries(state.leagues).map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    sel.innerHTML = '<option value="">All countries</option>' + uniqueCountries(App.getLeagues()).map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
     sel.value = cur;
   },
   refresh(){
@@ -821,7 +826,7 @@ const LeagueTab = {
   },
   render(){
     const f = state.lg;
-    let rows = state.leagues;
+    let rows = App.getLeagues();
     if (f.country) rows = rows.filter(r=>r.country===f.country);
     rows = applyMappedFilter(rows, f.mapped, 'betradar', 'betgenius');
     if (f.search) rows = rows.filter(r=>[r.country,r.bcm_competition,r.betradar,r.betgenius].some(v=>String(v||'').toLowerCase().includes(f.search)));
@@ -876,7 +881,7 @@ const TeamTab = {
   populateFilters(){
     const sel = document.getElementById('tm-country-filter');
     const cur = sel.value;
-    sel.innerHTML = '<option value="">All countries</option>' + uniqueCountries(state.teams).map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    sel.innerHTML = '<option value="">All countries</option>' + uniqueCountries(App.getTeams()).map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
     sel.value = cur;
   },
   refresh(){
@@ -890,7 +895,7 @@ const TeamTab = {
   },
   render(){
     const f = state.tm;
-    let rows = state.teams;
+    let rows = App.getTeams();
     if (f.country) rows = rows.filter(r=>r.country===f.country);
     rows = applyMappedFilter(rows, f.mapped, 'betradar_team', 'bg_team');
     if (f.search) rows = rows.filter(r=>[r.country,r.bcm_competition,r.bcm_team,r.betradar_competition,r.betradar_team,r.bg_competition,r.bg_team].some(v=>String(v||'').toLowerCase().includes(f.search)));
@@ -964,13 +969,13 @@ const AddTab = {
     if (state.addType!=='team') return;
     const sel = document.getElementById('at-country');
     const cur = sel.value;
-    sel.innerHTML = '<option value="">Select…</option>' + uniqueCountries(state.leagues).map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    sel.innerHTML = '<option value="">Select…</option>' + uniqueCountries(App.getLeagues()).map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
     sel.value = cur;
   },
   onCountryChange(){
     const country = document.getElementById('at-country').value;
     const bcmSel = document.getElementById('at-bcm');
-    const leagues = state.leagues.filter(l=>l.country===country);
+    const leagues = App.getLeagues().filter(l=>l.country===country);
     bcmSel.innerHTML = leagues.length
       ? '<option value="">Select…</option>' + leagues.map(l=>`<option value="${l.id}">${escapeHtml(l.bcm_competition)}</option>`).join('')
       : '<option value="">No leagues for this country</option>';
@@ -1014,7 +1019,7 @@ const AddTab = {
     const dup = state.leagues.find(l=>l.country.toLowerCase()===country.toLowerCase() && l.bcm_competition.toLowerCase()===bcm.toLowerCase());
     if (dup) { toast('This league already exists', true); return; }
     try {
-      const rows = await sb('leagues', { method:'POST', prefer:'return=representation', body:[{country,bcm_competition:bcm,betradar:br||'N/A',betgenius:bg||'N/A'}] });
+      const rows = await sb('leagues', { method:'POST', prefer:'return=representation', body:[{country,bcm_competition:bcm,betradar:br||'N/A',betgenius:bg||'N/A',sport:state.sport}] });
       state.leagues.push(rows[0]);
       await logHistory('Add','leagues', `${country} / ${bcm}`);
       toast('League added');
@@ -1048,7 +1053,7 @@ const AddTab = {
       const rows = await sb('teams', { method:'POST', prefer:'return=representation', body:[{
         country, bcm_competition: league.bcm_competition, bcm_team: bcmTeam,
         betradar_competition: brComp, betradar_team: brTeam,
-        bg_competition: bgComp, bg_team: bgTeam
+        bg_competition: bgComp, bg_team: bgTeam, sport: state.sport
       }]});
       state.teams.push(rows[0]);
       await logHistory('Add','teams', `${country} / ${league.bcm_competition} / ${bcmTeam}`);
@@ -1338,6 +1343,10 @@ const App = {
       ]);
       state.leagues = leagues; state.teams = teams; state.users = users; state.history = history || [];
 
+      // Restore sport selection
+      const savedSport = localStorage.getItem('ltm_sport');
+      if (savedSport) { state.sport = savedSport; document.getElementById('sport-selector').value = savedSport; }
+
       document.getElementById('user-chip-name').textContent = state.user.username;
       const pill = document.getElementById('user-role-pill');
       pill.textContent = state.user.role;
@@ -1355,6 +1364,15 @@ const App = {
       Auth.logout();
     }
   },
+  switchSport(){
+    state.sport = document.getElementById('sport-selector').value;
+    localStorage.setItem('ltm_sport', state.sport);
+    // Refresh current view
+    UI.switchTab(state.currentTab);
+  },
+  // Helper to get leagues/teams for current sport
+  getLeagues(){ return state.leagues.filter(l => l.sport === state.sport); },
+  getTeams(){ return state.teams.filter(t => t.sport === state.sport); },
   async init(){
     UI.initDark();
     if (Auth.restore()) {
