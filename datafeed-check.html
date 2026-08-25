@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DataFeed Check — League & Team Mapper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#1E1B2E;--surface:#2A2640;--surface-alt:#332F4A;--border:#4A4563;
+  --text:#F0ECF9;--text-dim:#B8B0D0;--text-faint:#8A80A8;
+  --accent:#A855F7;--accent-hover:#C084FC;--accent-soft:rgba(168,85,247,.18);
+  --success:#10B981;--success-soft:rgba(16,185,129,.15);
+  --warn:#F59E0B;--warn-soft:rgba(245,158,11,.15);
+  --danger:#EF4444;--danger-soft:rgba(239,68,68,.12);
+  --shadow:0 2px 4px rgba(0,0,0,.3);--radius:10px;
+  --font-display:'Space Grotesk',sans-serif;--font-body:'Inter',sans-serif;--font-mono:'IBM Plex Mono',monospace;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:15px;}
+h1,h2,h3,h4{font-family:var(--font-display);margin:0;}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;background:var(--surface);border-bottom:1px solid var(--border);}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand-mark{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent-hover));display:flex;align-items:center;justify-content:center;font-size:16px;}
+.brand-title{font-size:20px;font-weight:700;}
+.brand-sub{font-size:11px;color:var(--text-faint);font-family:var(--font-mono);}
+.back-btn{padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text-dim);font-size:14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;}
+.back-btn:hover{background:var(--border);color:var(--text);}
+.tool-tab{padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text-dim);font-size:14px;cursor:pointer;}
+.tool-tab:hover{background:var(--border);color:var(--text);}
+.tool-tab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.tool-section{display:none;}
+.tool-section.active{display:block;}
+
+.container{max-width:1400px;margin:0 auto;padding:24px;}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:20px;}
+.panel-title{font-size:18px;font-weight:700;margin-bottom:16px;}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;}
+.stat-card .num{font-family:var(--font-display);font-size:32px;font-weight:700;}
+.stat-card .label{color:var(--text-dim);font-size:12px;margin-top:4px;text-transform:uppercase;}
+.stat-card.correct .num{color:var(--success);}
+.stat-card.review .num{color:var(--warn);}
+.stat-card.wrong .num{color:var(--danger);}
+.stat-card.nomap .num{color:var(--text-faint);}
+
+.field{margin-bottom:18px;}
+.field label{display:block;font-size:13px;font-weight:600;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:.03em;}
+.field small{color:var(--text-faint);font-size:12px;display:block;margin-top:4px;}
+.field input[type=file]{width:100%;padding:12px;border:2px dashed var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:14px;cursor:pointer;}
+.field input[type=file]:hover{border-color:var(--accent);}
+
+.btn{padding:12px 20px;border-radius:8px;border:none;font-size:15px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{background:var(--accent-hover);}
+.btn-secondary{background:var(--surface-alt);color:var(--text);border:1px solid var(--border);}
+.btn-secondary:hover{background:var(--border);}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+.btn-group{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px;}
+
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);margin-top:16px;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+thead th{text-align:left;padding:10px 12px;background:var(--surface-alt);color:var(--text-dim);font-size:11px;text-transform:uppercase;font-weight:700;white-space:nowrap;border-bottom:1px solid var(--border);}
+tbody td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tbody tr:hover{background:var(--surface-alt);}
+tr.status-correct{border-left:3px solid var(--success);}
+tr.status-review{border-left:3px solid var(--warn);}
+tr.status-wrong{border-left:3px solid var(--danger);}
+tr.status-nomap{border-left:3px solid var(--text-faint);opacity:.7;}
+.status-badge{padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600;font-family:var(--font-mono);}
+.status-badge.correct{background:var(--success-soft);color:var(--success);}
+.status-badge.review{background:var(--warn-soft);color:var(--warn);}
+.status-badge.wrong{background:var(--danger-soft);color:var(--danger);}
+.status-badge.nomap{background:var(--surface-alt);color:var(--text-faint);}
+
+.step{display:none;} .step.active{display:block;}
+.progress-bar{display:flex;gap:4px;margin-bottom:24px;}
+.progress-step{flex:1;height:6px;border-radius:3px;background:var(--border);}
+.progress-step.done{background:var(--accent);}
+.progress-step.current{background:var(--accent-soft);border:1px solid var(--accent);}
+
+.loading{text-align:center;padding:40px;color:var(--text-dim);}
+.spinner{width:30px;height:30px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--accent);animation:spin .7s linear infinite;margin:0 auto 12px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark">📊</div>
+    <div>
+      <div class="brand-title">DataFeed Tools</div>
+      <div class="brand-sub">LEAGUE & TEAM MAPPER</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <button class="tool-tab active" onclick="switchTool('datafeed')">📊 DataFeed Check</button>
+    <button class="tool-tab" onclick="switchTool('prepare')">📋 Prepare Mapping</button>
+    <a href="index.html" class="back-btn">← Back to Mapper</a>
+  </div>
+</div>
+
+<div class="container">
+  <!-- TOOL 1: DataFeed Check -->
+  <div class="tool-section active" id="tool-datafeed">
+  <!-- Step 1: Upload -->
+  <div class="step active" id="step-upload">
+    <div class="progress-bar">
+      <div class="progress-step current"></div>
+      <div class="progress-step"></div>
+      <div class="progress-step"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">📊 Upload Your Files</div>
+      <p style="color:var(--text-dim);margin-bottom:20px;">Select the required input files below, then click "Run Check".</p>
+
+      <div class="field">
+        <label>Betradar File(s) (Excel/CSV) — select multiple with Ctrl+Click</label>
+        <input type="file" id="file-br" accept=".xlsx,.xls,.csv" multiple>
+        <small>Columns: EventId, Day, Date, Time, Sport, Category, Unique Tournament, Tournament, Event, Hometeam, Awayteam</small>
+      </div>
+
+      <div class="field">
+        <label>Betgenius File(s) (Excel/CSV) — select multiple with Ctrl+Click</label>
+        <input type="file" id="file-bg" accept=".xlsx,.xls,.csv" multiple>
+        <small>Columns: Competition, EventId, Event, Start (UTC), Feed, Booking Status, Column1</small>
+      </div>
+
+      <div class="field">
+        <label>BCM Dump File(s) (Excel/CSV) — select multiple with Ctrl+Click</label>
+        <input type="file" id="file-bcm" accept=".xlsx,.xls,.csv" multiple>
+        <small>Columns: Event ID, Event Open Date GMT, Event Date GMT, Sport, Event Name, Feed Name, Feed Provider ID, Similarity %</small>
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="DFC.run()">▶ Run Check</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Processing -->
+  <div class="step" id="step-processing">
+    <div class="progress-bar">
+      <div class="progress-step done"></div>
+      <div class="progress-step current"></div>
+      <div class="progress-step"></div>
+    </div>
+    <div class="loading">
+      <div class="spinner"></div>
+      <p>Processing your files...</p>
+      <p style="font-size:13px;color:var(--text-faint);">Validating feed mappings against Betradar and Betgenius data.</p>
+    </div>
+  </div>
+
+  <!-- Step 3: Results -->
+  <div class="step" id="step-results">
+    <div class="progress-bar">
+      <div class="progress-step done"></div>
+      <div class="progress-step done"></div>
+      <div class="progress-step done"></div>
+    </div>
+
+    <div class="stat-grid" id="result-stats"></div>
+
+    <div class="panel">
+      <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>✅ DataFeed Check Results</span>
+        <div class="btn-group" style="margin:0;">
+          <button class="btn btn-secondary" onclick="DFC.download()">⬇ Download Excel</button>
+          <button class="btn btn-secondary" onclick="DFC.reset()">↺ Run Again</button>
+        </div>
+      </div>
+
+      <!-- Filter -->
+      <div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;">
+        <select id="filter-status" onchange="DFC.renderTable()" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text);font-size:14px;">
+          <option value="all">All Statuses</option>
+          <option value="correct">Correct</option>
+          <option value="review">Review</option>
+          <option value="wrong">Wrong</option>
+          <option value="nomap">No Mapping</option>
+        </select>
+        <input type="text" id="filter-search" placeholder="Search..." oninput="DFC.renderTable()" style="flex:1;min-width:200px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text);font-size:14px;">
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Event ID</th><th>Event Date</th><th>Sport</th><th>BCM Event Name</th>
+            <th>Feed Name</th><th>Feed Provider ID</th><th>Feed Date/Time</th>
+            <th>Source Event Name</th><th>Similarity %</th><th>Status</th>
+          </tr></thead>
+          <tbody id="results-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  </div><!-- end tool-datafeed -->
+
+  <!-- TOOL 2: Prepare Mapping Sheet -->
+  <div class="tool-section" id="tool-prepare">
+    <div class="panel">
+      <div class="panel-title">📋 Prepare Mapping Sheet</div>
+      <p style="color:var(--text-dim);margin-bottom:20px;">Use DataFeed Check "Correct" results + BCM hierarchy + source files to generate League and Team sheets for bulk upload.</p>
+
+      <div class="field">
+        <label>1. DataFeed Check Output (Paste from Excel or use current results)</label>
+        <small>Paste rows with columns: BCM Event Name, Feed Name. Or click "Use Current Results" if you just ran DataFeed Check.</small>
+        <textarea id="prep-datafeed" style="width:100%;min-height:100px;padding:12px;border:2px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:14px;font-family:var(--font-mono);resize:vertical;" placeholder="BCM Event Name&#10;APR BBC - Patriots BC&#10;Greece - Cyprus&#10;KK SC Derby - KB Peja"></textarea>
+        <button class="btn btn-secondary" style="margin-top:8px;" onclick="PREP.useCurrentResults()">↑ Use Current DataFeed Check Results (Correct only)</button>
+      </div>
+
+      <div class="field">
+        <label>2. Paste BCM Hierarchy (Country + Competition structure)</label>
+        <small>Format: Country (0 indent) > Competition (2 spaces) > Events (4 spaces). Events should match what's in step 1.</small>
+        <textarea id="prep-hierarchy" style="width:100%;min-height:180px;padding:12px;border:2px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:14px;font-family:var(--font-mono);resize:vertical;" placeholder="World
+  International Men's Friendlies
+    Greece - Cyprus
+    Lithuania - Michigan
+  Club Friendlies - Men
+    KK SC Derby - KB Peja
+Brasil
+  Campeonato Paulista (U20)
+    C.A. Paulistano (U20) - Sorocaba Basquete (U20)
+Rwanda
+  National League
+    APR BBC - Patriots BC
+  National League - Women
+    REG BBC (Women) - The Hoops BBC (Women)"></textarea>
+      </div>
+
+      <div class="field">
+        <label>3. Betradar File(s) (Excel/CSV) — select multiple with Ctrl+Click</label>
+        <input type="file" id="prep-br" accept=".xlsx,.xls,.csv" multiple>
+        <small>Columns: EventId, Sport, Category, Unique Tournament, Tournament, Event, Hometeam, Awayteam</small>
+      </div>
+
+      <div class="field">
+        <label>4. Betgenius File(s) (Excel/CSV)</label>
+        <input type="file" id="prep-bg" accept=".xlsx,.xls,.csv" multiple>
+        <small>Columns: Competition, EventId, Event</small>
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="PREP.run()">▶ Generate Mapping Sheets</button>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div id="prep-results" style="display:none;">
+      <div class="panel">
+        <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;">
+          <span>🏆 League Sheet Preview</span>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-secondary" onclick="PREP.toggleEditLeagues()" id="edit-leagues-btn">✏️ Edit</button>
+            <button class="btn btn-secondary" onclick="PREP.downloadLeagues()">⬇ Download League Sheet</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Sport</th><th>Country</th><th>BCM Competition</th><th>Betradar</th><th>Betgenius</th></tr></thead>
+            <tbody id="prep-leagues-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;">
+          <span>👥 Team Sheet Preview</span>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-secondary" onclick="PREP.toggleEditTeams()" id="edit-teams-btn">✏️ Edit</button>
+            <button class="btn btn-secondary" onclick="PREP.downloadTeams()">⬇ Download Team Sheet</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Sport</th><th>Country</th><th>BCM Competition</th><th>BCM Team</th><th>BR Competition</th><th>BR Team</th><th>BG Competition</th><th>BG Team</th></tr></thead>
+            <tbody id="prep-teams-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="PREP.downloadLeagues()">⬇ Download League Sheet (CSV)</button>
+        <button class="btn btn-primary" onclick="PREP.downloadTeams()">⬇ Download Team Sheet (CSV)</button>
+      </div>
+    </div>
+  </div><!-- end tool-prepare -->
+</div>
+
+<script>
+const DFC = {
+  results: [],
+
+  async run(){
+    const brFiles = document.getElementById('file-br').files;
+    const bgFiles = document.getElementById('file-bg').files;
+    const bcmFiles = document.getElementById('file-bcm').files;
+
+    if (bcmFiles.length === 0) { alert('BCM Dump file is required'); return; }
+    if (brFiles.length === 0 && bgFiles.length === 0) { alert('At least one Betradar or Betgenius file is required'); return; }
+
+    // Show processing
+    document.getElementById('step-upload').classList.remove('active');
+    document.getElementById('step-processing').classList.add('active');
+
+    await new Promise(r => setTimeout(r, 100)); // Let UI update
+
+    try {
+      // Parse files — multiple for each
+      let brData = [];
+      for (let i = 0; i < brFiles.length; i++) {
+        const d = await this.parseFile(brFiles[i]);
+        brData = brData.concat(d);
+      }
+      let bgData = [];
+      for (let i = 0; i < bgFiles.length; i++) {
+        const d = await this.parseFile(bgFiles[i]);
+        bgData = bgData.concat(d);
+      }
+      let bcmData = [];
+      for (let i = 0; i < bcmFiles.length; i++) {
+        const d = await this.parseFile(bcmFiles[i]);
+        bcmData = bcmData.concat(d);
+      }
+
+      // Build lookup maps
+      const brMap = {};
+      brData.forEach(row => {
+        let id = String(row['EventId'] || row['eventid'] || row['EVENTID'] || row['Event Id'] || row['event_id'] || '').trim();
+        // Strip sr:match: or similar prefixes
+        id = id.replace(/^sr:match:/i, '').replace(/^sr:/i, '').trim();
+        if (id) brMap[id] = row;
+      });
+
+      const bgMap = {};
+      bgData.forEach(row => {
+        let id = String(row['EventId'] || row['eventid'] || row['EVENTID'] || row['Event Id'] || row['event_id'] || '').trim();
+        // Strip any prefix
+        id = id.replace(/^sr:match:/i, '').replace(/^sr:/i, '').trim();
+        if (id) bgMap[id] = row;
+      });
+
+      // Process BCM rows
+      this.results = bcmData.map(bcm => {
+        const keys = Object.keys(bcm);
+        // Flexible column matching
+        const getCol = (names) => {
+          for (const n of names) {
+            const found = keys.find(k => k.toLowerCase().trim() === n.toLowerCase().trim());
+            if (found) return String(bcm[found] || '').trim();
+          }
+          // Partial match
+          for (const n of names) {
+            const found = keys.find(k => k.toLowerCase().includes(n.toLowerCase()));
+            if (found) return String(bcm[found] || '').trim();
+          }
+          return '';
+        };
+
+        const eventId = getCol(['Event ID', 'EventID', 'Event_ID']);
+        const bcmOpenDate = getCol(['Event Open Date GMT', 'Event Open Date']);
+        const bcmDate = getCol(['Event Date GMT', 'Event Date']);
+        const bcmSport = getCol(['Sport', 'Sport Name']);
+        const bcmEventName = getCol(['Event Name', 'EventName']);
+        const feedNameVal = getCol(['Feed Name', 'FeedName']);
+        const feedProviderId = getCol(['Feed Provider ID', 'Feed Provider Id', 'FeedProviderID']);
+        const bcmSimilarity = getCol(['Similarity %', 'Similarity']);
+
+        let sourceRow = null;
+        let sourceType = '';
+        let sourceEventName = '';
+        let sourceDateTime = '';
+
+        // Determine source by Feed Provider ID prefix
+        // Starts with 7 = Betradar, starts with 1 = Betgenius
+        const feedIdPrefix = feedProviderId.charAt(0);
+
+        if (feedIdPrefix === '7') {
+          sourceRow = brMap[feedProviderId];
+          sourceType = 'Betradar';
+          if (sourceRow) {
+            const home = sourceRow['Hometeam'] || sourceRow['hometeam'] || '';
+            const away = sourceRow['Awayteam'] || sourceRow['awayteam'] || '';
+            sourceEventName = home && away ? `${home} vs ${away}` : (sourceRow['Event'] || sourceRow['event'] || '');
+            const d = sourceRow['Date'] || sourceRow['date'] || sourceRow['Day'] || '';
+            const t = sourceRow['Time'] || sourceRow['time'] || '';
+            // Betradar time is CET (GMT+1) — subtract 1 hour using string math
+            if (d && t) {
+              const timeParts = t.match(/(\d{1,2}):(\d{2})/);
+              if (timeParts) {
+                let h = parseInt(timeParts[1]) - 1;
+                let dateStr = d;
+                if (h < 0) { h = 23; } // wrap to previous day (simplified)
+                sourceDateTime = d + ' ' + String(h).padStart(2,'0') + ':' + timeParts[2];
+              } else {
+                sourceDateTime = d + ' ' + t;
+              }
+            } else {
+              sourceDateTime = d + (t ? ' ' + t : '');
+            }
+          }
+        } else if (feedIdPrefix === '1') {
+          sourceRow = bgMap[feedProviderId];
+          sourceType = 'Betgenius';
+          if (sourceRow) {
+            sourceEventName = sourceRow['Event'] || sourceRow['event'] || '';
+            sourceDateTime = sourceRow['Start (UTC)'] || sourceRow['start (utc)'] || '';
+          }
+        } else {
+          // Unknown prefix — try both
+          sourceRow = brMap[feedProviderId];
+          if (sourceRow) {
+            sourceType = 'Betradar';
+            const home = sourceRow['Hometeam'] || sourceRow['hometeam'] || '';
+            const away = sourceRow['Awayteam'] || sourceRow['awayteam'] || '';
+            sourceEventName = home && away ? `${home} vs ${away}` : (sourceRow['Event'] || '');
+            const d = sourceRow['Date'] || sourceRow['date'] || sourceRow['Day'] || '';
+            const t = sourceRow['Time'] || sourceRow['time'] || '';
+            if (d && t) {
+              const timeParts = t.match(/(\d{1,2}):(\d{2})/);
+              if (timeParts) {
+                let h = parseInt(timeParts[1]) - 1;
+                if (h < 0) h = 23;
+                sourceDateTime = d + ' ' + String(h).padStart(2,'0') + ':' + timeParts[2];
+              } else { sourceDateTime = d + ' ' + t; }
+            } else { sourceDateTime = d + (t ? ' ' + t : ''); }
+          } else {
+            sourceRow = bgMap[feedProviderId];
+            if (sourceRow) {
+              sourceType = 'Betgenius';
+              sourceEventName = sourceRow['Event'] || sourceRow['event'] || '';
+              sourceDateTime = sourceRow['Start (UTC)'] || sourceRow['start (utc)'] || '';
+            }
+          }
+        }
+
+        // Calculate similarity and status
+        let similarity = 0;
+        let status = 'nomap';
+
+        if (sourceRow) {
+          similarity = this.calcSimilarity(bcmEventName, sourceEventName);
+          const timeDiff = this.calcTimeDiff(bcmDate, sourceDateTime);
+
+          if (timeDiff === -1) {
+            // Can't compare time — use only name similarity
+            if (similarity >= 75) status = 'correct';
+            else if (similarity >= 50) status = 'review';
+            else status = 'wrong';
+          } else {
+            if (similarity >= 75 && timeDiff <= 30) status = 'correct';
+            else if (similarity >= 50 && timeDiff <= 120) status = 'review';
+            else status = 'wrong';
+          }
+        }
+
+        return {
+          eventId, bcmOpenDate, bcmDate: this.formatDate(bcmDate), bcmSport, bcmEventName,
+          feedName: feedNameVal, feedProviderId,
+          sourceDateTime, sourceEventName, similarity, status, sourceType
+        };
+      });
+
+      // Show results
+      document.getElementById('step-processing').classList.remove('active');
+      document.getElementById('step-results').classList.add('active');
+      this.renderStats();
+      this.renderTable();
+
+    } catch(e) {
+      alert('Error processing: ' + e.message);
+      console.error(e);
+      this.reset();
+    }
+  },
+
+  renderStats(){
+    const total = this.results.length;
+    const correct = this.results.filter(r=>r.status==='correct').length;
+    const review = this.results.filter(r=>r.status==='review').length;
+    const wrong = this.results.filter(r=>r.status==='wrong').length;
+    const nomap = this.results.filter(r=>r.status==='nomap').length;
+
+    document.getElementById('result-stats').innerHTML = `
+      <div class="stat-card"><div class="num">${total}</div><div class="label">Total</div></div>
+      <div class="stat-card correct"><div class="num">${correct}</div><div class="label">Correct</div></div>
+      <div class="stat-card review"><div class="num">${review}</div><div class="label">Review</div></div>
+      <div class="stat-card wrong"><div class="num">${wrong}</div><div class="label">Wrong</div></div>
+      <div class="stat-card nomap"><div class="num">${nomap}</div><div class="label">No Mapping</div></div>
+    `;
+  },
+
+  renderTable(){
+    const statusFilter = document.getElementById('filter-status').value;
+    const search = (document.getElementById('filter-search').value || '').toLowerCase();
+    let rows = this.results;
+    if (statusFilter !== 'all') rows = rows.filter(r => r.status === statusFilter);
+    if (search) rows = rows.filter(r => [r.eventId,r.bcmSport,r.bcmEventName,r.feedName,r.feedProviderId,r.sourceEventName].some(v=>(v||'').toLowerCase().includes(search)));
+
+    const tbody = document.getElementById('results-tbody');
+    tbody.innerHTML = rows.slice(0, 500).map(r => `
+      <tr class="status-${r.status}">
+        <td>${this.esc(r.eventId)}</td>
+        <td>${this.esc(r.bcmDate)}</td>
+        <td>${this.esc(r.bcmSport)}</td>
+        <td>${this.esc(r.bcmEventName)}</td>
+        <td>${this.esc(r.feedName)}</td>
+        <td>${this.esc(r.feedProviderId)}</td>
+        <td>${this.esc(r.sourceDateTime)}</td>
+        <td>${this.esc(r.sourceEventName)}</td>
+        <td>${r.similarity}%</td>
+        <td><span class="status-badge ${r.status}">${r.status === 'nomap' ? 'No Mapping' : r.status.charAt(0).toUpperCase() + r.status.slice(1)}</span></td>
+      </tr>
+    `).join('');
+  },
+
+  download(){
+    const wb = XLSX.utils.book_new();
+    const data = this.results.map(r => ({
+      'Event ID': r.eventId,
+      'Event Date GMT': r.bcmDate,
+      'Sport': r.bcmSport,
+      'BCM Event Name': r.bcmEventName,
+      'Feed Name': r.feedName,
+      'Feed Provider ID': r.feedProviderId,
+      'Source Date/Time': r.sourceDateTime,
+      'Source Event Name': r.sourceEventName,
+      'Similarity %': r.similarity,
+      'Status': r.status === 'nomap' ? 'No Mapping' : r.status.charAt(0).toUpperCase() + r.status.slice(1)
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, 'DataFeed Check');
+    XLSX.writeFile(wb, `datafeed_check_${new Date().toISOString().slice(0,10)}.xlsx`);
+  },
+
+  reset(){
+    document.getElementById('step-results').classList.remove('active');
+    document.getElementById('step-processing').classList.remove('active');
+    document.getElementById('step-upload').classList.add('active');
+    document.getElementById('file-br').value = '';
+    document.getElementById('file-bg').value = '';
+    document.getElementById('file-bcm').value = '';
+    this.results = [];
+  },
+
+  // File parsing
+  async parseFile(file){
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const wb = XLSX.read(data, {type:'array'});
+          const sheet = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(sheet, {defval:'', raw:true});
+          // Convert Excel serial dates in each row
+          rows.forEach(row => {
+            Object.keys(row).forEach(key => {
+              const val = row[key];
+              if (typeof val === 'number' && val > 30000 && val < 100000 && (key.toLowerCase().includes('date') || key.toLowerCase().includes('time') || key.toLowerCase().includes('open'))) {
+                // Excel serial date to readable string using pure math (no Date object, no timezone)
+                const totalDays = val;
+                const wholeDays = Math.floor(totalDays);
+                const timeFraction = totalDays - wholeDays;
+                
+                // Calculate date from days since 1900-01-01 (Excel epoch, with the leap year bug)
+                // Day 1 = 1900-01-01, but Excel thinks 1900 is a leap year (it's not), so day 60 = 1900-02-29 (fake)
+                let dayCount = wholeDays - 1; // adjust since day 1 = Jan 1 1900
+                if (dayCount >= 60) dayCount--; // skip the fake Feb 29, 1900
+                
+                let year = 1900;
+                const daysInYear = (y) => ((y%4===0 && y%100!==0) || y%400===0) ? 366 : 365;
+                while (dayCount >= daysInYear(year)) { dayCount -= daysInYear(year); year++; }
+                
+                const daysInMonth = [31, ((year%4===0 && year%100!==0) || year%400===0)?29:28, 31,30,31,30,31,31,30,31,30,31];
+                let month = 0;
+                while (dayCount >= daysInMonth[month]) { dayCount -= daysInMonth[month]; month++; }
+                const day = dayCount + 1;
+                
+                const totalMinutes = Math.round(timeFraction * 1440);
+                const hours = Math.floor(totalMinutes / 60);
+                const minutes = totalMinutes % 60;
+                
+                const mm = String(month + 1).padStart(2, '0');
+                const dd = String(day).padStart(2, '0');
+                const hh = String(hours).padStart(2, '0');
+                const mi = String(minutes).padStart(2, '0');
+                
+                row[key] = `${year}-${mm}-${dd} ${hh}:${mi}`;
+              }
+            });
+          });
+          resolve(rows);
+        } catch(err) { reject(err); }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  },
+
+  // Fuzzy similarity
+  calcSimilarity(str1, str2){
+    if (!str1 || !str2) return 0;
+    const a = this.normalize(str1);
+    const b = this.normalize(str2);
+    if (a === b) return 100;
+
+    // Try reversed teams (Team B vs Team A)
+    const aParts = a.split(/\s+vs\s+|\s+-\s+|\s+v\s+/);
+    const bParts = b.split(/\s+vs\s+|\s+-\s+|\s+v\s+/);
+
+    if (aParts.length === 2 && bParts.length === 2) {
+      const forward = (this.sim(aParts[0], bParts[0]) + this.sim(aParts[1], bParts[1])) / 2;
+      const reversed = (this.sim(aParts[0], bParts[1]) + this.sim(aParts[1], bParts[0])) / 2;
+      return Math.round(Math.max(forward, reversed));
+    }
+
+    return Math.round(this.sim(a, b));
+  },
+
+  normalize(s){
+    return s.toLowerCase()
+      .replace(/\bbbc\b/g, '')
+      .replace(/\bfc\b/g, '')
+      .replace(/\bsc\b/g, '')
+      .replace(/\bsk\b/g, '')
+      .replace(/\bfk\b/g, '')
+      .replace(/\bkk\b/g, '')
+      .replace(/\bhc\b/g, '')
+      .replace(/\bbc\b/g, '')
+      .replace(/\bac\b/g, '')
+      .replace(/\bcf\b/g, '')
+      .replace(/\bunited\b/g, '')
+      .replace(/\bcity\b/g, '')
+      .replace(/\bclub\b/g, '')
+      .replace(/\bteam\b/g, '')
+      .replace(/\bwomen\b/g, '')
+      .replace(/\bmen\b/g, '')
+      .replace(/\(women\)/g, '')
+      .replace(/\(men\)/g, '')
+      .replace(/\(u\d+\)/g, '')
+      .replace(/u\d+/g, '')
+      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  },
+
+  sim(a, b){
+    if (a === b) return 100;
+    if (!a || !b) return 0;
+    const longer = a.length > b.length ? a : b;
+    const shorter = a.length > b.length ? b : a;
+    if (longer.length === 0) return 100;
+    const editDist = this.levenshtein(longer, shorter);
+    return ((longer.length - editDist) / longer.length) * 100;
+  },
+
+  levenshtein(a, b){
+    const m = a.length, n = b.length;
+    const dp = Array.from({length:m+1}, ()=>Array(n+1).fill(0));
+    for (let i=0;i<=m;i++) dp[i][0]=i;
+    for (let j=0;j<=n;j++) dp[0][j]=j;
+    for (let i=1;i<=m;i++){
+      for (let j=1;j<=n;j++){
+        dp[i][j] = a[i-1]===b[j-1] ? dp[i-1][j-1] : 1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+      }
+    }
+    return dp[m][n];
+  },
+
+  // Time diff in minutes
+  calcTimeDiff(dateStr1, dateStr2){
+    if (!dateStr1 || !dateStr2) return -1;
+    try {
+      const d1 = this.parseDate(dateStr1);
+      const d2 = this.parseDate(dateStr2);
+      if (isNaN(d1) || isNaN(d2)) return -1;
+      return Math.abs(d1 - d2) / 60000;
+    } catch(e) { return -1; }
+  },
+
+  // Parse date handling Excel serial numbers
+  parseDate(val){
+    if (!val) return NaN;
+    const str = String(val).trim();
+    // Check if it's an Excel serial number
+    const num = Number(str);
+    if (!isNaN(num) && num > 30000 && num < 100000) {
+      // Use same pure math logic
+      const wholeDays = Math.floor(num);
+      const timeFraction = num - wholeDays;
+      let dayCount = wholeDays - 1;
+      if (dayCount >= 60) dayCount--;
+      let year = 1900;
+      const daysInYear = (y) => ((y%4===0 && y%100!==0) || y%400===0) ? 366 : 365;
+      while (dayCount >= daysInYear(year)) { dayCount -= daysInYear(year); year++; }
+      const daysInMonth = [31, ((year%4===0 && year%100!==0) || year%400===0)?29:28, 31,30,31,30,31,31,30,31,30,31];
+      let month = 0;
+      while (dayCount >= daysInMonth[month]) { dayCount -= daysInMonth[month]; month++; }
+      const day = dayCount + 1;
+      const totalMinutes = Math.round(timeFraction * 1440);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      // Return a timestamp number for comparison
+      return new Date(year, month, day, hours, minutes, 0, 0).getTime();
+    }
+    // Try parsing date string (handle various formats)
+    const parts = str.match(/(\d{1,4})[\/\-](\d{1,2})[\/\-](\d{2,4})\s*(\d{1,2}):(\d{2})/);
+    if (parts) {
+      let y, m, d;
+      if (parseInt(parts[1]) > 31) { y = parseInt(parts[1]); m = parseInt(parts[2]) - 1; d = parseInt(parts[3]); }
+      else { d = parseInt(parts[1]); m = parseInt(parts[2]) - 1; y = parseInt(parts[3]); }
+      return new Date(y, m, d, parseInt(parts[4]), parseInt(parts[5]), 0, 0).getTime();
+    }
+    // Fallback
+    const fallback = new Date(str);
+    return isNaN(fallback) ? NaN : fallback.getTime();
+  },
+
+  esc(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; },
+
+  formatDate(val){
+    if (!val) return '';
+    const num = Number(val);
+    if (!isNaN(num) && num > 30000 && num < 100000) {
+      const wholeDays = Math.floor(num);
+      const timeFraction = num - wholeDays;
+      let dayCount = wholeDays - 1;
+      if (dayCount >= 60) dayCount--;
+      let year = 1900;
+      const daysInYear = (y) => ((y%4===0 && y%100!==0) || y%400===0) ? 366 : 365;
+      while (dayCount >= daysInYear(year)) { dayCount -= daysInYear(year); year++; }
+      const daysInMonth = [31, ((year%4===0 && year%100!==0) || year%400===0)?29:28, 31,30,31,30,31,31,30,31,30,31];
+      let month = 0;
+      while (dayCount >= daysInMonth[month]) { dayCount -= daysInMonth[month]; month++; }
+      const day = dayCount + 1;
+      const totalMinutes = Math.round(timeFraction * 1440);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      return `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')} ${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}`;
+    }
+    return String(val);
+  }
+};
+
+// ============================= TOOL SWITCHING =============================
+function switchTool(tool) {
+  document.querySelectorAll('.tool-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tool-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tool-' + tool).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ============================= PREPARE MAPPING =============================
+const PREP = {
+  leagueResults: [],
+  teamResults: [],
+
+  useCurrentResults(){
+    // Pull "Correct" results from DataFeed Check
+    const correct = DFC.results.filter(r => r.status === 'correct');
+    if (correct.length === 0) {
+      alert('No "Correct" results found. Run DataFeed Check first.');
+      return;
+    }
+    const lines = correct.map(r => r.bcmEventName);
+    document.getElementById('prep-datafeed').value = lines.join('\n');
+  },
+
+  async run(){
+    const datafeedText = document.getElementById('prep-datafeed').value.trim();
+    const hierarchyText = document.getElementById('prep-hierarchy').value.trim();
+    if (!datafeedText) { alert('Please provide BCM Event Names (step 1)'); return; }
+    if (!hierarchyText) { alert('Please paste BCM Hierarchy (step 2)'); return; }
+
+    const brFiles = document.getElementById('prep-br').files;
+    const bgFiles = document.getElementById('prep-bg').files;
+
+    // Parse BCM event names (one per line, skip header if present)
+    let bcmEvents = datafeedText.split('\n').map(l => l.trim()).filter(l => l && l !== 'BCM Event Name');
+
+    // Parse hierarchy to get Country + Competition for each event
+    const hierarchy = this.parseHierarchy(hierarchyText);
+    // Capture sport name from hierarchy (top level)
+    this.lastParsedSport = (hierarchy.length > 0 && hierarchy[0].sport) ? hierarchy[0].sport : 'Basketball';
+
+    // Parse source files — multiple for each
+    let brData = [];
+    for (let i = 0; i < brFiles.length; i++) {
+      const d = await DFC.parseFile(brFiles[i]);
+      brData = brData.concat(d);
+    }
+    let bgData = [];
+    for (let i = 0; i < bgFiles.length; i++) {
+      const d = await DFC.parseFile(bgFiles[i]);
+      bgData = bgData.concat(d);
+    }
+
+    // Build source lookup: Betradar events
+    // Format: "Hometeam vs. Awayteam" — we need to match against BCM "Team A - Team B"
+    const brEvents = brData.map(row => {
+      const home = String(row['Hometeam'] || row['hometeam'] || '').trim();
+      const away = String(row['Awayteam'] || row['awayteam'] || '').trim();
+      const tournament = String(row['Tournament'] || row['tournament'] || row['Unique Tournament'] || row['unique tournament'] || '').trim();
+      const category = String(row['Category'] || row['category'] || '').trim();
+      // Normalized for matching: "hometeam awayteam"
+      const norm = DFC.normalize(home + ' ' + away);
+      return { home, away, tournament, category, norm };
+    });
+
+    // Build source lookup: Betgenius events
+    // Format: "Team A v Team B"
+    const bgEvents = bgData.map(row => {
+      const eventName = String(row['Event'] || row['event'] || '').trim();
+      const competition = String(row['Competition'] || row['competition'] || '').trim();
+      // Split "A v B" to get individual team names
+      const parts = eventName.split(/\s+v\s+/i);
+      const team1 = parts[0] ? parts[0].trim() : '';
+      const team2 = parts[1] ? parts[1].trim() : '';
+      const norm = DFC.normalize(eventName);
+      return { eventName, competition, team1, team2, norm };
+    });
+
+    // Process each BCM event
+    this.leagueResults = [];
+    this.teamResults = [];
+    const leagueMap = {}; // country|competition → {brComps, bgComps}
+
+    bcmEvents.forEach(bcmEvent => {
+      // Split BCM event "Team A - Team B" into individual teams
+      const parts = bcmEvent.split(/\s+-\s+/);
+      const bcmTeam1 = parts[0] ? parts[0].trim() : bcmEvent;
+      const bcmTeam2 = parts[1] ? parts[1].trim() : '';
+
+      // Find country + competition from hierarchy
+      let country = 'N/A', competition = 'N/A';
+      for (const h of hierarchy) {
+        const found = h.events.some(e => {
+          // Flexible matching: exact, case-insensitive, or team-name containment
+          if (e.toLowerCase().trim() === bcmEvent.toLowerCase().trim()) return true;
+          // Check if both team names appear in the hierarchy event
+          if (bcmTeam1 && bcmTeam2) {
+            const eLower = e.toLowerCase();
+            if (eLower.includes(bcmTeam1.toLowerCase()) && eLower.includes(bcmTeam2.toLowerCase())) return true;
+          }
+          return false;
+        });
+        if (found) {
+          country = h.country;
+          competition = h.competition;
+          break;
+        }
+      }
+
+      const leagueKey = `${country}|${competition}`;
+      if (!leagueMap[leagueKey]) leagueMap[leagueKey] = { country, competition, brComps: new Set(), bgComps: new Set() };
+
+      // Match against Betradar — require high similarity (75%+)
+      const normBcm = DFC.normalize(bcmTeam1 + ' ' + bcmTeam2);
+      let brMatch = null;
+      let bestBrScore = 0;
+      brEvents.forEach(br => {
+        const score = Math.max(
+          DFC.sim(normBcm, br.norm),
+          DFC.sim(normBcm, DFC.normalize(br.away + ' ' + br.home))
+        );
+        if (score > bestBrScore && score >= 75) {
+          bestBrScore = score;
+          brMatch = br;
+        }
+      });
+
+      // Match against Betgenius — require high similarity (75%+)
+      let bgMatch = null;
+      let bestBgScore = 0;
+      bgEvents.forEach(bg => {
+        const score = Math.max(
+          DFC.sim(normBcm, bg.norm),
+          DFC.sim(normBcm, DFC.normalize(bg.team2 + ' ' + bg.team1))
+        );
+        if (score > bestBgScore && score >= 75) {
+          bestBgScore = score;
+          bgMatch = bg;
+        }
+      });
+
+      // Determine BR team names (which Betradar team matches which BCM team)
+      let brTeam1 = 'N/A', brTeam2 = 'N/A', brComp = 'N/A';
+      if (brMatch) {
+        brComp = brMatch.tournament || brMatch.category || 'N/A';
+        leagueMap[leagueKey].brComps.add(brComp);
+        // Figure out which BR team is which
+        const s1h = DFC.sim(DFC.normalize(bcmTeam1), DFC.normalize(brMatch.home));
+        const s1a = DFC.sim(DFC.normalize(bcmTeam1), DFC.normalize(brMatch.away));
+        if (s1h >= s1a) {
+          brTeam1 = brMatch.home;
+          brTeam2 = brMatch.away;
+        } else {
+          brTeam1 = brMatch.away;
+          brTeam2 = brMatch.home;
+        }
+      }
+
+      // Determine BG team names
+      let bgTeam1 = 'N/A', bgTeam2 = 'N/A', bgComp = 'N/A';
+      if (bgMatch) {
+        bgComp = bgMatch.competition || 'N/A';
+        leagueMap[leagueKey].bgComps.add(bgComp);
+        const s1t1 = DFC.sim(DFC.normalize(bcmTeam1), DFC.normalize(bgMatch.team1));
+        const s1t2 = DFC.sim(DFC.normalize(bcmTeam1), DFC.normalize(bgMatch.team2));
+        if (s1t1 >= s1t2) {
+          bgTeam1 = bgMatch.team1;
+          bgTeam2 = bgMatch.team2;
+        } else {
+          bgTeam1 = bgMatch.team2;
+          bgTeam2 = bgMatch.team1;
+        }
+      }
+
+      // Add Team 1
+      this.teamResults.push({
+        country, bcmCompetition: competition, bcmTeam: bcmTeam1,
+        brComp, brTeam: brTeam1, bgComp, bgTeam: bgTeam1
+      });
+
+      // Add Team 2 (if exists)
+      if (bcmTeam2) {
+        this.teamResults.push({
+          country, bcmCompetition: competition, bcmTeam: bcmTeam2,
+          brComp, brTeam: brTeam2, bgComp, bgTeam: bgTeam2
+        });
+      }
+    });
+
+    // Build league results — exclude N/A country/competition
+    Object.values(leagueMap).forEach(l => {
+      if (l.country === 'N/A' && l.competition === 'N/A') return; // skip unmatched
+      const brNames = [...l.brComps].filter(n => n && n !== 'N/A');
+      const bgNames = [...l.bgComps].filter(n => n && n !== 'N/A');
+      this.leagueResults.push({
+        country: l.country, competition: l.competition,
+        betradar: brNames.length > 0 ? brNames.join(' & ') : 'N/A',
+        betgenius: bgNames.length > 0 ? bgNames.join(' & ') : 'N/A'
+      });
+    });
+
+    // Remove team rows where both country and competition are N/A
+    this.teamResults = this.teamResults.filter(t => !(t.country === 'N/A' && t.bcmCompetition === 'N/A'));
+
+    this.renderResults();
+  },
+
+  parseHierarchy(text){
+    const lines = text.split('\n').filter(l => l.trim());
+    const results = [];
+    let currentSport = '', currentCountry = '', currentCompetition = '';
+
+    lines.forEach(line => {
+      let content = line;
+      let indent = 0;
+
+      // Handle dot-space pattern (". . . content" where each ". " or "." = one level)
+      const dotMatch = content.match(/^([\.\s]+)/);
+      if (dotMatch && dotMatch[1].includes('.')) {
+        indent = (dotMatch[1].match(/\./g) || []).length;
+        content = content.replace(/^[\.\s]+/, '').trim();
+      } else {
+        // Handle space/tab indentation
+        const raw = line.replace(/\t/g, '  ');
+        const spaces = raw.search(/\S/);
+        indent = Math.floor(spaces / 2);
+        content = raw.trim();
+      }
+
+      if (!content) return;
+
+      console.log(`Indent ${indent}: "${content}"`);
+
+      // Levels: 0-1=Sport, 2=Country, 3=Competition, 4+=Events
+      if (indent <= 1) {
+        currentSport = content;
+      } else if (indent === 2) {
+        currentCountry = content;
+      } else if (indent === 3) {
+        currentCompetition = content;
+        results.push({ sport: currentSport, country: currentCountry, competition: currentCompetition, events: [] });
+      } else {
+        // Event level
+        if (results.length > 0) {
+          results[results.length - 1].events.push(content);
+        }
+      }
+    });
+
+    console.log('Parsed hierarchy:', results.map(r => `${r.country} > ${r.competition} (${r.events.length} events)`));
+    return results;
+  },
+
+  editingLeagues: false,
+  editingTeams: false,
+
+  toggleEditLeagues(){
+    this.editingLeagues = !this.editingLeagues;
+    document.getElementById('edit-leagues-btn').textContent = this.editingLeagues ? '✓ Done' : '✏️ Edit';
+    this.renderResults();
+  },
+
+  toggleEditTeams(){
+    this.editingTeams = !this.editingTeams;
+    document.getElementById('edit-teams-btn').textContent = this.editingTeams ? '✓ Done' : '✏️ Edit';
+    this.renderResults();
+  },
+
+  renderResults(){
+    document.getElementById('prep-results').style.display = 'block';
+    const parsedSport = this.lastParsedSport || 'Basketball';
+
+    const ltbody = document.getElementById('prep-leagues-tbody');
+    if (this.editingLeagues) {
+      ltbody.innerHTML = this.leagueResults.map((l, i) => `<tr>
+        <td><input type="text" value="${this.escAttr(l.sport || parsedSport)}" onchange="PREP.leagueResults[${i}].sport=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:13px;"></td>
+        <td><input type="text" value="${this.escAttr(l.country)}" onchange="PREP.leagueResults[${i}].country=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:13px;"></td>
+        <td><input type="text" value="${this.escAttr(l.competition)}" onchange="PREP.leagueResults[${i}].competition=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:13px;font-weight:600;"></td>
+        <td><input type="text" value="${this.escAttr(l.betradar)}" onchange="PREP.leagueResults[${i}].betradar=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:13px;"></td>
+        <td><input type="text" value="${this.escAttr(l.betgenius)}" onchange="PREP.leagueResults[${i}].betgenius=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:13px;"></td>
+      </tr>`).join('');
+    } else {
+      ltbody.innerHTML = this.leagueResults.map(l => `<tr>
+        <td>${DFC.esc(l.sport || parsedSport)}</td>
+        <td>${DFC.esc(l.country)}</td>
+        <td><strong>${DFC.esc(l.competition)}</strong></td>
+        <td>${DFC.esc(l.betradar)}</td>
+        <td>${DFC.esc(l.betgenius)}</td>
+      </tr>`).join('');
+    }
+
+    const ttbody = document.getElementById('prep-teams-tbody');
+    if (this.editingTeams) {
+      ttbody.innerHTML = this.teamResults.map((t, i) => `<tr>
+        <td><input type="text" value="${this.escAttr(t.sport || parsedSport)}" onchange="PREP.teamResults[${i}].sport=this.value" style="width:80px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:12px;"></td>
+        <td><input type="text" value="${this.escAttr(t.country)}" onchange="PREP.teamResults[${i}].country=this.value" style="width:70px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:12px;"></td>
+        <td><input type="text" value="${this.escAttr(t.bcmCompetition)}" onchange="PREP.teamResults[${i}].bcmCompetition=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:12px;"></td>
+        <td><input type="text" value="${this.escAttr(t.bcmTeam)}" onchange="PREP.teamResults[${i}].bcmTeam=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:12px;font-weight:600;"></td>
+        <td><input type="text" value="${this.escAttr(t.brComp)}" onchange="PREP.teamResults[${i}].brComp=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:12px;"></td>
+        <td><input type="text" value="${this.escAttr(t.brTeam)}" onchange="PREP.teamResults[${i}].brTeam=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:12px;"></td>
+        <td><input type="text" value="${this.escAttr(t.bgComp)}" onchange="PREP.teamResults[${i}].bgComp=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:12px;"></td>
+        <td><input type="text" value="${this.escAttr(t.bgTeam)}" onchange="PREP.teamResults[${i}].bgTeam=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:12px;"></td>
+      </tr>`).join('');
+    } else {
+      ttbody.innerHTML = this.teamResults.map(t => `<tr>
+        <td>${DFC.esc(t.sport || parsedSport)}</td>
+        <td>${DFC.esc(t.country)}</td>
+        <td>${DFC.esc(t.bcmCompetition)}</td>
+        <td><strong>${DFC.esc(t.bcmTeam)}</strong></td>
+        <td>${DFC.esc(t.brComp)}</td>
+        <td>${DFC.esc(t.brTeam)}</td>
+        <td>${DFC.esc(t.bgComp)}</td>
+        <td>${DFC.esc(t.bgTeam)}</td>
+      </tr>`).join('');
+    }
+  },
+
+  escAttr(s){ return (s||'').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); },
+
+  downloadLeagues(){
+    const sport = this.lastParsedSport || 'Basketball';
+    const today = new Date().toISOString().slice(0,10);
+    const wb = XLSX.utils.book_new();
+    const data = this.leagueResults.map(l => ({ Sport: l.sport || sport, Country: l.country, Competition: l.competition, Betradar: l.betradar, Betgenius: l.betgenius }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, 'Leagues');
+    XLSX.writeFile(wb, `prepared_leagues_${today}.csv`, { bookType: 'csv' });
+  },
+
+  downloadTeams(){
+    const sport = this.lastParsedSport || 'Basketball';
+    const today = new Date().toISOString().slice(0,10);
+    const wb = XLSX.utils.book_new();
+    const data = this.teamResults.map(t => ({
+      Sport: t.sport || sport, Country: t.country, 'BCM Competition': t.bcmCompetition, 'BCM Unique Team': t.bcmTeam,
+      'Betradar Competition': t.brComp, 'Betradar Unique Team': t.brTeam,
+      'BG Competition': t.bgComp, 'BG Unique Team': t.bgTeam
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, 'Teams');
+    XLSX.writeFile(wb, `prepared_teams_${today}.csv`, { bookType: 'csv' });
+  }
+};
+</script>
+</body>
+</html>

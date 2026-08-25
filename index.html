@@ -272,6 +272,7 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
       </div>
     </div>
     <div class="user-bar">
+      <a href="datafeed-check.html" class="icon-btn" style="width:auto;padding:6px 12px;font-size:13px;text-decoration:none;border-radius:8px;" title="DataFeed Check">📊 DataFeed</a>
       <select id="sport-selector" class="icon-btn" style="width:auto;padding:6px 12px;font-size:14px;border-radius:8px;background:var(--surface-alt);color:var(--text);border:1px solid var(--border);cursor:pointer;" onchange="App.switchSport()">
         <option value="Basketball">🏀 Basketball</option>
         <option value="Ice Hockey">🏒 Ice Hockey</option>
@@ -421,7 +422,7 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
         <div class="drop-zone" id="bulk-drop">
           <div style="font-size:26px;margin-bottom:6px;">📄</div>
           <div>Drop an Excel file here, or <label for="bulk-file" style="color:var(--accent);cursor:pointer;text-decoration:underline;">browse</label></div>
-          <div class="hint" id="bulk-hint">Leagues: columns A–D = Country, BCM Competition, Betradar, Betgenius (row 1 header skipped)</div>
+          <div class="hint" id="bulk-hint">Leagues: columns A–E = Sport, Country, BCM Competition, Betradar, Betgenius (row 1 header skipped)</div>
           <input type="file" id="bulk-file" accept=".xlsx,.xls,.csv">
         </div>
         <div id="bulk-preview"></div>
@@ -458,6 +459,57 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
           <thead><tr><th>Username</th><th>Role</th><th>Created</th><th>Actions</th></tr></thead>
           <tbody id="users-tbody"></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- ---------- TRAINING ---------- -->
+    <div class="tab-panel" data-panel="training">
+      <div class="toolbar">
+        <select id="tr-sport-filter" onchange="TrainingTab.render()" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;">
+          <option value="">All Sports</option>
+          <option value="Basketball">Basketball</option>
+          <option value="Ice Hockey">Ice Hockey</option>
+        </select>
+        <select id="tr-category-filter" onchange="TrainingTab.render()" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;">
+          <option value="">All Categories</option>
+        </select>
+        <input type="text" id="tr-search" placeholder="Search tasks..." oninput="TrainingTab.render()" style="flex:1;min-width:180px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;">
+        <button class="btn btn-primary admin-only-btn" onclick="TrainingTab.openAdd()" style="display:none;">+ Add Task</button>
+      </div>
+      <div id="tr-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-top:16px;"></div>
+    </div>
+
+    <!-- Training Add/Edit Modal -->
+    <div class="modal-backdrop" id="tr-modal">
+      <div class="modal">
+        <div class="modal-head">
+          <h3 id="tr-modal-title">Add Training Task</h3>
+          <button class="icon-btn" onclick="TrainingTab.closeModal()">✕</button>
+        </div>
+        <div style="padding:20px;">
+          <div class="form-row">
+            <div class="fld"><label>Sport</label><select id="tr-sport"><option value="Basketball">Basketball</option><option value="Ice Hockey">Ice Hockey</option></select></div>
+            <div class="fld"><label>Category</label><input type="text" id="tr-category" placeholder="e.g., Event Creation, Mapping, Deletion"></div>
+          </div>
+          <div class="form-row" style="margin-top:14px;">
+            <div class="fld" style="flex:2;"><label>Task Title</label><input type="text" id="tr-title" placeholder="e.g., Create MB Event"></div>
+          </div>
+          <div class="form-row" style="margin-top:14px;">
+            <div class="fld" style="flex:2;"><label>Description</label><input type="text" id="tr-desc" placeholder="Brief description of the task"></div>
+          </div>
+          <div class="form-row" style="margin-top:14px;">
+            <div class="fld" style="flex:2;"><label>Video URL (SharePoint/OneDrive link)</label><input type="text" id="tr-video" placeholder="https://entaingroup.sharepoint.com/..."></div>
+          </div>
+          <div style="margin-top:14px;">
+            <label style="display:block;font-size:12px;font-weight:600;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;">Reference Image</label>
+            <input type="file" id="tr-image" accept="image/*" style="padding:8px;border:1px dashed var(--border);border-radius:8px;width:100%;background:var(--surface-alt);color:var(--text);">
+            <img id="tr-image-preview" style="max-width:100%;max-height:150px;margin-top:8px;border-radius:8px;display:none;">
+          </div>
+          <div class="form-actions" style="margin-top:20px;">
+            <button class="btn btn-primary" onclick="TrainingTab.save()">Save</button>
+            <button class="btn btn-ghost" onclick="TrainingTab.closeModal()">Cancel</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -586,8 +638,8 @@ const UI = {
   buildTabs(){
     const isAdmin = state.user.role === 'admin';
     const tabs = [
-      ['search','Master Search'],['dashboard','Dashboard'],['leagues','League Mappings'],
-      ['teams','Team Mappings'],['add','Add New'],['bulk','Bulk Upload']
+      ['dashboard','Dashboard'],['search','Master Search'],['leagues','League Mappings'],
+      ['teams','Team Mappings'],['add','Add New'],['bulk','Bulk Upload'],['training','📚 Training']
     ];
     if (isAdmin) { tabs.push(['history','History'],['users','Users']); }
     const row = document.getElementById('tabs-row');
@@ -608,6 +660,7 @@ const UI = {
     if (id==='dashboard') DashboardTab.render();
     if (id==='leagues') LeagueTab.refresh();
     if (id==='teams') TeamTab.refresh();
+    if (id==='training') TrainingTab.render();
     if (id==='history') HistoryTab.render();
     if (id==='users') UsersTab.render();
     if (id==='add') AddTab.populateCountry();
@@ -1143,8 +1196,8 @@ const BulkTab = {
     const typeSel = document.getElementById('bulk-type');
     typeSel.addEventListener('change', ()=>{
       document.getElementById('bulk-hint').textContent = typeSel.value==='league'
-        ? 'Leagues: columns A–D = Country, BCM Competition, Betradar, Betgenius (row 1 header skipped)'
-        : 'Teams: columns A–G = Country, BCM Competition, BCM Team, Betradar Competition, Betradar Team, BG Competition, BG Team (row 1 header skipped)';
+        ? 'Leagues: columns A–E = Sport, Country, BCM Competition, Betradar, Betgenius (row 1 header skipped)'
+        : 'Teams: columns A–H = Sport, Country, BCM Competition, BCM Team, Betradar Competition, Betradar Team, BG Competition, BG Team (row 1 header skipped)';
       state.bulkParsed = null;
       document.getElementById('bulk-preview').innerHTML = '';
     });
@@ -1167,12 +1220,12 @@ const BulkTab = {
         const dataRows = rows.slice(1).filter(r=>r.some(c=>String(c).trim()!==''));
         const parsed = dataRows.map(r=>{
           if (type==='league') {
-            return { country:String(r[0]||'').trim(), bcm_competition:String(r[1]||'').trim(), betradar:String(r[2]||'').trim()||'N/A', betgenius:String(r[3]||'').trim()||'N/A' };
+            return { sport:String(r[0]||'').trim()||'Basketball', country:String(r[1]||'').trim(), bcm_competition:String(r[2]||'').trim(), betradar:String(r[3]||'').trim()||'N/A', betgenius:String(r[4]||'').trim()||'N/A' };
           }
           return {
-            country:String(r[0]||'').trim(), bcm_competition:String(r[1]||'').trim(), bcm_team:String(r[2]||'').trim(),
-            betradar_competition:String(r[3]||'').trim()||'N/A', betradar_team:String(r[4]||'').trim()||'N/A',
-            bg_competition:String(r[5]||'').trim()||'N/A', bg_team:String(r[6]||'').trim()||'N/A'
+            sport:String(r[0]||'').trim()||'Basketball', country:String(r[1]||'').trim(), bcm_competition:String(r[2]||'').trim(), bcm_team:String(r[3]||'').trim(),
+            betradar_competition:String(r[4]||'').trim()||'N/A', betradar_team:String(r[5]||'').trim()||'N/A',
+            bg_competition:String(r[6]||'').trim()||'N/A', bg_team:String(r[7]||'').trim()||'N/A'
           };
         });
         this.preview(type, parsed);
@@ -1185,9 +1238,9 @@ const BulkTab = {
     const withFlags = rows.map(r=>{
       let isDup;
       if (type==='league') {
-        isDup = existing.some(e=>e.country.toLowerCase()===r.country.toLowerCase() && e.bcm_competition.toLowerCase()===r.bcm_competition.toLowerCase());
+        isDup = existing.some(e=>e.sport===r.sport && e.country.toLowerCase()===r.country.toLowerCase() && e.bcm_competition.toLowerCase()===r.bcm_competition.toLowerCase());
       } else {
-        isDup = existing.some(e=>e.country.toLowerCase()===r.country.toLowerCase() && e.bcm_competition.toLowerCase()===r.bcm_competition.toLowerCase() && (e.bcm_team||'').toLowerCase()===(r.bcm_team||'').toLowerCase());
+        isDup = existing.some(e=>e.sport===r.sport && e.country.toLowerCase()===r.country.toLowerCase() && e.bcm_competition.toLowerCase()===r.bcm_competition.toLowerCase() && (e.bcm_team||'').toLowerCase()===(r.bcm_team||'').toLowerCase());
       }
       return { data:r, isDup, checked: !isDup };
     });
@@ -1200,8 +1253,8 @@ const BulkTab = {
     const dups = p.rows.filter(r=>r.isDup);
     const news = p.rows.filter(r=>!r.isDup);
     const cols = p.type==='league'
-      ? [['country','Country'],['bcm_competition','BCM Competition'],['betradar','Betradar'],['betgenius','Betgenius']]
-      : [['country','Country'],['bcm_competition','BCM Competition'],['bcm_team','BCM Team'],['betradar_competition','BR Comp'],['betradar_team','BR Team'],['bg_competition','BG Comp'],['bg_team','BG Team']];
+      ? [['sport','Sport'],['country','Country'],['bcm_competition','BCM Competition'],['betradar','Betradar'],['betgenius','Betgenius']]
+      : [['sport','Sport'],['country','Country'],['bcm_competition','BCM Competition'],['bcm_team','BCM Team'],['betradar_competition','BR Comp'],['betradar_team','BR Team'],['bg_competition','BG Comp'],['bg_team','BG Team']];
 
     let html = `<div style="margin:20px 0 10px;display:flex;align-items:center;gap:10px;">
       <span class="section-count dup">🔴 ${dups.length} duplicates</span>
@@ -1329,6 +1382,160 @@ const UsersTab = {
   }
 };
 
+/* ============================= TRAINING TAB ============================= */
+const TrainingTab = {
+  data: [],
+  editId: null,
+
+  async load(){
+    try {
+      const rows = await sb('training', { query:'?select=*&order=sport,category,title' });
+      this.data = rows || [];
+    } catch(e){ console.warn('Failed to load training:', e); this.data = []; }
+  },
+
+  render(){
+    const sportFilter = document.getElementById('tr-sport-filter').value;
+    const catFilter = document.getElementById('tr-category-filter').value;
+    const search = (document.getElementById('tr-search').value || '').toLowerCase();
+
+    // Populate category filter
+    const cats = [...new Set(this.data.map(t=>t.category).filter(Boolean))].sort();
+    const catSel = document.getElementById('tr-category-filter');
+    const curCat = catSel.value;
+    catSel.innerHTML = '<option value="">All Categories</option>' + cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+    catSel.value = curCat;
+
+    // Show admin button
+    const addBtn = document.querySelector('.admin-only-btn');
+    if (addBtn) addBtn.style.display = (state.user && state.user.role === 'admin') ? '' : 'none';
+
+    let filtered = this.data;
+    if (sportFilter) filtered = filtered.filter(t=>t.sport===sportFilter);
+    if (catFilter) filtered = filtered.filter(t=>t.category===catFilter);
+    if (search) filtered = filtered.filter(t=>(t.title||'').toLowerCase().includes(search) || (t.category||'').toLowerCase().includes(search) || (t.description||'').toLowerCase().includes(search));
+
+    const container = document.getElementById('tr-cards');
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="empty-state"><div class="ic">📚</div>No training tasks found. Admin can add tasks using the + button.</div>';
+      return;
+    }
+
+    const isAdmin = state.user && state.user.role === 'admin';
+    container.innerHTML = filtered.map(t => `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+        <div style="padding:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+            <div>
+              <span style="font-size:10px;font-family:var(--font-mono);padding:2px 8px;border-radius:99px;background:var(--accent-soft);color:var(--accent);">${escapeHtml(t.sport||'')}</span>
+              <span style="font-size:10px;font-family:var(--font-mono);padding:2px 8px;border-radius:99px;background:var(--surface-alt);color:var(--text-dim);margin-left:4px;">${escapeHtml(t.category||'')}</span>
+            </div>
+            ${isAdmin ? `<div style="display:flex;gap:4px;">
+              <button class="btn btn-sm btn-ghost" onclick="TrainingTab.edit(${t.id})">✏️</button>
+              <button class="btn btn-sm btn-danger" onclick="TrainingTab.del(${t.id})">🗑️</button>
+            </div>` : ''}
+          </div>
+          <div style="font-weight:700;font-size:16px;margin-bottom:6px;">${escapeHtml(t.title||'')}</div>
+          ${t.description ? `<div style="font-size:13px;color:var(--text-dim);margin-bottom:10px;">${escapeHtml(t.description)}</div>` : ''}
+          ${t.video_url ? `<a href="${escapeHtml(t.video_url)}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:var(--accent-soft);color:var(--accent);border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;margin-bottom:10px;">📹 Watch Video</a>` : ''}
+        </div>
+        ${t.image_base64 ? `<img src="${t.image_base64}" style="width:100%;max-height:200px;object-fit:cover;cursor:pointer;border-top:1px solid var(--border);" onclick="TrainingTab.viewImage(this.src)">` : ''}
+      </div>
+    `).join('');
+  },
+
+  viewImage(src){
+    const w = window.open('','_blank');
+    w.document.write(`<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh;"><img src="${src}" style="max-width:100%;max-height:100vh;"></body></html>`);
+  },
+
+  openAdd(){
+    this.editId = null;
+    document.getElementById('tr-modal-title').textContent = 'Add Training Task';
+    document.getElementById('tr-sport').value = state.sport || 'Basketball';
+    document.getElementById('tr-category').value = '';
+    document.getElementById('tr-title').value = '';
+    document.getElementById('tr-desc').value = '';
+    document.getElementById('tr-video').value = '';
+    document.getElementById('tr-image').value = '';
+    document.getElementById('tr-image-preview').style.display = 'none';
+    document.getElementById('tr-modal').classList.add('show');
+  },
+
+  edit(id){
+    const item = this.data.find(t=>t.id===id);
+    if (!item) return;
+    this.editId = id;
+    document.getElementById('tr-modal-title').textContent = 'Edit Training Task';
+    document.getElementById('tr-sport').value = item.sport || 'Basketball';
+    document.getElementById('tr-category').value = item.category || '';
+    document.getElementById('tr-title').value = item.title || '';
+    document.getElementById('tr-desc').value = item.description || '';
+    document.getElementById('tr-video').value = item.video_url || '';
+    document.getElementById('tr-image').value = '';
+    const preview = document.getElementById('tr-image-preview');
+    if (item.image_base64) { preview.src = item.image_base64; preview.style.display = 'block'; }
+    else { preview.style.display = 'none'; }
+    document.getElementById('tr-modal').classList.add('show');
+  },
+
+  closeModal(){
+    document.getElementById('tr-modal').classList.remove('show');
+    this.editId = null;
+  },
+
+  async save(){
+    const sport = document.getElementById('tr-sport').value;
+    const category = document.getElementById('tr-category').value.trim();
+    const title = document.getElementById('tr-title').value.trim();
+    const description = document.getElementById('tr-desc').value.trim();
+    const video_url = document.getElementById('tr-video').value.trim();
+
+    if (!title) { toast('Title is required', true); return; }
+
+    // Handle image
+    let image_base64 = '';
+    const fileInput = document.getElementById('tr-image');
+    if (fileInput.files[0]) {
+      image_base64 = await this.fileToBase64(fileInput.files[0]);
+    } else if (this.editId) {
+      const existing = this.data.find(t=>t.id===this.editId);
+      image_base64 = existing ? existing.image_base64 || '' : '';
+    }
+
+    try {
+      if (this.editId) {
+        await sb('training', { method:'PATCH', query:`?id=eq.${this.editId}`, body:{sport,category,title,description,video_url,image_base64,updated_at:new Date().toISOString()} });
+        toast('Task updated');
+      } else {
+        await sb('training', { method:'POST', prefer:'return=representation', body:[{sport,category,title,description,video_url,image_base64}] });
+        toast('Task added');
+      }
+      await this.load();
+      this.render();
+      this.closeModal();
+    } catch(e){ toast('Error: '+e.message, true); }
+  },
+
+  async del(id){
+    if (!confirm('Delete this training task?')) return;
+    try {
+      await sb('training', { method:'DELETE', query:`?id=eq.${id}` });
+      this.data = this.data.filter(t=>t.id!==id);
+      this.render();
+      toast('Task deleted');
+    } catch(e){ toast('Error: '+e.message, true); }
+  },
+
+  fileToBase64(file){
+    return new Promise((resolve)=>{
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.readAsDataURL(file);
+    });
+  }
+};
+
 /* ============================= APP BOOT ============================= */
 const App = {
   async boot(){
@@ -1353,8 +1560,9 @@ const App = {
       pill.className = 'role-pill ' + state.user.role;
 
       UI.buildTabs();
-      UI.switchTab('search');
+      UI.switchTab('dashboard');
       BulkTab.init();
+      await TrainingTab.load();
 
       document.getElementById('app').classList.add('show');
       document.getElementById('loading-overlay').style.display = 'none';
