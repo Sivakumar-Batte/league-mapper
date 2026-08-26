@@ -467,8 +467,6 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
       <div class="toolbar">
         <select id="tr-sport-filter" onchange="TrainingTab.render()" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;">
           <option value="">All Sports</option>
-          <option value="Basketball">Basketball</option>
-          <option value="Ice Hockey">Ice Hockey</option>
         </select>
         <select id="tr-category-filter" onchange="TrainingTab.render()" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;">
           <option value="">All Categories</option>
@@ -488,7 +486,7 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
         </div>
         <div style="padding:20px;">
           <div class="form-row">
-            <div class="fld"><label>Sport</label><select id="tr-sport"><option value="Basketball">Basketball</option><option value="Ice Hockey">Ice Hockey</option></select></div>
+            <div class="fld"><label>Sport</label><input type="text" id="tr-sport" placeholder="e.g., Basketball, Ice Hockey, Tennis"></div>
             <div class="fld"><label>Category</label><input type="text" id="tr-category" placeholder="e.g., Event Creation, Mapping, Deletion"></div>
           </div>
           <div class="form-row" style="margin-top:14px;">
@@ -1398,6 +1396,13 @@ const TrainingTab = {
     const sportFilter = document.getElementById('tr-sport-filter').value;
     const catFilter = document.getElementById('tr-category-filter').value;
     const search = (document.getElementById('tr-search').value || '').toLowerCase();
+
+    // Populate sport filter dynamically from data
+    const sports = [...new Set(this.data.map(t=>t.sport).filter(Boolean))].sort();
+    const sportSel = document.getElementById('tr-sport-filter');
+    const curSport = sportSel.value;
+    sportSel.innerHTML = '<option value="">All Sports</option>' + sports.map(s=>`<option value="${s}">${s}</option>`).join('');
+    sportSel.value = curSport;
 
     // Populate category filter
     const cats = [...new Set(this.data.map(t=>t.category).filter(Boolean))].sort();
