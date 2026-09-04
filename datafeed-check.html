@@ -916,6 +916,9 @@ const PREP = {
   leagueResults: [],
   teamResults: [],
 
+  // Store the rich data from DataFeed Check: bcmEventName → {feedProviderId, sourceType, sourceEventName}
+  correctMap: {},
+
   useCurrentResults(){
     // Pull "Correct" results from DataFeed Check
     const correct = DFC.results.filter(r => r.status === 'correct');
@@ -923,7 +926,19 @@ const PREP = {
       alert('No "Correct" results found. Run DataFeed Check first.');
       return;
     }
-    const lines = correct.map(r => r.bcmEventName);
+    // Build a lookup by BCM event name → provider info (an event can map to both BR and BG)
+    this.correctMap = {};
+    correct.forEach(r => {
+      const key = (r.bcmEventName || '').toLowerCase().trim();
+      if (!this.correctMap[key]) this.correctMap[key] = { br: null, bg: null };
+      const prefix = String(r.feedProviderId).charAt(0);
+      if (prefix === '7') {
+        this.correctMap[key].br = { id: r.feedProviderId, sourceEventName: r.sourceEventName };
+      } else if (prefix === '1') {
+        this.correctMap[key].bg = { id: r.feedProviderId, sourceEventName: r.sourceEventName };
+      }
+    });
+    const lines = [...new Set(correct.map(r => r.bcmEventName))];
     document.getElementById('prep-datafeed').value = lines.join('\n');
   },
 
@@ -958,6 +973,7 @@ const PREP = {
 
     // Build source lookup: Betradar events
     // Format: "Hometeam vs. Awayteam" — we need to match against BCM "Team A - Team B"
+    const brById = {}; // stripped EventId → betradar event object
     const brEvents = brData.map(row => {
       const home = String(row['Hometeam'] || row['hometeam'] || '').trim();
       const away = String(row['Awayteam'] || row['awayteam'] || '').trim();
@@ -965,11 +981,17 @@ const PREP = {
       const category = String(row['Category'] || row['category'] || '').trim();
       // Normalized for matching: "hometeam awayteam"
       const norm = DFC.normalize(home + ' ' + away);
-      return { home, away, tournament, category, norm };
+      // Extract & strip EventId
+      let id = String(row['EventId'] || row['eventid'] || row['EVENTID'] || row['Event Id'] || row['event_id'] || '').trim();
+      id = id.replace(/^sr:match:/i, '').replace(/^sr:/i, '').trim();
+      const evt = { home, away, tournament, category, norm, id };
+      if (id) brById[id] = evt;
+      return evt;
     });
 
     // Build source lookup: Betgenius events
     // Format: "Team A v Team B"
+    const bgById = {}; // stripped EventId → betgenius event object
     const bgEvents = bgData.map(row => {
       const eventName = String(row['Event'] || row['event'] || '').trim();
       const competition = String(row['Competition'] || row['competition'] || '').trim();
@@ -978,7 +1000,11 @@ const PREP = {
       const team1 = parts[0] ? parts[0].trim() : '';
       const team2 = parts[1] ? parts[1].trim() : '';
       const norm = DFC.normalize(eventName);
-      return { eventName, competition, team1, team2, norm };
+      let id = String(row['EventId'] || row['eventid'] || row['EVENTID'] || row['Event Id'] || row['event_id'] || '').trim();
+      id = id.replace(/^sr:match:/i, '').replace(/^sr:/i, '').trim();
+      const evt = { eventName, competition, team1, team2, norm, id };
+      if (id) bgById[id] = evt;
+      return evt;
     });
 
     // Process each BCM event
@@ -1015,34 +1041,56 @@ const PREP = {
       const leagueKey = `${country}|${competition}`;
       if (!leagueMap[leagueKey]) leagueMap[leagueKey] = { country, competition, brComps: new Set(), bgComps: new Set() };
 
-      // Match against Betradar — require high similarity (75%+)
       const normBcm = DFC.normalize(bcmTeam1 + ' ' + bcmTeam2);
-      let brMatch = null;
-      let bestBrScore = 0;
-      brEvents.forEach(br => {
-        const score = Math.max(
-          DFC.sim(normBcm, br.norm),
-          DFC.sim(normBcm, DFC.normalize(br.away + ' ' + br.home))
-        );
-        if (score > bestBrScore && score >= 75) {
-          bestBrScore = score;
-          brMatch = br;
-        }
-      });
 
-      // Match against Betgenius — require high similarity (75%+)
+      // Look up exact Feed Provider IDs captured from DataFeed Check "Correct" results
+      const providerInfo = this.correctMap[bcmEvent.toLowerCase().trim()] || null;
+
+      // ---- Betradar: prefer exact ID lookup, fall back to fuzzy ----
+      let brMatch = null;
+      if (providerInfo && providerInfo.br && providerInfo.br.id) {
+        const strippedId = String(providerInfo.br.id).replace(/^sr:match:/i, '').replace(/^sr:/i, '').trim();
+        if (brById[strippedId]) brMatch = brById[strippedId];
+      }
+      if (!brMatch) {
+        // Fuzzy fallback — lower threshold (60%) + token overlap
+        let bestBrScore = 0;
+        brEvents.forEach(br => {
+          const score = Math.max(
+            DFC.calcSimilarity(bcmTeam1 + ' - ' + bcmTeam2, br.home + ' - ' + br.away),
+            DFC.calcSimilarity(bcmTeam1 + ' - ' + bcmTeam2, br.away + ' - ' + br.home),
+            DFC.sim(normBcm, br.norm),
+            DFC.sim(normBcm, DFC.normalize(br.away + ' ' + br.home))
+          );
+          if (score > bestBrScore && score >= 60) {
+            bestBrScore = score;
+            brMatch = br;
+          }
+        });
+      }
+
+      // ---- Betgenius: prefer exact ID lookup, fall back to fuzzy ----
       let bgMatch = null;
-      let bestBgScore = 0;
-      bgEvents.forEach(bg => {
-        const score = Math.max(
-          DFC.sim(normBcm, bg.norm),
-          DFC.sim(normBcm, DFC.normalize(bg.team2 + ' ' + bg.team1))
-        );
-        if (score > bestBgScore && score >= 75) {
-          bestBgScore = score;
-          bgMatch = bg;
-        }
-      });
+      if (providerInfo && providerInfo.bg && providerInfo.bg.id) {
+        const strippedId = String(providerInfo.bg.id).replace(/^sr:match:/i, '').replace(/^sr:/i, '').trim();
+        if (bgById[strippedId]) bgMatch = bgById[strippedId];
+      }
+      if (!bgMatch) {
+        // Fuzzy fallback — lower threshold (60%) + token overlap
+        let bestBgScore = 0;
+        bgEvents.forEach(bg => {
+          const score = Math.max(
+            DFC.calcSimilarity(bcmTeam1 + ' - ' + bcmTeam2, bg.team1 + ' - ' + bg.team2),
+            DFC.calcSimilarity(bcmTeam1 + ' - ' + bcmTeam2, bg.team2 + ' - ' + bg.team1),
+            DFC.sim(normBcm, bg.norm),
+            DFC.sim(normBcm, DFC.normalize(bg.team2 + ' ' + bg.team1))
+          );
+          if (score > bestBgScore && score >= 60) {
+            bestBgScore = score;
+            bgMatch = bg;
+          }
+        });
+      }
 
       // Determine BR team names (which Betradar team matches which BCM team)
       let brTeam1 = 'N/A', brTeam2 = 'N/A', brComp = 'N/A';
