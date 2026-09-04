@@ -437,7 +437,7 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Table</th><th>Details</th></tr></thead>
+          <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Table</th><th>Details</th><th>Changes</th></tr></thead>
           <tbody id="hist-tbody"></tbody>
         </table>
       </div>
@@ -529,6 +529,20 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
   </div>
 </div>
 
+<!-- ======================= HISTORY DETAILS MODAL ======================= -->
+<div class="modal-backdrop" id="hist-details-modal">
+  <div class="modal" style="max-width:800px;">
+    <div class="modal-head">
+      <h3>Change Details</h3>
+      <button class="icon-btn" onclick="HistoryTab.closeDetails()">✕</button>
+    </div>
+    <div id="hist-details-body" style="max-height:70vh;overflow:auto;"></div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="HistoryTab.closeDetails()">Close</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast-wrap"></div>
 
 <script>
@@ -591,12 +605,13 @@ async function sbLoadAll(table, order='id') {
   return out;
 }
 
-async function logHistory(action, table_name, record_details) {
+async function logHistory(action, table_name, record_details, change_data) {
   try {
-    await sb('history', {
-      method: 'POST',
-      body: [{ username: state.user.username, action, table_name, record_details }]
-    });
+    const row = { username: state.user.username, action, table_name, record_details };
+    if (change_data !== undefined && change_data !== null) {
+      row.change_data = typeof change_data === 'string' ? change_data : JSON.stringify(change_data);
+    }
+    await sb('history', { method: 'POST', body: [row] });
   } catch (e) { console.warn('history log failed', e); }
   try {
     const h = await sb('history', { query: '?select=*&order=created_at.desc&limit=500' });
@@ -920,7 +935,10 @@ const LeagueTab = {
     try {
       await sb('leagues', { method:'DELETE', query:`?id=eq.${id}` });
       state.leagues = state.leagues.filter(l=>l.id!==id);
-      await logHistory('Delete','leagues', `${rec.country} / ${rec.bcm_competition}`);
+      await logHistory('Delete','leagues', `${rec.country} / ${rec.bcm_competition}`, {
+        type:'delete',
+        deleted: { Sport:rec.sport, Country:rec.country, 'BCM Competition':rec.bcm_competition, Betradar:rec.betradar, Betgenius:rec.betgenius }
+      });
       toast('League deleted');
       this.render(); DashboardTab.render();
     } catch(e){ toast('Delete failed: '+e.message, true); }
@@ -992,7 +1010,10 @@ const TeamTab = {
     try {
       await sb('teams', { method:'DELETE', query:`?id=eq.${id}` });
       state.teams = state.teams.filter(t=>t.id!==id);
-      await logHistory('Delete','teams', `${rec.country} / ${rec.bcm_competition} / ${rec.bcm_team}`);
+      await logHistory('Delete','teams', `${rec.country} / ${rec.bcm_competition} / ${rec.bcm_team}`, {
+        type:'delete',
+        deleted: { Sport:rec.sport, Country:rec.country, 'BCM Competition':rec.bcm_competition, 'BCM Team':rec.bcm_team, 'BR Competition':rec.betradar_competition, 'BR Team':rec.betradar_team, 'BG Competition':rec.bg_competition, 'BG Team':rec.bg_team }
+      });
       toast('Team deleted');
       this.render(); DashboardTab.render();
     } catch(e){ toast('Delete failed: '+e.message, true); }
@@ -1072,7 +1093,10 @@ const AddTab = {
     try {
       const rows = await sb('leagues', { method:'POST', prefer:'return=representation', body:[{country,bcm_competition:bcm,betradar:br||'N/A',betgenius:bg||'N/A',sport:state.sport}] });
       state.leagues.push(rows[0]);
-      await logHistory('Add','leagues', `${country} / ${bcm}`);
+      await logHistory('Add','leagues', `${country} / ${bcm}`, {
+        type:'add',
+        added: { Sport:state.sport, Country:country, 'BCM Competition':bcm, Betradar:br||'N/A', Betgenius:bg||'N/A' }
+      });
       toast('League added');
       UI.dirty = false;
       this.resetLeague();
@@ -1107,7 +1131,10 @@ const AddTab = {
         bg_competition: bgComp, bg_team: bgTeam, sport: state.sport
       }]});
       state.teams.push(rows[0]);
-      await logHistory('Add','teams', `${country} / ${league.bcm_competition} / ${bcmTeam}`);
+      await logHistory('Add','teams', `${country} / ${league.bcm_competition} / ${bcmTeam}`, {
+        type:'add',
+        added: { Sport:state.sport, Country:country, 'BCM Competition':league.bcm_competition, 'BCM Team':bcmTeam, 'BR Competition':brComp, 'BR Team':brTeam, 'BG Competition':bgComp, 'BG Team':bgTeam }
+      });
       toast('Team added');
       UI.dirty = false;
       this.resetTeam();
@@ -1147,9 +1174,21 @@ const EditModal = {
     document.getElementById('edit-modal').classList.add('show');
   },
   close(){ document.getElementById('edit-modal').classList.remove('show'); },
+  buildDiff(oldObj, newObj, fieldLabels){
+    const changes = [];
+    Object.keys(fieldLabels).forEach(key => {
+      const oldVal = String(oldObj[key] ?? '');
+      const newVal = String(newObj[key] ?? '');
+      if (oldVal !== newVal) {
+        changes.push({ field: fieldLabels[key], old: oldVal, new: newVal });
+      }
+    });
+    return changes;
+  },
   async save(){
     try {
       if (this.mode==='league') {
+        const old = state.leagues.find(l=>l.id===this.id) || {};
         const body = {
           country: document.getElementById('em-country').value.trim(),
           bcm_competition: document.getElementById('em-bcm').value.trim(),
@@ -1157,12 +1196,16 @@ const EditModal = {
           betgenius: document.getElementById('em-bg').value.trim() || 'N/A',
           updated_at: new Date().toISOString()
         };
+        const changes = this.buildDiff(old, body, {
+          country:'Country', bcm_competition:'BCM Competition', betradar:'Betradar', betgenius:'Betgenius'
+        });
         const rows = await sb('leagues', { method:'PATCH', query:`?id=eq.${this.id}`, prefer:'return=representation', body });
         const idx = state.leagues.findIndex(l=>l.id===this.id);
         state.leagues[idx] = rows[0];
-        await logHistory('Edit','leagues', `${body.country} / ${body.bcm_competition}`);
+        await logHistory('Edit','leagues', `${body.country} / ${body.bcm_competition}`, { type:'edit', changes });
         LeagueTab.render();
       } else {
+        const old = state.teams.find(t=>t.id===this.id) || {};
         const body = {
           country: document.getElementById('em-country').value.trim(),
           bcm_competition: document.getElementById('em-bcm').value.trim(),
@@ -1173,10 +1216,15 @@ const EditModal = {
           bg_team: document.getElementById('em-bgteam').value.trim() || 'N/A',
           updated_at: new Date().toISOString()
         };
+        const changes = this.buildDiff(old, body, {
+          country:'Country', bcm_competition:'BCM Competition', bcm_team:'BCM Team',
+          betradar_competition:'BR Competition', betradar_team:'BR Team',
+          bg_competition:'BG Competition', bg_team:'BG Team'
+        });
         const rows = await sb('teams', { method:'PATCH', query:`?id=eq.${this.id}`, prefer:'return=representation', body });
         const idx = state.teams.findIndex(t=>t.id===this.id);
         state.teams[idx] = rows[0];
-        await logHistory('Edit','teams', `${body.country} / ${body.bcm_competition} / ${body.bcm_team}`);
+        await logHistory('Edit','teams', `${body.country} / ${body.bcm_competition} / ${body.bcm_team}`, { type:'edit', changes });
         TeamTab.render();
       }
       DashboardTab.render();
@@ -1292,7 +1340,12 @@ const BulkTab = {
       }
       if (table==='leagues') state.leagues = state.leagues.concat(inserted);
       else state.teams = state.teams.concat(inserted);
-      await logHistory('Bulk Upload', table, `${inserted.length} entries added via bulk upload`);
+      // Build detailed entry list for history
+      const entriesList = inserted.map(r => table==='leagues'
+        ? { Sport:r.sport, Country:r.country, 'BCM Competition':r.bcm_competition, Betradar:r.betradar, Betgenius:r.betgenius }
+        : { Sport:r.sport, Country:r.country, 'BCM Competition':r.bcm_competition, 'BCM Team':r.bcm_team, 'BR Competition':r.betradar_competition, 'BR Team':r.betradar_team, 'BG Competition':r.bg_competition, 'BG Team':r.bg_team }
+      );
+      await logHistory('Bulk Upload', table, `${inserted.length} entries added via bulk upload`, { type:'bulk', entries: entriesList });
       toast(`${inserted.length} ${table} uploaded`);
       state.bulkParsed = null;
       document.getElementById('bulk-preview').innerHTML = '';
@@ -1314,9 +1367,63 @@ const BulkTab = {
 /* ============================= HISTORY TAB (admin) ============================= */
 const HistoryTab = {
   render(){
-    document.getElementById('hist-tbody').innerHTML = state.history.length ? state.history.map(h=>`
-      <tr><td class="mono" style="white-space:nowrap;">${fmtTime(h.created_at)}</td><td>${escapeHtml(h.username)}</td><td>${escapeHtml(h.action)}</td><td>${escapeHtml(h.table_name)}</td><td>${escapeHtml(h.record_details||'')}</td></tr>
-    `).join('') : `<tr><td colspan="5"><div class="empty-state">No history yet</div></td></tr>`;
+    document.getElementById('hist-tbody').innerHTML = state.history.length ? state.history.map((h,i)=>`
+      <tr><td class="mono" style="white-space:nowrap;">${fmtTime(h.created_at)}</td><td>${escapeHtml(h.username)}</td><td>${escapeHtml(h.action)}</td><td>${escapeHtml(h.table_name)}</td><td>${escapeHtml(h.record_details||'')}</td>
+      <td>${h.change_data ? `<button class="btn btn-sm btn-ghost" onclick="HistoryTab.showDetails(${i})">🔍 Details</button>` : '<span style="color:var(--text-faint);font-size:12px;">—</span>'}</td></tr>
+    `).join('') : `<tr><td colspan="6"><div class="empty-state">No history yet</div></td></tr>`;
+  },
+
+  showDetails(i){
+    const h = state.history[i];
+    if (!h || !h.change_data) return;
+    let data;
+    try { data = JSON.parse(h.change_data); } catch(e){ data = null; }
+    if (!data) { alert('No detailed changes available'); return; }
+
+    let html = `<div style="margin-bottom:16px;"><strong>${escapeHtml(h.action)}</strong> on <strong>${escapeHtml(h.table_name)}</strong> by ${escapeHtml(h.username)} at ${fmtTime(h.created_at)}</div>`;
+
+    if (data.type === 'edit' && data.changes) {
+      if (data.changes.length === 0) {
+        html += `<div style="color:var(--text-dim);">No fields were changed.</div>`;
+      } else {
+        html += `<table class="history-table" style="width:100%;"><thead><tr><th>Field</th><th>Old Value</th><th>New Value</th></tr></thead><tbody>`;
+        // changes is an array of {field, old, new}
+        data.changes.forEach(c => {
+          html += `<tr><td><strong>${escapeHtml(c.field)}</strong></td><td style="color:var(--danger);">${escapeHtml(c.old ?? '')}</td><td style="color:var(--success);">${escapeHtml(c.new ?? '')}</td></tr>`;
+        });
+        html += `</tbody></table>`;
+      }
+    } else if (data.type === 'add' && data.added) {
+      html += `<table class="history-table" style="width:100%;"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>`;
+      Object.keys(data.added).forEach(field => {
+        html += `<tr><td><strong>${escapeHtml(field)}</strong></td><td>${escapeHtml(data.added[field] ?? '')}</td></tr>`;
+      });
+      html += `</tbody></table>`;
+    } else if (data.type === 'delete' && data.deleted) {
+      html += `<div style="color:var(--danger);margin-bottom:8px;">Deleted record:</div>`;
+      html += `<table class="history-table" style="width:100%;"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>`;
+      Object.keys(data.deleted).forEach(field => {
+        html += `<tr><td><strong>${escapeHtml(field)}</strong></td><td>${escapeHtml(data.deleted[field] ?? '')}</td></tr>`;
+      });
+      html += `</tbody></table>`;
+    } else if (data.type === 'bulk' && data.entries) {
+      html += `<div style="margin-bottom:8px;">${data.entries.length} entries added:</div>`;
+      const cols = data.entries.length > 0 ? Object.keys(data.entries[0]) : [];
+      html += `<div style="max-height:400px;overflow:auto;"><table class="history-table" style="width:100%;"><thead><tr>${cols.map(c=>`<th>${escapeHtml(c)}</th>`).join('')}</tr></thead><tbody>`;
+      data.entries.forEach(e => {
+        html += `<tr>${cols.map(c=>`<td>${escapeHtml(e[c] ?? '')}</td>`).join('')}</tr>`;
+      });
+      html += `</tbody></table></div>`;
+    } else {
+      html += `<pre style="white-space:pre-wrap;font-size:12px;">${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+    }
+
+    document.getElementById('hist-details-body').innerHTML = html;
+    document.getElementById('hist-details-modal').classList.add('show');
+  },
+
+  closeDetails(){
+    document.getElementById('hist-details-modal').classList.remove('show');
   },
   exportExcel(){
     const wb = XLSX.utils.book_new();

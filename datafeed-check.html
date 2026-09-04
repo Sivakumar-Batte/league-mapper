@@ -181,8 +181,7 @@ tr.status-nomap{border-left:3px solid var(--text-faint);opacity:.7;}
         <select id="filter-status" onchange="DFC.renderTable()" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text);font-size:14px;">
           <option value="all">All Statuses</option>
           <option value="correct">Correct</option>
-          <option value="review">Review</option>
-          <option value="wrong">Wrong</option>
+          <option value="issues">Issues (Any Mismatch)</option>
           <option value="nomap">No Mapping</option>
         </select>
         <input type="text" id="filter-search" placeholder="Search..." oninput="DFC.renderTable()" style="flex:1;min-width:200px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text);font-size:14px;">
@@ -390,27 +389,18 @@ const DFC = {
             sourceEventName = home && away ? `${home} vs ${away}` : (sourceRow['Event'] || sourceRow['event'] || '');
             const d = sourceRow['Date'] || sourceRow['date'] || sourceRow['Day'] || '';
             const t = sourceRow['Time'] || sourceRow['time'] || '';
-            // Betradar time is CET (GMT+1) — subtract 1 hour using string math
-            if (d && t) {
-              const timeParts = t.match(/(\d{1,2}):(\d{2})/);
-              if (timeParts) {
-                let h = parseInt(timeParts[1]) - 1;
-                let dateStr = d;
-                if (h < 0) { h = 23; } // wrap to previous day (simplified)
-                sourceDateTime = d + ' ' + String(h).padStart(2,'0') + ':' + timeParts[2];
-              } else {
-                sourceDateTime = d + ' ' + t;
-              }
-            } else {
-              sourceDateTime = d + (t ? ' ' + t : '');
-            }
+            console.log('Betradar raw Date:', JSON.stringify(d), 'type:', typeof d, '| Time:', JSON.stringify(t));
+            // Betradar: transform dd-mm-yyyy + hh:mm → mm-dd-YYYY hh:mm
+            sourceDateTime = this.formatBetradarDate(d, t);
+            console.log('Betradar formatted:', sourceDateTime);
           }
         } else if (feedIdPrefix === '1') {
           sourceRow = bgMap[feedProviderId];
           sourceType = 'Betgenius';
           if (sourceRow) {
             sourceEventName = sourceRow['Event'] || sourceRow['event'] || '';
-            sourceDateTime = sourceRow['Start (UTC)'] || sourceRow['start (utc)'] || '';
+            const bgStart = sourceRow['Start (UTC+2)'] || sourceRow['Start (UTC)'] || sourceRow['start (utc)'] || sourceRow['Start'] || '';
+            sourceDateTime = this.formatBGDate(bgStart);
           }
         } else {
           // Unknown prefix — try both
@@ -422,20 +412,14 @@ const DFC = {
             sourceEventName = home && away ? `${home} vs ${away}` : (sourceRow['Event'] || '');
             const d = sourceRow['Date'] || sourceRow['date'] || sourceRow['Day'] || '';
             const t = sourceRow['Time'] || sourceRow['time'] || '';
-            if (d && t) {
-              const timeParts = t.match(/(\d{1,2}):(\d{2})/);
-              if (timeParts) {
-                let h = parseInt(timeParts[1]) - 1;
-                if (h < 0) h = 23;
-                sourceDateTime = d + ' ' + String(h).padStart(2,'0') + ':' + timeParts[2];
-              } else { sourceDateTime = d + ' ' + t; }
-            } else { sourceDateTime = d + (t ? ' ' + t : ''); }
+            sourceDateTime = this.formatBetradarDate(d, t);
           } else {
             sourceRow = bgMap[feedProviderId];
             if (sourceRow) {
               sourceType = 'Betgenius';
               sourceEventName = sourceRow['Event'] || sourceRow['event'] || '';
-              sourceDateTime = sourceRow['Start (UTC)'] || sourceRow['start (utc)'] || '';
+              const bgStart = sourceRow['Start (UTC+2)'] || sourceRow['Start (UTC)'] || sourceRow['start (utc)'] || sourceRow['Start'] || '';
+              sourceDateTime = this.formatBGDate(bgStart);
             }
           }
         }
@@ -445,23 +429,47 @@ const DFC = {
         let status = 'nomap';
 
         if (sourceRow) {
-          similarity = this.calcSimilarity(bcmEventName, sourceEventName);
-          const timeDiff = this.calcTimeDiff(bcmDate, sourceDateTime);
+          // Transform the BCM Feed Name delimiter based on source before comparing
+          let feedNameForCompare = feedNameVal || bcmEventName;
+          if (feedIdPrefix === '7') {
+            feedNameForCompare = feedNameForCompare.replace(/\s+-\s+/g, ' vs ');
+          } else if (feedIdPrefix === '1') {
+            feedNameForCompare = feedNameForCompare.replace(/\s+-\s+/g, ' v ');
+          }
+          similarity = this.calcSimilarity(feedNameForCompare, sourceEventName);
+          const bcmFmt = this.formatBCMDate(bcmDate);
 
-          if (timeDiff === -1) {
-            // Can't compare time — use only name similarity
-            if (similarity >= 75) status = 'correct';
-            else if (similarity >= 50) status = 'review';
-            else status = 'wrong';
+          // Break down comparison into date, time, name
+          const p1 = this.dateNums(bcmFmt);
+          const p2 = this.dateNums(sourceDateTime);
+
+          let dateOk = false, timeOk = false;
+          if (p1 && p2) {
+            const sameDate = (p1.y === p2.y) && ((p1.a===p2.a && p1.b===p2.b) || (p1.a===p2.b && p1.b===p2.a));
+            dateOk = sameDate;
+            const tDiff = Math.abs((p1.h*60 + p1.mi) - (p2.h*60 + p2.mi));
+            timeOk = tDiff <= 30;
           } else {
-            if (similarity >= 75 && timeDiff <= 30) status = 'correct';
-            else if (similarity >= 50 && timeDiff <= 120) status = 'review';
-            else status = 'wrong';
+            // Can't parse dates — treat as unknown (don't fail on it)
+            dateOk = true; timeOk = true;
+          }
+
+          const nameOk = similarity >= 75;
+
+          // Build status with reasons
+          if (nameOk && dateOk && timeOk) {
+            status = 'correct';
+          } else {
+            const reasons = [];
+            if (!nameOk) reasons.push('Event name not matching');
+            if (!dateOk) reasons.push('Date not matching');
+            if (!timeOk) reasons.push('Time not matching');
+            status = reasons.join(', ');
           }
         }
 
         return {
-          eventId, bcmOpenDate, bcmDate: this.formatDate(bcmDate), bcmSport, bcmEventName,
+          eventId, bcmOpenDate, bcmDate: this.formatBCMDate(bcmDate), bcmSport, bcmEventName,
           feedName: feedNameVal, feedProviderId,
           sourceDateTime, sourceEventName, similarity, status, sourceType
         };
@@ -483,15 +491,13 @@ const DFC = {
   renderStats(){
     const total = this.results.length;
     const correct = this.results.filter(r=>r.status==='correct').length;
-    const review = this.results.filter(r=>r.status==='review').length;
-    const wrong = this.results.filter(r=>r.status==='wrong').length;
     const nomap = this.results.filter(r=>r.status==='nomap').length;
+    const issues = total - correct - nomap;
 
     document.getElementById('result-stats').innerHTML = `
       <div class="stat-card"><div class="num">${total}</div><div class="label">Total</div></div>
       <div class="stat-card correct"><div class="num">${correct}</div><div class="label">Correct</div></div>
-      <div class="stat-card review"><div class="num">${review}</div><div class="label">Review</div></div>
-      <div class="stat-card wrong"><div class="num">${wrong}</div><div class="label">Wrong</div></div>
+      <div class="stat-card wrong"><div class="num">${issues}</div><div class="label">Issues</div></div>
       <div class="stat-card nomap"><div class="num">${nomap}</div><div class="label">No Mapping</div></div>
     `;
   },
@@ -500,12 +506,20 @@ const DFC = {
     const statusFilter = document.getElementById('filter-status').value;
     const search = (document.getElementById('filter-search').value || '').toLowerCase();
     let rows = this.results;
-    if (statusFilter !== 'all') rows = rows.filter(r => r.status === statusFilter);
+    if (statusFilter === 'correct') rows = rows.filter(r => r.status === 'correct');
+    else if (statusFilter === 'nomap') rows = rows.filter(r => r.status === 'nomap');
+    else if (statusFilter === 'issues') rows = rows.filter(r => r.status !== 'correct' && r.status !== 'nomap');
     if (search) rows = rows.filter(r => [r.eventId,r.bcmSport,r.bcmEventName,r.feedName,r.feedProviderId,r.sourceEventName].some(v=>(v||'').toLowerCase().includes(search)));
 
     const tbody = document.getElementById('results-tbody');
-    tbody.innerHTML = rows.slice(0, 500).map(r => `
-      <tr class="status-${r.status}">
+    tbody.innerHTML = rows.slice(0, 500).map(r => {
+      // Determine CSS class and label
+      let cls, label;
+      if (r.status === 'correct') { cls = 'correct'; label = 'Correct'; }
+      else if (r.status === 'nomap') { cls = 'nomap'; label = 'No Mapping'; }
+      else { cls = 'wrong'; label = r.status; } // status contains the reason text
+      return `
+      <tr class="status-${cls}">
         <td>${this.esc(r.eventId)}</td>
         <td>${this.esc(r.bcmDate)}</td>
         <td>${this.esc(r.bcmSport)}</td>
@@ -515,9 +529,9 @@ const DFC = {
         <td>${this.esc(r.sourceDateTime)}</td>
         <td>${this.esc(r.sourceEventName)}</td>
         <td>${r.similarity}%</td>
-        <td><span class="status-badge ${r.status}">${r.status === 'nomap' ? 'No Mapping' : r.status.charAt(0).toUpperCase() + r.status.slice(1)}</span></td>
-      </tr>
-    `).join('');
+        <td><span class="status-badge ${cls}">${this.esc(label)}</span></td>
+      </tr>`;
+    }).join('');
   },
 
   download(){
@@ -532,7 +546,7 @@ const DFC = {
       'Source Date/Time': r.sourceDateTime,
       'Source Event Name': r.sourceEventName,
       'Similarity %': r.similarity,
-      'Status': r.status === 'nomap' ? 'No Mapping' : r.status.charAt(0).toUpperCase() + r.status.slice(1)
+      'Status': r.status === 'correct' ? 'Correct' : (r.status === 'nomap' ? 'No Mapping' : r.status)
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     XLSX.utils.book_append_sheet(wb, ws, 'DataFeed Check');
@@ -559,8 +573,8 @@ const DFC = {
           const wb = XLSX.read(data, {type:'array'});
           const sheet = wb.Sheets[wb.SheetNames[0]];
           const rows = XLSX.utils.sheet_to_json(sheet, {defval:'', raw:true});
-          // Convert Excel serial dates in each row
-          rows.forEach(row => {
+          // Convert Excel serial dates in each row (DISABLED - handled by explicit formatters)
+          if (false) rows.forEach(row => {
             Object.keys(row).forEach(key => {
               const val = row[key];
               if (typeof val === 'number' && val > 30000 && val < 100000 && (key.toLowerCase().includes('date') || key.toLowerCase().includes('time') || key.toLowerCase().includes('open'))) {
@@ -624,28 +638,10 @@ const DFC = {
   },
 
   normalize(s){
+    // Light normalization only — lowercase, remove punctuation, collapse spaces.
+    // Keeps meaningful words like "women", "men", "u20" so real differences are caught.
     return s.toLowerCase()
-      .replace(/\bbbc\b/g, '')
-      .replace(/\bfc\b/g, '')
-      .replace(/\bsc\b/g, '')
-      .replace(/\bsk\b/g, '')
-      .replace(/\bfk\b/g, '')
-      .replace(/\bkk\b/g, '')
-      .replace(/\bhc\b/g, '')
-      .replace(/\bbc\b/g, '')
-      .replace(/\bac\b/g, '')
-      .replace(/\bcf\b/g, '')
-      .replace(/\bunited\b/g, '')
-      .replace(/\bcity\b/g, '')
-      .replace(/\bclub\b/g, '')
-      .replace(/\bteam\b/g, '')
-      .replace(/\bwomen\b/g, '')
-      .replace(/\bmen\b/g, '')
-      .replace(/\(women\)/g, '')
-      .replace(/\(men\)/g, '')
-      .replace(/\(u\d+\)/g, '')
-      .replace(/u\d+/g, '')
-      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/[^a-z0-9\s]/g, ' ')   // remove punctuation (keeps words)
       .replace(/\s+/g, ' ')
       .trim();
   },
@@ -673,15 +669,37 @@ const DFC = {
     return dp[m][n];
   },
 
-  // Time diff in minutes
+  // Extract numeric parts [a, b, year, hour, min] from a date string
+  dateNums(str){
+    const m = String(str).match(/(\d{1,4})[\/\-](\d{1,2})[\/\-](\d{2,4})\s*(\d{1,2})?:?(\d{2})?/);
+    if (!m) return null;
+    return {
+      a: parseInt(m[1]), b: parseInt(m[2]), y: parseInt(m[3]),
+      h: m[4] ? parseInt(m[4]) : 0, mi: m[5] ? parseInt(m[5]) : 0
+    };
+  },
+
+  // Time diff in minutes — format-agnostic (handles mm-dd vs dd-mm)
   calcTimeDiff(dateStr1, dateStr2){
     if (!dateStr1 || !dateStr2) return -1;
-    try {
-      const d1 = this.parseDate(dateStr1);
-      const d2 = this.parseDate(dateStr2);
-      if (isNaN(d1) || isNaN(d2)) return -1;
-      return Math.abs(d1 - d2) / 60000;
-    } catch(e) { return -1; }
+    const p1 = this.dateNums(dateStr1);
+    const p2 = this.dateNums(dateStr2);
+    if (!p1 || !p2) return -1;
+
+    // Compare time (hour:min) directly
+    const timeDiff = Math.abs((p1.h*60 + p1.mi) - (p2.h*60 + p2.mi));
+
+    // Compare dates: check both interpretations (mm-dd vs dd-mm)
+    // Same year required
+    if (p1.y !== p2.y) return 999999;
+    // Direct match: a1==a2 && b1==b2  OR  swapped: a1==b2 && b1==a2
+    const directMatch = (p1.a === p2.a && p1.b === p2.b);
+    const swappedMatch = (p1.a === p2.b && p1.b === p2.a);
+    if (directMatch || swappedMatch) {
+      return timeDiff; // same date, return only time difference
+    }
+    // Dates genuinely differ
+    return 999999;
   },
 
   // Parse date handling Excel serial numbers
@@ -709,13 +727,18 @@ const DFC = {
       // Return a timestamp number for comparison
       return new Date(year, month, day, hours, minutes, 0, 0).getTime();
     }
-    // Try parsing date string (handle various formats)
+    // Both BCM and source are now normalized to mm-dd-YYYY hh:mm
     const parts = str.match(/(\d{1,4})[\/\-](\d{1,2})[\/\-](\d{2,4})\s*(\d{1,2}):(\d{2})/);
     if (parts) {
-      let y, m, d;
-      if (parseInt(parts[1]) > 31) { y = parseInt(parts[1]); m = parseInt(parts[2]) - 1; d = parseInt(parts[3]); }
-      else { d = parseInt(parts[1]); m = parseInt(parts[2]) - 1; y = parseInt(parts[3]); }
-      return new Date(y, m, d, parseInt(parts[4]), parseInt(parts[5]), 0, 0).getTime();
+      let y, mo, d;
+      if (parseInt(parts[1]) > 31) {
+        // YYYY-MM-DD
+        y = parseInt(parts[1]); mo = parseInt(parts[2]) - 1; d = parseInt(parts[3]);
+      } else {
+        // mm-dd-YYYY (first is month, second is day)
+        mo = parseInt(parts[1]) - 1; d = parseInt(parts[2]); y = parseInt(parts[3]);
+      }
+      return new Date(y, mo, d, parseInt(parts[4]), parseInt(parts[5]), 0, 0).getTime();
     }
     // Fallback
     const fallback = new Date(str);
@@ -723,6 +746,138 @@ const DFC = {
   },
 
   esc(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; },
+
+  // === DATE FORMATTERS — all output mm-dd-YYYY hh:mm ===
+
+  // Parse Excel serial number into {y,mo,d,h,mi}
+  excelSerialToParts(num){
+    const wholeDays = Math.floor(num);
+    const timeFraction = num - wholeDays;
+    let dayCount = wholeDays - 1;
+    if (dayCount >= 60) dayCount--;
+    let year = 1900;
+    const diy = (y) => ((y%4===0 && y%100!==0) || y%400===0) ? 366 : 365;
+    while (dayCount >= diy(year)) { dayCount -= diy(year); year++; }
+    const dim = [31, ((year%4===0 && year%100!==0) || year%400===0)?29:28, 31,30,31,30,31,31,30,31,30,31];
+    let mo = 0;
+    while (dayCount >= dim[mo]) { dayCount -= dim[mo]; mo++; }
+    const totalMin = Math.round(timeFraction * 1440);
+    return { y: year, mo: mo+1, d: dayCount+1, h: Math.floor(totalMin/60), mi: totalMin%60 };
+  },
+
+  pad(n){ return String(n).padStart(2,'0'); },
+
+  // Add minutes to a date's parts, handling rollover across days/months/years
+  addMinutes(y, mo, d, h, mi, addMin){
+    // Use a Date object in UTC to avoid timezone issues, then read back UTC parts
+    const dt = new Date(Date.UTC(y, mo-1, d, h, mi, 0));
+    dt.setUTCMinutes(dt.getUTCMinutes() + addMin);
+    return {
+      y: dt.getUTCFullYear(),
+      mo: dt.getUTCMonth() + 1,
+      d: dt.getUTCDate(),
+      h: dt.getUTCHours(),
+      mi: dt.getUTCMinutes()
+    };
+  },
+
+  // BCM: input mm-dd-YYYY hh:mm:ss → output mm-dd-YYYY hh:mm, +60 minutes added
+  formatBCMDate(val){
+    if (val === '' || val === null || val === undefined) return '';
+    let y, mo, d, h, mi;
+    const num = Number(val);
+    if (!isNaN(num) && num > 30000 && num < 100000) {
+      const p = this.excelSerialToParts(num);
+      y = p.y; mo = p.mo; d = p.d; h = p.h; mi = p.mi;
+    } else {
+      const str = String(val).trim();
+      const m = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+      if (!m) return str;
+      mo = parseInt(m[1]); d = parseInt(m[2]); y = parseInt(m[3]); h = parseInt(m[4]); mi = parseInt(m[5]);
+    }
+    // Add +60 minutes with rollover
+    const r = this.addMinutes(y, mo, d, h, mi, 60);
+    return `${this.pad(r.mo)}-${this.pad(r.d)}-${r.y} ${this.pad(r.h)}:${this.pad(r.mi)}`;
+  },
+
+  // Betradar: Date input dd-mm-yyyy (or dd/mm/yyyy), Time input hh:mm → output mm-dd-YYYY hh:mm
+  formatBetradarDate(dateVal, timeVal){
+    let mo, d, y, h='00', mi='00';
+    const dNum = Number(dateVal);
+    if (dateVal !== '' && !isNaN(dNum) && dNum > 30000 && dNum < 100000) {
+      // Excel serial — parts are correct calendar values, no swap needed
+      const p = this.excelSerialToParts(dNum);
+      mo = p.mo; d = p.d; y = p.y; h = p.h; mi = p.mi;
+    } else if (dateVal instanceof Date) {
+      // JS Date object from SheetJS
+      mo = dateVal.getMonth()+1; d = dateVal.getDate(); y = dateVal.getFullYear();
+      h = dateVal.getHours(); mi = dateVal.getMinutes();
+    } else {
+      const ds = String(dateVal || '').trim();
+      // dd-mm-yyyy or dd/mm/yyyy with optional embedded time — FIRST number is DAY, SECOND is MONTH
+      const m = ds.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[ T]+(\d{1,2}):(\d{2}))?/);
+      if (m) {
+        d = parseInt(m[1]); mo = parseInt(m[2]); y = parseInt(m[3]); // dd first, mm second
+        if (m[4]) { h = parseInt(m[4]); mi = parseInt(m[5]); }
+      } else {
+        return String(dateVal || '');
+      }
+    }
+    // Separate Time column overrides embedded time
+    const ts = String(timeVal || '').trim();
+    const tm = ts.match(/(\d{1,2}):(\d{2})/);
+    if (tm) { h = parseInt(tm[1]); mi = parseInt(tm[2]); }
+    // Output as mm-dd-YYYY hh:mm
+    return `${this.pad(mo)}-${this.pad(d)}-${y} ${this.pad(h)}:${this.pad(mi)}`;
+  },
+
+  // Betgenius: input dd-mm-YYYY hh:mm → output mm-dd-YYYY hh:mm
+  formatBGDate(val){
+    if (val === '' || val === null || val === undefined) return '';
+    const num = Number(val);
+    if (!isNaN(num) && num > 30000 && num < 100000) {
+      const p = this.excelSerialToParts(num);
+      return `${this.pad(p.mo)}-${this.pad(p.d)}-${p.y} ${this.pad(p.h)}:${this.pad(p.mi)}`;
+    }
+    const str = String(val).trim();
+    // dd-mm-YYYY hh:mm  or  dd/mm/YYYY hh:mm
+    const m = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\s+(\d{1,2}):(\d{2})/);
+    if (m) {
+      return `${this.pad(m[2])}-${this.pad(m[1])}-${m[3]} ${this.pad(m[4])}:${m[5]}`; // swap dd and mm
+    }
+    return str;
+  },
+
+  // Normalize a source date string to YYYY-MM-DD (treats DD/MM/YYYY as European)
+  normalizeSourceDate(val){
+    if (!val) return '';
+    const str = String(val).trim();
+    // Excel serial number
+    const num = Number(str);
+    if (!isNaN(num) && num > 30000 && num < 100000) {
+      const wholeDays = Math.floor(num);
+      let dayCount = wholeDays - 1;
+      if (dayCount >= 60) dayCount--;
+      let year = 1900;
+      const diy = (y) => ((y%4===0 && y%100!==0) || y%400===0) ? 366 : 365;
+      while (dayCount >= diy(year)) { dayCount -= diy(year); year++; }
+      const dim = [31, ((year%4===0 && year%100!==0) || year%400===0)?29:28, 31,30,31,30,31,31,30,31,30,31];
+      let month = 0;
+      while (dayCount >= dim[month]) { dayCount -= dim[month]; month++; }
+      return `${year}-${String(month+1).padStart(2,'0')}-${String(dayCount+1).padStart(2,'0')}`;
+    }
+    // DD/MM/YYYY or DD-MM-YYYY → treat first as day, second as month
+    let m = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (m) {
+      return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
+    }
+    // YYYY-MM-DD already
+    m = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    if (m) {
+      return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+    }
+    return str;
+  },
 
   formatDate(val){
     if (!val) return '';
