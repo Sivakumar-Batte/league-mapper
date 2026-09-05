@@ -78,6 +78,15 @@ a{color:var(--accent);}
 .role-pill{font-size:10px;font-family:var(--font-mono);text-transform:uppercase;padding:2px 7px;border-radius:999px;letter-spacing:.05em;}
 .role-pill.admin{background:var(--accent-soft);color:var(--accent);}
 .role-pill.user{background:var(--surface-alt);color:var(--text-dim);border:1px solid var(--border);}
+.user-menu-item{display:block;width:100%;text-align:left;padding:11px 16px;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;}
+.user-menu-item:hover{background:var(--surface-alt);}
+.guide-section{border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden;}
+.guide-section > summary{padding:12px 16px;cursor:pointer;font-weight:700;font-size:14px;list-style:none;background:var(--surface-alt);}
+.guide-section > summary::-webkit-details-marker{display:none;}
+.guide-section[open] > summary{border-bottom:1px solid var(--border);}
+.guide-section .guide-content{padding:14px 16px;font-size:13.5px;color:var(--text-dim);line-height:1.6;}
+.guide-section .guide-content b{color:var(--text);}
+.guide-section .guide-content ul{margin:6px 0 6px 18px;}
 .icon-btn{width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text-dim);display:flex;align-items:center;justify-content:center;font-size:16px;transition:.15s;}
 .icon-btn:hover{background:var(--surface-alt);color:var(--text);}
 
@@ -277,12 +286,18 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
         <option value="Basketball">🏀 Basketball</option>
         <option value="Ice Hockey">🏒 Ice Hockey</option>
       </select>
-      <div class="user-chip">
-        <span id="user-chip-name"></span>
-        <span class="role-pill" id="user-role-pill"></span>
+      <div style="position:relative;">
+        <div class="user-chip" style="cursor:pointer;" onclick="UI.toggleUserMenu(event)" title="Account menu">
+          <span id="user-chip-name"></span>
+          <span class="role-pill" id="user-role-pill"></span>
+          <span style="font-size:10px;color:var(--text-dim);">▾</span>
+        </div>
+        <div id="user-menu" style="display:none;position:absolute;right:0;top:calc(100% + 8px);background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-lg);min-width:180px;z-index:200;overflow:hidden;">
+          <button class="user-menu-item" onclick="PasswordModal.open()">🔑 Change Password</button>
+          <button class="user-menu-item" onclick="Auth.logout()">⎋ Log out</button>
+        </div>
       </div>
       <button class="icon-btn" id="dark-toggle" title="Toggle dark mode" onclick="UI.toggleDark()">🌙</button>
-      <button class="icon-btn" title="Log out" onclick="Auth.logout()">⎋</button>
     </div>
   </div>
 
@@ -303,6 +318,13 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
 
     <!-- ---------- DASHBOARD ---------- -->
     <div class="tab-panel" data-panel="dashboard">
+      <div class="panel" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:linear-gradient(135deg,var(--accent-soft),transparent);">
+        <div>
+          <div style="font-weight:700;font-size:16px;">📖 New here? Read the User Guide</div>
+          <div style="color:var(--text-dim);font-size:13px;margin-top:2px;">A quick, plain-language walkthrough of every part of this application.</div>
+        </div>
+        <button class="btn btn-primary" onclick="UserGuide.open()">Open User Guide</button>
+      </div>
       <div class="stat-grid" id="dash-stats"></div>
       <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:18px;" id="dash-grid-top">
         <div class="panel">
@@ -320,51 +342,59 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
       </div>
     </div>
 
-    <!-- ---------- LEAGUE MAPPINGS ---------- -->
-    <div class="tab-panel" data-panel="leagues">
-      <div class="toolbar">
-        <select id="lg-country-filter" onchange="LeagueTab.refresh()"><option value="">All countries</option></select>
-        <select id="lg-mapped-filter" onchange="LeagueTab.refresh()">
-          <option value="all">All</option>
-          <option value="unmapped_br">Unmapped Betradar</option>
-          <option value="unmapped_bg">Unmapped Betgenius</option>
-          <option value="unmapped_any">Any unmapped</option>
-          <option value="fully_mapped">Fully mapped</option>
-        </select>
-        <input type="text" id="lg-search" placeholder="Search leagues…" oninput="LeagueTab.refresh()">
-        <span style="margin-left:auto;color:var(--text-dim);font-size:12.5px;" id="lg-count"></span>
+    <!-- ---------- MAPPINGS (combined Leagues + Teams) ---------- -->
+    <div class="tab-panel" data-panel="mappings">
+      <div class="type-toggle" style="margin-bottom:16px;">
+        <button id="map-toggle-leagues" class="active" onclick="MappingsTab.setView('leagues')">🏆 Leagues</button>
+        <button id="map-toggle-teams" onclick="MappingsTab.setView('teams')">👥 Teams</button>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr id="lg-thead"></tr></thead>
-          <tbody id="lg-tbody"></tbody>
-        </table>
-      </div>
-      <div class="pagination" id="lg-pagination"></div>
-    </div>
 
-    <!-- ---------- TEAM MAPPINGS ---------- -->
-    <div class="tab-panel" data-panel="teams">
-      <div class="toolbar">
-        <select id="tm-country-filter" onchange="TeamTab.refresh()"><option value="">All countries</option></select>
-        <select id="tm-mapped-filter" onchange="TeamTab.refresh()">
-          <option value="all">All</option>
-          <option value="unmapped_br">Unmapped Betradar</option>
-          <option value="unmapped_bg">Unmapped Betgenius</option>
-          <option value="unmapped_any">Any unmapped</option>
-          <option value="fully_mapped">Fully mapped</option>
-        </select>
-        <input type="text" id="tm-search" placeholder="Search teams…" oninput="TeamTab.refresh()">
-        <button class="btn btn-danger btn-sm admin-only-btn" id="tm-del-blank" onclick="TeamTab.removeBlankBcm()" style="display:none;">🧹 Delete Blank BCM Team</button>
-        <span style="margin-left:auto;color:var(--text-dim);font-size:12.5px;" id="tm-count"></span>
+      <!-- Leagues sub-view -->
+      <div id="map-view-leagues">
+        <div class="toolbar">
+          <select id="lg-country-filter" onchange="LeagueTab.refresh()"><option value="">All countries</option></select>
+          <select id="lg-mapped-filter" onchange="LeagueTab.refresh()">
+            <option value="all">All</option>
+            <option value="unmapped_br">Unmapped Betradar</option>
+            <option value="unmapped_bg">Unmapped Betgenius</option>
+            <option value="unmapped_any">Any unmapped</option>
+            <option value="fully_mapped">Fully mapped</option>
+          </select>
+          <input type="text" id="lg-search" placeholder="Search leagues…" oninput="LeagueTab.refresh()">
+          <span style="margin-left:auto;color:var(--text-dim);font-size:12.5px;" id="lg-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr id="lg-thead"></tr></thead>
+            <tbody id="lg-tbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="lg-pagination"></div>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr id="tm-thead"></tr></thead>
-          <tbody id="tm-tbody"></tbody>
-        </table>
+
+      <!-- Teams sub-view -->
+      <div id="map-view-teams" style="display:none;">
+        <div class="toolbar">
+          <select id="tm-country-filter" onchange="TeamTab.refresh()"><option value="">All countries</option></select>
+          <select id="tm-mapped-filter" onchange="TeamTab.refresh()">
+            <option value="all">All</option>
+            <option value="unmapped_br">Unmapped Betradar</option>
+            <option value="unmapped_bg">Unmapped Betgenius</option>
+            <option value="unmapped_any">Any unmapped</option>
+            <option value="fully_mapped">Fully mapped</option>
+          </select>
+          <input type="text" id="tm-search" placeholder="Search teams…" oninput="TeamTab.refresh()">
+          <button class="btn btn-danger btn-sm admin-only-btn" id="tm-del-blank" onclick="TeamTab.removeBlankBcm()" style="display:none;">🧹 Delete Blank BCM Team</button>
+          <span style="margin-left:auto;color:var(--text-dim);font-size:12.5px;" id="tm-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr id="tm-thead"></tr></thead>
+            <tbody id="tm-tbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="tm-pagination"></div>
       </div>
-      <div class="pagination" id="tm-pagination"></div>
     </div>
 
     <!-- ---------- ADD NEW ---------- -->
@@ -471,17 +501,39 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
 
     <!-- ---------- TRAINING ---------- -->
     <div class="tab-panel" data-panel="training">
-      <div class="toolbar">
-        <select id="tr-sport-filter" onchange="TrainingTab.render()" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;">
-          <option value="">All Sports</option>
-        </select>
-        <select id="tr-category-filter" onchange="TrainingTab.render()" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;">
-          <option value="">All Categories</option>
-        </select>
-        <input type="text" id="tr-search" placeholder="Search tasks..." oninput="TrainingTab.render()" style="flex:1;min-width:180px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;">
-        <button class="btn btn-primary admin-only-btn" onclick="TrainingTab.openAdd()" style="display:none;">+ Add Task</button>
+      <div class="type-toggle" style="margin-bottom:16px;">
+        <button id="tr-toggle-material" class="active" onclick="TrainingTab.setView('material')">📚 Training Material</button>
+        <button id="tr-toggle-daily" onclick="TrainingTab.setView('daily')">📝 Daily Updates</button>
       </div>
-      <div id="tr-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-top:16px;"></div>
+
+      <!-- Training material sub-view -->
+      <div id="tr-view-material">
+        <div class="toolbar">
+          <select id="tr-sport-filter" onchange="TrainingTab.render()" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;">
+            <option value="">All Sports</option>
+          </select>
+          <select id="tr-category-filter" onchange="TrainingTab.render()" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;">
+            <option value="">All Categories</option>
+          </select>
+          <input type="text" id="tr-search" placeholder="Search tasks..." oninput="TrainingTab.render()" style="flex:1;min-width:180px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;">
+          <button class="btn btn-primary admin-only-btn" onclick="TrainingTab.openAdd()" style="display:none;">+ Add Task</button>
+        </div>
+        <div id="tr-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-top:16px;"></div>
+      </div>
+
+      <!-- Daily Updates sub-view -->
+      <div id="tr-view-daily" style="display:none;">
+        <div class="toolbar">
+          <input type="date" id="du-date-filter" onchange="DailyTab.render()" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;">
+          <select id="du-author-filter" onchange="DailyTab.render()" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;">
+            <option value="">All Authors</option>
+          </select>
+          <input type="text" id="du-search" placeholder="Search updates..." oninput="DailyTab.render()" style="flex:1;min-width:180px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;">
+          <button class="btn btn-ghost btn-sm" onclick="DailyTab.clearFilters()">Clear</button>
+          <button class="btn btn-primary" onclick="DailyTab.openAdd()">+ Add Update</button>
+        </div>
+        <div id="du-list" style="margin-top:16px;display:grid;gap:12px;"></div>
+      </div>
     </div>
 
     <!-- Training Add/Edit Modal -->
@@ -518,6 +570,77 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
       </div>
     </div>
 
+    <!-- Daily Update Add/Edit Modal -->
+    <div class="modal-backdrop" id="du-modal">
+      <div class="modal">
+        <div class="modal-head">
+          <h3 id="du-modal-title">Add Daily Update</h3>
+          <button class="icon-btn" onclick="DailyTab.closeModal()">✕</button>
+        </div>
+        <div style="padding:20px;">
+          <div class="form-row">
+            <div class="fld" style="flex:2;"><label>Title</label><input type="text" id="du-title" placeholder="e.g., BCM feed outage — afternoon"></div>
+            <div class="fld"><label>Date</label><input type="date" id="du-udate"></div>
+          </div>
+          <div class="form-row" style="margin-top:14px;">
+            <div class="fld" style="flex:2;"><label>Update / Description</label><textarea id="du-desc" rows="6" placeholder="What happened, what was done, anything the team should know…" style="width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:14px;font-family:inherit;resize:vertical;"></textarea></div>
+          </div>
+          <div class="form-actions" style="margin-top:20px;">
+            <button class="btn btn-primary" onclick="DailyTab.save()">Save</button>
+            <button class="btn btn-ghost" onclick="DailyTab.closeModal()">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Daily Update View Modal -->
+    <div class="modal-backdrop" id="du-view-modal">
+      <div class="modal" style="max-width:640px;">
+        <div class="modal-head">
+          <h3 id="duv-title">Update</h3>
+          <button class="icon-btn" onclick="DailyTab.closeView()">✕</button>
+        </div>
+        <div id="duv-body" style="max-height:70vh;overflow:auto;"></div>
+        <div class="form-actions">
+          <button class="btn btn-ghost" onclick="DailyTab.closeView()">Close</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ======================= USER GUIDE MODAL ======================= -->
+<div class="modal-backdrop" id="guide-modal">
+  <div class="modal" style="max-width:820px;">
+    <div class="modal-head">
+      <h3>📖 User Guide</h3>
+      <button class="icon-btn" onclick="UserGuide.close()">✕</button>
+    </div>
+    <div style="margin-bottom:14px;">
+      <input type="text" id="guide-search" placeholder="Search the guide…" oninput="UserGuide.filter()" style="width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:14px;">
+    </div>
+    <div id="guide-body" style="max-height:66vh;overflow:auto;"></div>
+  </div>
+</div>
+
+<!-- ======================= CHANGE PASSWORD MODAL ======================= -->
+<div class="modal-backdrop" id="pw-modal">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-head">
+      <h3>🔑 Change Password</h3>
+      <button class="icon-btn" onclick="PasswordModal.close()">✕</button>
+    </div>
+    <div style="padding:4px 0 0;">
+      <div class="field"><label>Current password</label><input type="password" id="pw-current" autocomplete="current-password"></div>
+      <div class="field"><label>New password</label><input type="password" id="pw-new" autocomplete="new-password"></div>
+      <div class="field"><label>Confirm new password</label><input type="password" id="pw-confirm" autocomplete="new-password"></div>
+      <div id="pw-error" style="display:none;color:var(--danger);font-size:13px;margin-bottom:10px;"></div>
+      <div class="form-actions">
+        <button class="btn btn-primary" id="pw-save-btn" onclick="PasswordModal.save()">Update password</button>
+        <button class="btn btn-ghost" onclick="PasswordModal.close()">Cancel</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -658,8 +781,8 @@ const UI = {
   buildTabs(){
     const isAdmin = state.user.role === 'admin';
     const tabs = [
-      ['dashboard','Dashboard'],['search','Master Search'],['leagues','League Mappings'],
-      ['teams','Team Mappings'],['add','Add New'],['bulk','Bulk Upload'],['lbc','⚡ LBC Matcher'],['training','📚 Training']
+      ['dashboard','Dashboard'],['search','Master Search'],['mappings','Mappings'],
+      ['add','Add New'],['bulk','Bulk Upload'],['lbc','⚡ LBC Matcher'],['training','📚 Training']
     ];
     if (isAdmin) { tabs.push(['history','History'],['users','Users']); }
     const row = document.getElementById('tabs-row');
@@ -676,20 +799,32 @@ const UI = {
     // hide edit/delete affordances handled per-render
   },
   switchTab(id){
+    // Legacy route compatibility: old League/Team tab ids map to the combined
+    // Mappings workspace with the correct sub-view pre-selected.
+    let subView = null;
+    if (id==='leagues') { subView='leagues'; id='mappings'; }
+    else if (id==='teams') { subView='teams'; id='mappings'; }
+
     state.currentTab = id;
     document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===id));
     document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active', p.dataset.panel===id));
     if (id==='dashboard') DashboardTab.render();
-    if (id==='leagues') LeagueTab.refresh();
-    if (id==='teams') TeamTab.refresh();
+    if (id==='mappings') MappingsTab.enter(subView);
     if (id==='lbc') { const f = document.getElementById('lbc-frame'); if (f && f.src.indexOf('lbc-matcher.html') === -1) f.src = f.dataset.src; }
-    if (id==='training') TrainingTab.render();
+    if (id==='training') TrainingTab.enter();
     if (id==='history') HistoryTab.render();
     if (id==='users') UsersTab.render();
     if (id==='add') AddTab.populateCountry();
     if (id==='search') SearchTab.run();
+  },
+  toggleUserMenu(e){
+    if (e) e.stopPropagation();
+    const m = document.getElementById('user-menu');
+    m.style.display = m.style.display === 'none' ? 'block' : 'none';
   }
 };
+// Close the user menu when clicking anywhere else
+document.addEventListener('click', ()=>{ const m=document.getElementById('user-menu'); if (m) m.style.display='none'; });
 
 window.onbeforeunload = function(e){
   if (UI.dirty) { e.preventDefault(); e.returnValue=''; return ''; }
@@ -800,6 +935,26 @@ const SearchTab = {
       </div>`;
     });
     box.innerHTML = html;
+  }
+};
+
+/* ============================= MAPPINGS (combined workspace) ============================= */
+// Hosts the existing League and Team mapping views under one tab. It does NOT
+// change any mapping logic — it just shows/hides the two sub-views and calls
+// the unchanged LeagueTab / TeamTab refresh methods.
+const MappingsTab = {
+  view: 'leagues',
+  enter(subView){
+    this.setView(subView || this.view);
+  },
+  setView(v){
+    if (v !== 'teams') v = 'leagues';
+    this.view = v;
+    document.getElementById('map-toggle-leagues').classList.toggle('active', v==='leagues');
+    document.getElementById('map-toggle-teams').classList.toggle('active', v==='teams');
+    document.getElementById('map-view-leagues').style.display = v==='leagues' ? '' : 'none';
+    document.getElementById('map-view-teams').style.display = v==='teams' ? '' : 'none';
+    if (v==='leagues') LeagueTab.refresh(); else TeamTab.refresh();
   }
 };
 
@@ -1534,12 +1689,26 @@ const UsersTab = {
 const TrainingTab = {
   data: [],
   editId: null,
+  view: 'material',
 
   async load(){
     try {
       const rows = await sb('training', { query:'?select=*&order=sport,category,title' });
       this.data = rows || [];
     } catch(e){ console.warn('Failed to load training:', e); this.data = []; }
+  },
+
+  // Called on tab entry — renders whichever sub-view is active.
+  enter(){ this.setView(this.view); },
+  setView(v){
+    if (v !== 'daily') v = 'material';
+    this.view = v;
+    document.getElementById('tr-toggle-material').classList.toggle('active', v==='material');
+    document.getElementById('tr-toggle-daily').classList.toggle('active', v==='daily');
+    document.getElementById('tr-view-material').style.display = v==='material' ? '' : 'none';
+    document.getElementById('tr-view-daily').style.display = v==='daily' ? '' : 'none';
+    if (v==='material') this.render();
+    else DailyTab.enter();
   },
 
   render(){
@@ -1560,10 +1729,6 @@ const TrainingTab = {
     const curCat = catSel.value;
     catSel.innerHTML = '<option value="">All Categories</option>' + cats.map(c=>`<option value="${c}">${c}</option>`).join('');
     catSel.value = curCat;
-
-    // Show admin button
-    const addBtn = document.querySelector('.admin-only-btn');
-    if (addBtn) addBtn.style.display = (state.user && state.user.role === 'admin') ? '' : 'none';
 
     let filtered = this.data;
     if (sportFilter) filtered = filtered.filter(t=>t.sport===sportFilter);
@@ -1688,6 +1853,261 @@ const TrainingTab = {
       reader.onload = e => resolve(e.target.result);
       reader.readAsDataURL(file);
     });
+  }
+};
+
+/* ============================= DAILY UPDATES ============================= */
+// Team knowledge/update log. Stored in the Supabase `daily_updates` table.
+// Audit fields (created_by/at, updated_by/at) are set automatically from the
+// logged-in user and never entered by hand. Every write also logs to History.
+const DailyTab = {
+  data: [],
+  editId: null,
+  loaded: false,
+
+  // Load lazily the first time Daily Updates is opened so boot stays fast.
+  async enter(){
+    if (!this.loaded) {
+      await this.load();
+      this.loaded = true;
+      // default the date filter to blank (show all); add form defaults to today
+    }
+    this.render();
+  },
+  async load(){
+    try {
+      const rows = await sb('daily_updates', { query:'?select=*&order=update_date.desc,created_at.desc' });
+      this.data = rows || [];
+    } catch(e){ console.warn('Failed to load daily updates:', e); this.data = []; toast('Could not load daily updates: '+e.message, true); }
+  },
+  todayISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); },
+  fmtDate(iso){ if(!iso) return ''; const p=String(iso).split('-'); if(p.length!==3) return iso; return p[2]+'/'+p[1]+'/'+p[0]; },
+
+  render(){
+    // Populate author filter from data
+    const authors = [...new Set(this.data.map(u=>u.created_by).filter(Boolean))].sort();
+    const aSel = document.getElementById('du-author-filter');
+    const curA = aSel.value;
+    aSel.innerHTML = '<option value="">All Authors</option>' + authors.map(a=>`<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('');
+    aSel.value = curA;
+
+    const dateF = document.getElementById('du-date-filter').value;
+    const authorF = document.getElementById('du-author-filter').value;
+    const search = (document.getElementById('du-search').value||'').toLowerCase();
+
+    let rows = this.data.slice();
+    if (dateF) rows = rows.filter(u=>u.update_date===dateF);
+    if (authorF) rows = rows.filter(u=>u.created_by===authorF);
+    if (search) rows = rows.filter(u=>(u.title||'').toLowerCase().includes(search)||(u.description||'').toLowerCase().includes(search)||(u.created_by||'').toLowerCase().includes(search));
+
+    const isAdmin = state.user && state.user.role === 'admin';
+    const list = document.getElementById('du-list');
+    if (!rows.length) { list.innerHTML = '<div class="empty-state"><div class="ic">📝</div>No daily updates yet. Click “+ Add Update” to post one.</div>'; return; }
+
+    list.innerHTML = rows.map(u=>{
+      const canEdit = isAdmin || (u.created_by === state.user.username);
+      const short = (u.description||'').length>140 ? escapeHtml(u.description.slice(0,140))+'…' : escapeHtml(u.description||'');
+      const edited = u.updated_at && u.updated_by ? `<span style="margin-left:8px;">· edited by <b>${escapeHtml(u.updated_by)}</b> ${fmtTime(u.updated_at)}</span>` : '';
+      return `<div class="panel" style="cursor:pointer;" onclick="DailyTab.view(${u.id})">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <span class="role-pill" style="background:var(--accent-soft);color:var(--accent);">${escapeHtml(DailyTab.fmtDate(u.update_date))}</span>
+              <span style="font-weight:700;font-size:15px;">${escapeHtml(u.title||'(untitled)')}</span>
+            </div>
+            <div style="color:var(--text-dim);font-size:13px;margin-top:6px;">${short||'<i>No description</i>'}</div>
+            <div style="color:var(--text-faint);font-size:11.5px;margin-top:8px;">by <b>${escapeHtml(u.created_by||'')}</b> ${fmtTime(u.created_at)}${edited}</div>
+          </div>
+          <div style="display:flex;gap:6px;" onclick="event.stopPropagation()">
+            ${canEdit ? `<button class="btn btn-sm btn-ghost" onclick="DailyTab.edit(${u.id})">✏️</button>` : ''}
+            ${canEdit ? `<button class="btn btn-sm btn-danger" onclick="DailyTab.del(${u.id})">🗑️</button>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  clearFilters(){
+    document.getElementById('du-date-filter').value='';
+    document.getElementById('du-author-filter').value='';
+    document.getElementById('du-search').value='';
+    this.render();
+  },
+
+  openAdd(){
+    this.editId = null;
+    document.getElementById('du-modal-title').textContent = 'Add Daily Update';
+    document.getElementById('du-title').value = '';
+    document.getElementById('du-udate').value = this.todayISO();
+    document.getElementById('du-desc').value = '';
+    document.getElementById('du-modal').classList.add('show');
+  },
+  edit(id){
+    const u = this.data.find(x=>x.id===id); if(!u) return;
+    const canEdit = (state.user.role==='admin') || (u.created_by===state.user.username);
+    if (!canEdit) { toast('You can only edit your own updates', true); return; }
+    this.editId = id;
+    document.getElementById('du-modal-title').textContent = 'Edit Daily Update';
+    document.getElementById('du-title').value = u.title||'';
+    document.getElementById('du-udate').value = u.update_date||this.todayISO();
+    document.getElementById('du-desc').value = u.description||'';
+    document.getElementById('du-modal').classList.add('show');
+  },
+  closeModal(){ document.getElementById('du-modal').classList.remove('show'); this.editId=null; },
+
+  async save(){
+    const title = document.getElementById('du-title').value.trim();
+    const update_date = document.getElementById('du-udate').value || this.todayISO();
+    const description = document.getElementById('du-desc').value.trim();
+    if (!title) { toast('Title is required', true); return; }
+    const nowISO = new Date().toISOString();
+    try {
+      if (this.editId) {
+        const existing = this.data.find(x=>x.id===this.editId);
+        const canEdit = (state.user.role==='admin') || (existing && existing.created_by===state.user.username);
+        if (!canEdit) { toast('You can only edit your own updates', true); return; }
+        const body = { title, update_date, description, updated_by: state.user.username, updated_at: nowISO };
+        const rows = await sb('daily_updates', { method:'PATCH', query:`?id=eq.${this.editId}`, prefer:'return=representation', body });
+        const idx = this.data.findIndex(x=>x.id===this.editId);
+        if (idx>-1 && rows && rows[0]) this.data[idx] = rows[0];
+        await logHistory('Edit','daily_updates', `${update_date} / ${title}`, { type:'edit', changes:[
+          {field:'Title', old: existing?existing.title:'', new: title},
+          {field:'Date', old: existing?existing.update_date:'', new: update_date},
+          {field:'Update', old: existing?existing.description:'', new: description}
+        ]});
+        toast('Update saved');
+      } else {
+        const body = { title, update_date, description, created_by: state.user.username, created_at: nowISO, updated_by: null, updated_at: null };
+        const rows = await sb('daily_updates', { method:'POST', prefer:'return=representation', body:[body] });
+        if (rows && rows[0]) this.data.unshift(rows[0]);
+        await logHistory('Add','daily_updates', `${update_date} / ${title}`, { type:'add', added:{ Date:update_date, Title:title, Update:description, 'Created By':state.user.username } });
+        toast('Update posted');
+      }
+      this.loaded = true;
+      this.render();
+      this.closeModal();
+    } catch(e){ toast('Error saving update: '+e.message, true); }
+  },
+
+  view(id){
+    const u = this.data.find(x=>x.id===id); if(!u) return;
+    document.getElementById('duv-title').textContent = u.title||'(untitled)';
+    const edited = u.updated_at && u.updated_by
+      ? `<div style="margin-top:4px;">Last updated by <b>${escapeHtml(u.updated_by)}</b> · ${fmtTime(u.updated_at)}</div>` : '';
+    document.getElementById('duv-body').innerHTML = `
+      <div style="padding:4px 4px 16px;">
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;">
+          <span class="role-pill" style="background:var(--accent-soft);color:var(--accent);">${escapeHtml(this.fmtDate(u.update_date))}</span>
+        </div>
+        <div style="white-space:pre-wrap;font-size:14px;line-height:1.6;color:var(--text);">${escapeHtml(u.description||'') || '<i style="color:var(--text-dim)">No description</i>'}</div>
+        <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border);font-size:12px;color:var(--text-dim);">
+          <div>Created by <b>${escapeHtml(u.created_by||'')}</b> · ${fmtTime(u.created_at)}</div>
+          ${edited}
+        </div>
+      </div>`;
+    document.getElementById('du-view-modal').classList.add('show');
+  },
+  closeView(){ document.getElementById('du-view-modal').classList.remove('show'); },
+
+  async del(id){
+    const u = this.data.find(x=>x.id===id); if(!u) return;
+    const canEdit = (state.user.role==='admin') || (u.created_by===state.user.username);
+    if (!canEdit) { toast('You can only delete your own updates', true); return; }
+    if (!confirm('Delete this daily update? This cannot be undone.')) return;
+    try {
+      await sb('daily_updates', { method:'DELETE', query:`?id=eq.${id}` });
+      this.data = this.data.filter(x=>x.id!==id);
+      await logHistory('Delete','daily_updates', `${u.update_date} / ${u.title}`, { type:'delete', deleted:{ Date:u.update_date, Title:u.title, Update:u.description, 'Created By':u.created_by } });
+      toast('Update deleted');
+      this.render();
+    } catch(e){ toast('Delete failed: '+e.message, true); }
+  }
+};
+
+/* ============================= CHANGE PASSWORD ============================= */
+// NOTE ON SECURITY: This application authenticates against a Supabase `users`
+// table whose `password` column is stored as PLAINTEXT (see Auth.login). That
+// is the existing architecture — this feature does not weaken or "fake" it, and
+// it does not introduce client-side password storage. It verifies the current
+// password against the same table Auth.login uses, then PATCHes the new value
+// using the SAME mechanism the admin "Reset Password" already uses. Because the
+// backend has no hashing, we cannot add real hashing from the client without a
+// server change; this is called out honestly in the report. Passwords are never
+// logged (History records only "changed own password", not values).
+const PasswordModal = {
+  open(){
+    document.getElementById('user-menu').style.display='none';
+    document.getElementById('pw-current').value='';
+    document.getElementById('pw-new').value='';
+    document.getElementById('pw-confirm').value='';
+    const err=document.getElementById('pw-error'); err.style.display='none'; err.textContent='';
+    document.getElementById('pw-modal').classList.add('show');
+    setTimeout(()=>document.getElementById('pw-current').focus(),50);
+  },
+  close(){ document.getElementById('pw-modal').classList.remove('show'); },
+  err(msg){ const e=document.getElementById('pw-error'); e.textContent=msg; e.style.display='block'; },
+  async save(){
+    const cur = document.getElementById('pw-current').value;
+    const nw = document.getElementById('pw-new').value;
+    const cf = document.getElementById('pw-confirm').value;
+    const err=document.getElementById('pw-error'); err.style.display='none';
+    if (!cur || !nw || !cf) { this.err('All fields are required.'); return; }
+    if (nw !== cf) { this.err('New password and confirmation do not match.'); return; }
+    if (nw.length < 4) { this.err('New password must be at least 4 characters.'); return; }
+    if (nw === cur) { this.err('New password must be different from the current one.'); return; }
+    const btn = document.getElementById('pw-save-btn');
+    btn.disabled = true; btn.textContent = 'Updating…';
+    try {
+      // Verify current password against the user's own record only.
+      const rows = await sb('users', { query:`?id=eq.${state.user.id}&password=eq.${encodeURIComponent(cur)}&select=id` });
+      if (!rows || rows.length === 0) { this.err('Current password is incorrect.'); btn.disabled=false; btn.textContent='Update password'; return; }
+      // Update ONLY the logged-in user's password.
+      await sb('users', { method:'PATCH', query:`?id=eq.${state.user.id}`, body:{ password: nw } });
+      // Log the action WITHOUT the password value.
+      await logHistory('Change Password','users', `${state.user.username} changed their own password`);
+      // Keep local user list password field consistent if present.
+      const lu = state.users.find(u=>u.id===state.user.id); if (lu) lu.password = nw;
+      toast('Password updated. Use it next time you sign in.');
+      this.close();
+    } catch(e){ this.err('Failed to update password: '+e.message); }
+    finally { btn.disabled=false; btn.textContent='Update password'; }
+  }
+};
+
+/* ============================= USER GUIDE ============================= */
+const UserGuide = {
+  sections: [
+    ['Getting Started', `<p><b>League &amp; Team Mapper</b> is your central console for keeping BCM league and team names lined up with their equivalents in <b>Betradar</b> and <b>Betgenius</b>. Use it to view, add, edit, bulk-load and check those mappings, match LBC events to provider Event IDs, and share training and daily updates with the team.</p>
+      <p>The top navigation moves you between the main sections. The sport selector (top right) switches between <b>Basketball</b> and <b>Ice Hockey</b> — everything you see is filtered to the selected sport.</p>`],
+    ['Dashboard', `<p>Your landing page. It shows totals (leagues, teams, countries, users), mapping coverage bars for Betradar/Betgenius, top countries by league count, and recent activity. Open this User Guide any time from the button at the top of the Dashboard.</p>`],
+    ['Master Search', `<p>One search box across everything. Type any league or team name — in any source system (BCM, Betradar or Betgenius) — and matching mappings appear as cards.</p>
+      <ul><li>Searches league names and team names together.</li><li>Matches across all three source systems.</li><li>Each result shows how that record is mapped between BCM, Betradar and Betgenius.</li></ul>`],
+    ['Mappings', `<p>League and Team mappings now live together in one <b>Mappings</b> workspace. Use the <b>Leagues</b> / <b>Teams</b> toggle at the top to switch views without leaving the page.</p>
+      <ul><li><b>Leagues:</b> filter by country and mapped/unmapped status, search, sort, and (with permission) edit or delete.</li><li><b>Teams:</b> same filters and actions for team-level mappings, plus an admin cleanup for blank BCM Team rows.</li></ul>
+      <p>Old bookmarks to "League Mappings" or "Team Mappings" still work — they open the right tab automatically.</p>`],
+    ['Add New', `<p>Create a new league or team mapping. Toggle between <b>+ League</b> and <b>+ Team</b>. Use the <b>N/A</b> checkboxes when a source system has no equivalent. For teams, the Betradar/Betgenius competition fields auto-fill from the league's mapping once you pick a BCM Competition.</p>`],
+    ['Bulk Upload', `<p>Load many mappings at once from Excel/CSV.</p>
+      <ul><li>Choose <b>Leagues</b> or <b>Teams</b> first so the expected columns are shown.</li><li>Row 1 is treated as a header and skipped.</li><li>Duplicates are detected before saving.</li><li>After upload, check the preview and confirm the counts look right before it commits.</li></ul>`],
+    ['LBC Matcher', `<p>Matches your pasted LBC schedule to provider <b>Event IDs</b>, accurately and without guessing.</p>
+      <ul><li>Upload one or more <b>Sportradar</b> and <b>BetGenius</b> reference files, paste the LBC data, and click Compare.</li><li><b>MATCHED</b> — exactly one provider event matched on date, time, league and event; the Event ID is assigned.</li><li><b>NOT FOUND</b> — no exact match; the comment explains what differed (date/time/league/teams).</li><li><b>AMBIGUOUS</b> — more than one provider event matched; it lists the candidate IDs and refuses to guess.</li><li><b>MALFORMED</b> — a required field (date/time/league/match) is missing or invalid.</li><li><b>UNRECOGNIZED FEED</b> — the Ticker Channel isn't a supported provider.</li></ul>
+      <p>Read the <b>Comments</b> column to investigate mismatches, use the filters to focus, and export the results to <b>CSV</b> or <b>Excel</b>.</p>`],
+    ['Training', `<p>Two parts, switched by the toggle at the top:</p>
+      <ul><li><b>Training Material:</b> video links and reference images by sport and category to help with tasks.</li><li><b>Daily Updates:</b> a shared log where anyone can post what happened today. Filter by date or author, search, and open any entry to read it in full. Your name and the time are recorded automatically — you never type them.</li></ul>`],
+    ['History', `<p>An audit trail of the last 500 actions (adds, edits, deletes, password changes, bulk uploads). Each row shows who did it, when, and a Details view of exactly what changed. Admins can export it.</p>`],
+    ['Users', `<p>Everyone can change their own password from the account menu (top-right). Administrators can additionally add users, reset any user's password, and remove accounts from the Users tab.</p>`]
+  ],
+  open(){ document.getElementById('guide-search').value=''; this.render(''); document.getElementById('guide-modal').classList.add('show'); },
+  close(){ document.getElementById('guide-modal').classList.remove('show'); },
+  filter(){ this.render((document.getElementById('guide-search').value||'').toLowerCase()); },
+  render(q){
+    const body = document.getElementById('guide-body');
+    const matches = this.sections.filter(([title,html]) => !q || title.toLowerCase().includes(q) || html.toLowerCase().includes(q));
+    if (!matches.length) { body.innerHTML = '<div class="empty-state" style="padding:30px;">No guide sections match “'+escapeHtml(q)+'”.</div>'; return; }
+    body.innerHTML = matches.map(([title,html],i)=>`
+      <details class="guide-section" ${q?'open':(i===0?'open':'')}>
+        <summary>${escapeHtml(title)}</summary>
+        <div class="guide-content">${html}</div>
+      </details>`).join('');
   }
 };
 
