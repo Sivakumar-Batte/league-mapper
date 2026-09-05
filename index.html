@@ -355,6 +355,7 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
           <option value="fully_mapped">Fully mapped</option>
         </select>
         <input type="text" id="tm-search" placeholder="Search teams…" oninput="TeamTab.refresh()">
+        <button class="btn btn-danger btn-sm admin-only-btn" id="tm-del-blank" onclick="TeamTab.removeBlankBcm()" style="display:none;">🧹 Delete Blank BCM Team</button>
         <span style="margin-left:auto;color:var(--text-dim);font-size:12.5px;" id="tm-count"></span>
       </div>
       <div class="table-wrap">
@@ -670,6 +671,8 @@ const UI = {
       const p = document.querySelector(`.tab-panel[data-panel="${id}"]`);
       if (p) p.style.display = isAdmin ? '' : 'none';
     });
+    // show/hide ALL admin-only buttons based on role
+    document.querySelectorAll('.admin-only-btn').forEach(b=>{ b.style.display = isAdmin ? '' : 'none'; });
     // hide edit/delete affordances handled per-render
   },
   switchTab(id){
@@ -1024,6 +1027,39 @@ const TeamTab = {
       toast('Team deleted');
       this.render(); DashboardTab.render();
     } catch(e){ toast('Delete failed: '+e.message, true); }
+  },
+  // Permanently delete team records where BCM Team is blank/null/N/A (current sport only)
+  async removeBlankBcm(){
+    if (state.user.role !== 'admin') { toast('Admin only', true); return; }
+    const isBlank = v => { const s = String(v==null?'':v).trim(); return s==='' || s.toLowerCase()==='n/a'; };
+    // Scope to the currently selected sport (matches what the tab shows)
+    const targets = App.getTeams().filter(t=>isBlank(t.bcm_team));
+    if (targets.length === 0) { toast('No records with blank BCM Team found'); return; }
+    if (!confirm(`Permanently delete ${targets.length} team record(s) with a blank BCM Team for "${state.sport}"?\n\nThis removes them from the database for everyone and cannot be undone.`)) return;
+
+    const ids = targets.map(t=>t.id);
+    const btn = document.getElementById('tm-del-blank');
+    if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
+    try {
+      // Delete in batches to keep the URL length safe (PostgREST id=in.(...))
+      const BATCH = 100;
+      for (let i=0; i<ids.length; i+=BATCH){
+        const chunk = ids.slice(i, i+BATCH);
+        await sb('teams', { method:'DELETE', query:`?id=in.(${chunk.join(',')})` });
+      }
+      const idSet = new Set(ids);
+      state.teams = state.teams.filter(t=>!idSet.has(t.id));
+      await logHistory('Bulk Delete','teams', `${targets.length} team(s) with blank BCM Team deleted`, {
+        type:'bulk',
+        entries: targets.map(r=>({ Sport:r.sport, Country:r.country, 'BCM Competition':r.bcm_competition, 'BCM Team':r.bcm_team||'', 'BR Competition':r.betradar_competition, 'BR Team':r.betradar_team, 'BG Competition':r.bg_competition, 'BG Team':r.bg_team }))
+      });
+      toast(`Deleted ${targets.length} record(s)`);
+      this.render(); DashboardTab.render();
+    } catch(e){
+      toast('Delete failed: '+e.message, true);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '🧹 Delete Blank BCM Team'; }
+    }
   }
 };
 
