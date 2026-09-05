@@ -463,6 +463,12 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
     </div>
 
     <!-- ---------- TRAINING ---------- -->
+    <!-- ---------- LBC EVENT ID MATCHER ---------- -->
+    <div class="tab-panel" data-panel="lbc">
+      <iframe id="lbc-frame" src="about:blank" data-src="lbc-matcher.html" style="width:100%;height:calc(100vh - 160px);min-height:700px;border:1px solid var(--border);border-radius:10px;background:#fff;"></iframe>
+    </div>
+
+    <!-- ---------- TRAINING ---------- -->
     <div class="tab-panel" data-panel="training">
       <div class="toolbar">
         <select id="tr-sport-filter" onchange="TrainingTab.render()" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;">
@@ -652,7 +658,7 @@ const UI = {
     const isAdmin = state.user.role === 'admin';
     const tabs = [
       ['dashboard','Dashboard'],['search','Master Search'],['leagues','League Mappings'],
-      ['teams','Team Mappings'],['add','Add New'],['bulk','Bulk Upload'],['training','📚 Training']
+      ['teams','Team Mappings'],['add','Add New'],['bulk','Bulk Upload'],['lbc','⚡ LBC Matcher'],['training','📚 Training']
     ];
     if (isAdmin) { tabs.push(['history','History'],['users','Users']); }
     const row = document.getElementById('tabs-row');
@@ -673,6 +679,7 @@ const UI = {
     if (id==='dashboard') DashboardTab.render();
     if (id==='leagues') LeagueTab.refresh();
     if (id==='teams') TeamTab.refresh();
+    if (id==='lbc') { const f = document.getElementById('lbc-frame'); if (f && f.src.indexOf('lbc-matcher.html') === -1) f.src = f.dataset.src; }
     if (id==='training') TrainingTab.render();
     if (id==='history') HistoryTab.render();
     if (id==='users') UsersTab.render();

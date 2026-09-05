@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LBC Event ID Matcher</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--primary:#4f46e5;--primary-hover:#4338ca;--success:#059669;--success-light:#d1fae5;--success-border:#6ee7b7;--danger:#dc2626;--danger-light:#fee2e2;--danger-border:#fca5a5;--gray-50:#f9fafb;--gray-100:#f3f4f6;--gray-200:#e5e7eb;--gray-300:#d1d5db;--gray-400:#9ca3af;--gray-500:#6b7280;--gray-600:#4b5563;--gray-700:#374151;--gray-800:#1f2937;--gray-900:#111827;--radius:12px;--radius-sm:8px;--shadow-sm:0 1px 2px rgba(0,0,0,.05);--shadow:0 4px 6px -1px rgba(0,0,0,.07),0 2px 4px -2px rgba(0,0,0,.05);--shadow-lg:0 10px 15px -3px rgba(0,0,0,.08),0 4px 6px -4px rgba(0,0,0,.05);--transition:.2s cubic-bezier(.4,0,.2,1)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:linear-gradient(135deg,#f0f4ff 0%,#f5f3ff 50%,#fdf2f8 100%);color:var(--gray-800);padding:24px;font-size:14px;min-height:100vh}
+.container{max-width:1700px;margin:0 auto}
+.header{display:flex;align-items:center;gap:14px;margin-bottom:24px;padding:20px 28px;background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--gray-200)}
+.header-icon{width:44px;height:44px;background:linear-gradient(135deg,var(--primary),#7c3aed);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;flex-shrink:0}
+.header h1{font-size:24px;font-weight:700;color:var(--gray-900)}
+.header p{font-size:13px;color:var(--gray-500);margin-top:2px}
+.panel{background:#fff;border-radius:var(--radius);padding:24px;margin-bottom:16px;border:1px solid var(--gray-200);box-shadow:var(--shadow-sm)}
+.panel h2{font-size:15px;font-weight:600;color:var(--gray-700);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.row{display:flex;gap:16px;flex-wrap:wrap}.col{flex:1;min-width:280px}
+.upload-zone{border:2px dashed var(--gray-300);border-radius:var(--radius-sm);padding:20px 16px;text-align:center;cursor:pointer;position:relative;background:var(--gray-50);transition:all var(--transition)}
+.upload-zone:hover{border-color:var(--primary);background:#eef2ff}
+.upload-zone.success{border-color:var(--success-border);background:var(--success-light);border-style:solid}
+.upload-zone.error{border-color:var(--danger-border);background:var(--danger-light);border-style:solid}
+.upload-zone input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.upload-zone .upload-icon{font-size:28px;margin-bottom:6px;display:block}
+.upload-zone .upload-label{font-weight:600;font-size:14px;color:var(--gray-700)}
+.upload-zone .upload-sublabel{font-size:12px;color:var(--gray-400);margin-top:4px}
+.upload-info{margin-top:10px;font-size:12px;color:var(--gray-500);font-weight:500}
+.upload-info.success{color:var(--success)}.upload-info.error{color:var(--danger)}
+.file-list{margin-top:10px}
+.file-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;background:var(--gray-50);border:1px solid var(--gray-200);margin-bottom:4px;font-size:12px}
+.file-item .file-name{flex:1;font-weight:500;color:var(--gray-700);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-item .file-count{color:var(--success);font-weight:600}
+.file-item .file-remove{cursor:pointer;color:var(--danger);font-weight:700;font-size:14px;padding:0 4px;border-radius:4px}
+.file-item .file-remove:hover{background:var(--danger-light)}
+textarea{width:100%;min-height:180px;font-family:'Consolas',monospace;font-size:12px;border:2px solid var(--gray-200);border-radius:var(--radius-sm);padding:14px;resize:vertical;background:var(--gray-50);transition:all var(--transition);line-height:1.5}
+textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(79,70,229,.1);background:#fff}
+.btn{padding:10px 22px;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;transition:all var(--transition);display:inline-flex;align-items:center;gap:6px}
+.btn:active:not(:disabled){transform:scale(.97)}
+.btn-primary{background:linear-gradient(135deg,var(--primary),#6366f1);color:#fff;box-shadow:0 2px 8px rgba(79,70,229,.3)}
+.btn-primary:hover:not(:disabled){background:linear-gradient(135deg,var(--primary-hover),#4f46e5);box-shadow:0 4px 12px rgba(79,70,229,.4)}
+.btn-primary:disabled{background:var(--gray-300);color:var(--gray-500);cursor:not-allowed;box-shadow:none}
+.btn-export{background:linear-gradient(135deg,var(--success),#10b981);color:#fff;box-shadow:0 2px 8px rgba(5,150,105,.25)}
+.btn-export:hover:not(:disabled){box-shadow:0 4px 12px rgba(5,150,105,.35)}
+.btn-export:disabled{background:var(--gray-300);color:var(--gray-500);cursor:not-allowed;box-shadow:none}
+.btn-clear{background:#fff;color:var(--danger);border:2px solid var(--danger-border)}
+.btn-clear:hover{background:var(--danger-light);border-color:var(--danger)}
+.btn-group{display:flex;gap:10px;align-items:center;margin:16px 0;flex-wrap:wrap;padding:16px 24px;background:#fff;border-radius:var(--radius);border:1px solid var(--gray-200);box-shadow:var(--shadow-sm)}
+.dashboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.card{display:flex;flex-direction:column;align-items:center;padding:18px 12px;border-radius:var(--radius-sm);background:var(--gray-50);border:1px solid var(--gray-200);transition:all var(--transition)}
+.card:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+.card-value{font-size:28px;font-weight:800;line-height:1.1}
+.card-label{font-size:11px;font-weight:500;color:var(--gray-500);margin-top:6px;text-align:center;text-transform:uppercase;letter-spacing:.5px}
+.filter-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.filter-row select,.filter-row input{padding:8px 12px;border:2px solid var(--gray-200);border-radius:6px;font-size:13px;background:#fff;transition:all var(--transition);color:var(--gray-700)}
+.filter-row select:focus,.filter-row input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(79,70,229,.1)}
+.filter-row select{min-width:130px;cursor:pointer}.filter-row input[type="text"]{min-width:220px}
+.table-wrapper{overflow-x:auto;max-height:650px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:var(--radius-sm)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead{position:sticky;top:0;z-index:1}
+th{background:linear-gradient(180deg,var(--gray-700),var(--gray-800));color:#fff;padding:10px 8px;text-align:left;cursor:pointer;white-space:nowrap;user-select:none;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+th:hover{background:linear-gradient(180deg,var(--gray-600),var(--gray-700))}
+td{padding:8px;border-bottom:1px solid var(--gray-100);white-space:nowrap;cursor:pointer;font-size:12px}
+tr.matched{background:#ecfdf5}tr.matched:hover td{background:#d1fae5}
+tr.not-found{background:#fef2f2}tr.not-found:hover td{background:#fee2e2}
+tr.error-row{background:#fffbeb}tr.error-row:hover td{background:#fef3c7}
+.empty-state{text-align:center;padding:60px 20px;color:var(--gray-400);font-size:14px}
+.empty-state .empty-icon{font-size:48px;margin-bottom:12px;display:block}
+.lbc-info{margin-top:10px;font-size:12px;color:var(--gray-500);font-weight:500}
+.lbc-info.success{color:var(--success)}.lbc-info.error{color:var(--danger)}
+.progress-bar{height:4px;background:var(--gray-200);border-radius:2px;overflow:hidden;margin-top:8px;display:none}
+.progress-bar.active{display:block}
+.progress-bar .progress-fill{height:100%;background:linear-gradient(90deg,var(--primary),#7c3aed);border-radius:2px;transition:width .3s ease;width:0%}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--gray-800);color:#fff;padding:12px 20px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;opacity:0;transform:translateY(10px);transition:all .3s;pointer-events:none;z-index:1000;box-shadow:var(--shadow-lg)}
+.toast.show{opacity:1;transform:translateY(0)}
+.result-count{font-weight:400;font-size:12px;color:var(--gray-500);background:var(--gray-100);padding:3px 10px;border-radius:20px;margin-left:8px}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header"><div class="header-icon">⚡</div><div><h1>LBC Event ID Matcher</h1><p>Match LBC events against Sportradar &amp; BetGenius reference data</p></div></div>
+
+  <div class="panel">
+    <h2>📁 Reference Files (upload multiple per source)</h2>
+    <div class="row">
+      <div class="col">
+        <div class="upload-zone" id="srZone"><input type="file" accept=".csv,.xlsx,.xls" id="srFile" multiple><span class="upload-icon">📊</span><div class="upload-label">Sportradar Live Calendar</div><div class="upload-sublabel">Drop one or more CSV files here</div></div>
+        <div class="upload-info" id="srInfo"></div><div class="file-list" id="srFileList"></div>
+      </div>
+      <div class="col">
+        <div class="upload-zone" id="bgZone"><input type="file" accept=".csv,.xlsx,.xls" id="bgFile" multiple><span class="upload-icon">📋</span><div class="upload-label">BetGenius Event Data</div><div class="upload-sublabel">Drop one or more CSV files here</div></div>
+        <div class="upload-info" id="bgInfo"></div><div class="file-list" id="bgFileList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel"><h2>📝 LBC Data</h2><textarea id="lbcTextarea" placeholder="Paste tab-separated LBC data (Day, Date, Time, Ticker Channel, Stream, Region, Sport, League, Info, Matches)..."></textarea><div class="lbc-info" id="lbcInfo"></div></div>
+
+  <div class="panel"><h2>⚙️ Settings</h2><div class="filter-row"><label style="font-size:13px;font-weight:500">Date format:</label><select id="dateFormatSelect"><option value="auto">Auto-detect (default)</option><option value="dmy">DD/MM/YYYY (European)</option><option value="mdy">MM/DD/YYYY (US)</option></select><span style="font-size:11px;color:var(--gray-400)">Only matters for ambiguous dates like 05/08/2026</span></div></div>
+
+  <div class="btn-group">
+    <button class="btn btn-primary" id="compareBtn" disabled><span>▶</span> Compare</button>
+    <div class="progress-bar" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
+    <div style="flex:1"></div>
+    <button class="btn btn-export" id="exportCsvBtn" disabled>📄 Export CSV</button>
+    <button class="btn btn-export" id="exportXlsxBtn" disabled>📊 Export Excel</button>
+    <button class="btn btn-clear" id="clearBtn">🗑️ Clear All</button>
+  </div>
+
+  <div class="panel"><h2>📈 Summary</h2><div class="dashboard" id="dashboard"></div></div>
+  <div class="panel"><h2>🔍 Filters</h2><div class="filter-row"><input type="text" id="searchInput" placeholder="Search all columns..."><select id="filterFeed"><option value="">All Feeds</option></select><select id="filterRegion"><option value="">All Regions</option></select><select id="filterSport"><option value="">All Sports</option></select><select id="filterLeague"><option value="">All Leagues</option></select><select id="filterStatus"><option value="">All Status</option><option value="Matched">Matched</option><option value="Not Found">Not Found</option><option value="Error">Error</option></select></div></div>
+  <div class="panel"><h2>📋 Results <span class="result-count" id="resultCount">0 rows</span></h2><div class="table-wrapper" id="tableWrapper"><div class="empty-state"><span class="empty-icon">📂</span><div>No results yet. Upload files, paste LBC data, click <strong>Compare</strong>.</div></div></div></div>
+</div>
+<div class="toast" id="toast">Copied!</div>
+<script>
+// ENGINE
+function basicNormalize(s){if(!s)return'';let r=s.toLowerCase().trim();r=r.replace(/\s+/g,' ');r=r.replace(/\.+$/,'');return r}
+function separatorNormalize(s){return s.replace(/(?<=^|\s)(?:vs\.|vs|v\.|v)(?=\s|$)/gi,'vs')}
+function fullNormalize(s){return separatorNormalize(basicNormalize(s))}
+function parseDate(input){if(!input||typeof input!=='string')return null;const t=input.trim();if(!t)return null;const fmt=(document.getElementById('dateFormatSelect')||{}).value||'auto';const iso=t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);if(iso)return vf(+iso[1],+iso[2],+iso[3]);const sl=t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);if(sl){const a=+sl[1],b=+sl[2],y=+sl[3];if(fmt==='mdy')return vf(y,a,b);if(fmt==='dmy')return vf(y,b,a);if(a>12)return vf(y,b,a);if(b>12)return vf(y,a,b);return vf(y,b,a)}const da=t.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);if(da){const a=+da[1],b=+da[2],y=+da[3];if(fmt==='mdy')return vf(y,a,b);if(fmt==='dmy')return vf(y,b,a);if(a>12)return vf(y,b,a);if(b>12)return vf(y,a,b);return vf(y,b,a)}return null}
+function vf(y,m,d){if(m<1||m>12)return null;const dm=[31,28,31,30,31,30,31,31,30,31,30,31];let mx=dm[m-1];if(m===2&&((y%4===0&&y%100!==0)||y%400===0))mx=29;if(d<1||d>mx)return null;return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0')}
+function parseTime(input){if(!input||typeof input!=='string')return null;const t=input.trim();if(!t)return null;const m=t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);if(!m)return null;const h=+m[1],mn=+m[2];if(m[3]!==undefined&&(+m[3]<0||+m[3]>59))return null;if(h<0||h>23||mn<0||mn>59)return null;return String(h).padStart(2,'0')+':'+String(mn).padStart(2,'0')}
+function splitBgDateTime(s){if(!s||typeof s!=='string')return null;const t=s.trim();if(!t)return null;const i=t.lastIndexOf(' ');if(i===-1)return null;const dp=t.substring(0,i).trim(),tp=t.substring(i+1).trim();if(!dp||!tp)return null;const d=parseDate(dp),ti=parseTime(tp);if(!d||!ti)return null;return{date:d,time:ti}}
+function routeFeed(f){const n=basicNormalize(f);if(n==='sportradar')return'sportradar';if(n==='genius sports')return'betgenius';return'unrecognized'}
+function matchRow(row,refs,src){const ld=parseDate(row.date),lt=parseTime(row.time);if(!ld||!lt)return{eventId:'NOT FOUND',comments:''};const ll=basicNormalize(row.league),le=fullNormalize(row.matches);for(const ref of refs){if(src==='sportradar'){const rd=parseDate(ref.date),rt=parseTime(ref.time);if(!rd||!rt)continue;if(ld!==rd||lt!==rt)continue;if(ll!==basicNormalize(ref.tournament))continue;if(le!==fullNormalize(ref.event))continue;return{eventId:ref.eventId,comments:'Match Found'}}else{const bg=splitBgDateTime(ref.startUtcPlus2);if(!bg)continue;if(ld!==bg.date||lt!==bg.time)continue;if(ll!==basicNormalize(ref.competition))continue;if(le!==fullNormalize(ref.event))continue;return{eventId:ref.eventId,comments:'Match Found'}}}return{eventId:'NOT FOUND',comments:''}}
+function diagnose(row,cands,src){const ld=parseDate(row.date),lt=parseTime(row.time);if(!ld||!lt)return'No matching event found in selected data source';const ll=basicNormalize(row.league),le=fullNormalize(row.matches);const comps=[];for(const ref of cands){let c;if(src==='sportradar'){const rd=parseDate(ref.date),rt=parseTime(ref.time);if(!rd||!rt)continue;c={dm:ld===rd,tm:lt===rt,lm:ll===basicNormalize(ref.tournament),em:le===fullNormalize(ref.event)};if(c.dm)comps.push(c)}else{const bg=splitBgDateTime(ref.startUtcPlus2);if(!bg)continue;c={dm:ld===bg.date,tm:lt===bg.time,lm:ll===basicNormalize(ref.competition),em:le===fullNormalize(ref.event)};if(c.dm)comps.push(c)}}if(!comps.length)return'No matching event found in selected data source';let best=comps[0],bc=(best.dm?1:0)+(best.tm?1:0)+(best.lm?1:0)+(best.em?1:0);for(let i=1;i<comps.length;i++){const s=(comps[i].dm?1:0)+(comps[i].tm?1:0)+(comps[i].lm?1:0)+(comps[i].em?1:0);if(s>bc){best=comps[i];bc=s}}const msgs=[];if(!best.dm)msgs.push('Date is not matching');if(!best.tm)msgs.push('Time is not matching');if(!best.lm)msgs.push('League is different');if(!best.em)msgs.push(src==='sportradar'?'Team names are different':'Event name is different');return msgs.join('; ')}
+function checkMalformed(r){if(!r.date||!r.date.trim())return'Malformed: missing Date';if(!r.time||!r.time.trim())return'Malformed: missing Time';if(!r.tickerChannel||!r.tickerChannel.trim())return'Malformed: missing Ticker Channel';if(!r.league||!r.league.trim())return'Malformed: missing League';if(!r.matches||!r.matches.trim())return'Malformed: missing Matches';if(!parseDate(r.date))return'Malformed: unparseable date';if(!parseTime(r.time))return'Malformed: unparseable time';return null}
+function processRow(row,sr,bg){const m=checkMalformed(row);if(m)return{...row,eventId:'ERROR',comments:m};const f=routeFeed(row.tickerChannel);if(f==='unrecognized')return{...row,eventId:'NOT FOUND',comments:'Unrecognized feed value'};if(f==='sportradar'&&!sr.length)return{...row,eventId:'NOT FOUND',comments:'Sportradar file not uploaded'};if(f==='betgenius'&&!bg.length)return{...row,eventId:'NOT FOUND',comments:'BetGenius file not uploaded'};const ref=f==='sportradar'?sr:bg;const res=matchRow(row,ref,f);if(res.eventId==='NOT FOUND'&&res.comments==='')return{...row,eventId:'NOT FOUND',comments:diagnose(row,ref,f)};return{...row,eventId:res.eventId,comments:res.comments}}
+async function runComparison(rows,sr,bg,cb){const results=[];for(let i=0;i<rows.length;i+=100){const batch=rows.slice(i,i+100);for(const r of batch)results.push(processRow(r,sr,bg));if(cb)cb(Math.min(i+100,rows.length),rows.length);if(i+100<rows.length)await new Promise(r=>setTimeout(r,0))}return{rows:results,summary:calcSummary(results)}}
+function calcSummary(rows){let matched=0,notFound=0,malformed=0,dm=0,tm=0,lm=0,em=0;for(const r of rows){if(r.eventId==='ERROR')malformed++;else if(r.eventId==='NOT FOUND')notFound++;else matched++;if(r.comments.includes('Date is not matching'))dm++;if(r.comments.includes('Time is not matching'))tm++;if(r.comments.includes('League is different'))lm++;if(r.comments.includes('Team names are different')||r.comments.includes('Event name is different'))em++}return{totalEvents:rows.length,matched,notFound,malformed,dateMismatches:dm,timeMismatches:tm,leagueMismatches:lm,teamEventMismatches:em}}
+
+// PARSERS
+const SR_REQ=['eventid','date','time','sport','tournament','event'];
+const BG_REQ=['eventid','event','start (utc+2)','competition'];
+function parseSR(buf){try{const wb=XLSX.read(buf,{type:'array',cellDates:false,raw:true});const ws=wb.Sheets[wb.SheetNames[0]];if(!ws)return{ok:false,err:'No data'};const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});if(!rows.length)return{ok:false,err:'No records'};const h=Object.keys(rows[0]).map(x=>x.toLowerCase().trim());const miss=SR_REQ.filter(r=>!h.includes(r));if(miss.length)return{ok:false,err:'Missing: '+miss.join(', ')};const hm={};Object.keys(rows[0]).forEach(x=>{hm[x.toLowerCase().trim()]=x});return{ok:true,records:rows.map(r=>({eventId:String(r[hm['eventid']]||'').replace(/^sr:match:/i,''),date:String(r[hm['date']]||''),time:String(r[hm['time']]||''),sport:String(r[hm['sport']]||''),tournament:String(r[hm['tournament']]||''),event:String(r[hm['event']]||'')})),count:rows.length}}catch(e){return{ok:false,err:'Invalid file'}}}
+function parseBG(buf,size){if(size>10*1024*1024)return{ok:false,err:'File exceeds 10MB'};try{const wb=XLSX.read(buf,{type:'array',cellDates:false,raw:true});const ws=wb.Sheets[wb.SheetNames[0]];if(!ws)return{ok:false,err:'No data'};const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});if(!rows.length)return{ok:false,err:'No records'};const hdrs=Object.keys(rows[0]);const hl=hdrs.map(x=>x.toLowerCase().trim());const miss=[];for(const r of BG_REQ){if(r==='start (utc+2)'){if(!hdrs.some(x=>x==='Start (UTC+2)'))miss.push('Start (UTC+2)')}else{if(!hl.includes(r))miss.push(r)}}if(miss.length)return{ok:false,err:'Missing: '+miss.join(', ')};const hm={};hdrs.forEach(x=>{hm[x.toLowerCase().trim()]=x});const sc=hdrs.find(x=>x==='Start (UTC+2)')||'';return{ok:true,records:rows.map(r=>({eventId:String(r[hm['eventid']]||''),event:String(r[hm['event']]||''),startUtcPlus2:String(r[sc]||''),competition:String(r[hm['competition']]||'')})),count:rows.length}}catch(e){return{ok:false,err:'Invalid file'}}}
+function parseLBC(text){if(!text||!text.trim())return{ok:false,err:'No data pasted'};const lines=text.split(/\r?\n/);const hi=lines.findIndex(l=>l.trim().length>0);if(hi===-1)return{ok:false,err:'No data'};const headers=lines[hi].split('\t').map(h=>h.trim());const hl=headers.map(h=>h.toLowerCase());const req=['date','time','ticker channel','league','matches'];const miss=req.filter(r=>!hl.includes(r));if(miss.length)return{ok:false,err:'Missing columns: '+miss.join(', ')};const cm={};const MAP={'day':'day','date':'date','time':'time','ticker channel':'tickerChannel','stream':'stream','region':'region','sport':'sport','league':'league','info':'info','matches':'matches'};hl.forEach((h,i)=>{if(MAP[h])cm[MAP[h]]=i});const rows=[];for(let i=hi+1;i<lines.length;i++){if(!lines[i].trim())continue;const v=lines[i].split('\t');rows.push({day:(v[cm.day]||'').trim(),date:(v[cm.date]||'').trim(),time:(v[cm.time]||'').trim(),tickerChannel:(v[cm.tickerChannel]||'').trim(),stream:(v[cm.stream]||'').trim(),region:(v[cm.region]||'').trim(),sport:(v[cm.sport]||'').trim(),league:(v[cm.league]||'').trim(),info:(v[cm.info]||'').trim(),matches:(v[cm.matches]||'').trim()})}if(!rows.length)return{ok:false,err:'No data rows'};return{ok:true,rows,count:rows.length}}
+
+// STATE
+const state={srFiles:[],bgFiles:[],lbc:{status:'idle',rows:[],count:0,err:null},results:{rows:[],summary:{totalEvents:0,matched:0,notFound:0,malformed:0,dateMismatches:0,timeMismatches:0,leagueMismatches:0,teamEventMismatches:0}},filters:{search:'',feed:'',region:'',sport:'',league:'',status:''},sort:{col:null,asc:true}};
+const COLS=['day','date','time','tickerChannel','stream','region','sport','league','info','matches','eventId','comments'];
+const LABELS=['Day','Date','Time','Ticker Channel','Stream','Region','Sport','League','Info','Matches','Event ID','Comments'];
+
+// UI
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function renderDash(){const s=state.results.summary;const cards=[{l:'Total Events',v:s.totalEvents,c:'#2563eb'},{l:'Matched',v:s.matched,c:'#059669'},{l:'Not Found',v:s.notFound,c:'#dc2626'},{l:'Malformed',v:s.malformed,c:'#92400e'},{l:'Date',v:s.dateMismatches,c:'#d97706'},{l:'Time',v:s.timeMismatches,c:'#d97706'},{l:'League',v:s.leagueMismatches,c:'#7c3aed'},{l:'Team/Event',v:s.teamEventMismatches,c:'#be185d'}];document.getElementById('dashboard').innerHTML=cards.map(c=>'<div class="card"><span class="card-value" style="color:'+c.c+'">'+c.v+'</span><span class="card-label">'+c.l+'</span></div>').join('')}
+function renderFL(src){const el=document.getElementById(src+'FileList'),info=document.getElementById(src+'Info'),zone=document.getElementById(src+'Zone');const files=src==='sr'?state.srFiles:state.bgFiles;if(!files.length){el.innerHTML='';info.textContent='';info.className='upload-info';zone.className='upload-zone';return}zone.className='upload-zone success';const tot=files.reduce((s,f)=>s+f.count,0);info.textContent='✓ '+files.length+' file(s) — '+tot.toLocaleString()+' records';info.className='upload-info success';el.innerHTML=files.map((f,i)=>'<div class="file-item"><span class="file-name">'+esc(f.name)+'</span><span class="file-count">'+f.count.toLocaleString()+'</span><span class="file-remove" data-src="'+src+'" data-idx="'+i+'">✕</span></div>').join('')}
+function getFiltered(){let rows=state.results.rows;const f=state.filters;if(f.search){const s=f.search.toLowerCase();rows=rows.filter(r=>COLS.some(c=>String(r[c]).toLowerCase().includes(s)))}if(f.feed)rows=rows.filter(r=>r.tickerChannel===f.feed);if(f.region)rows=rows.filter(r=>r.region===f.region);if(f.sport)rows=rows.filter(r=>r.sport===f.sport);if(f.league)rows=rows.filter(r=>r.league===f.league);if(f.status){if(f.status==='Matched')rows=rows.filter(r=>r.eventId!=='NOT FOUND'&&r.eventId!=='ERROR');else if(f.status==='Not Found')rows=rows.filter(r=>r.eventId==='NOT FOUND');else rows=rows.filter(r=>r.eventId==='ERROR')}return rows}
+function renderTable(){const w=document.getElementById('tableWrapper'),cnt=document.getElementById('resultCount');if(!state.results.rows.length){w.innerHTML='<div class="empty-state"><span class="empty-icon">📂</span><div>No results yet.</div></div>';cnt.textContent='0 rows';return}let rows=getFiltered();const s=state.sort;if(s.col){const d=s.asc?1:-1;rows=[...rows].sort((a,b)=>{const av=String(a[s.col]||'').toLowerCase(),bv=String(b[s.col]||'').toLowerCase();return av<bv?-d:av>bv?d:0})}cnt.textContent=rows.length+' of '+state.results.rows.length;if(!rows.length){w.innerHTML='<div class="empty-state">🔍 No results match filters.</div>';return}let h='<table><thead><tr>';LABELS.forEach((l,i)=>{const c=COLS[i];let ar='';if(s.col===c)ar=s.asc?' ▲':' ▼';h+='<th data-col="'+c+'">'+l+ar+'</th>'});h+='</tr></thead><tbody>';for(const r of rows){let cls=r.eventId==='ERROR'?'error-row':r.eventId==='NOT FOUND'?'not-found':'matched';h+='<tr class="'+cls+'">';for(const c of COLS)h+='<td>'+esc(String(r[c]||''))+'</td>';h+='</tr>'}h+='</tbody></table>';w.innerHTML=h}
+function popFilter(id,lbl,opts){const sel=document.getElementById(id);const cur=sel.value;sel.innerHTML='<option value="">'+lbl+'</option>'+opts.sort().map(o=>'<option value="'+esc(o)+'">'+esc(o)+'</option>').join('');sel.value=cur}
+function updateFilters(){const r=state.results.rows;popFilter('filterFeed','All Feeds',[...new Set(r.map(x=>x.tickerChannel).filter(Boolean))]);popFilter('filterRegion','All Regions',[...new Set(r.map(x=>x.region).filter(Boolean))]);popFilter('filterSport','All Sports',[...new Set(r.map(x=>x.sport).filter(Boolean))]);popFilter('filterLeague','All Leagues',[...new Set(r.map(x=>x.league).filter(Boolean))])}
+function updateBtn(){document.getElementById('compareBtn').disabled=!(state.srFiles.length>0&&state.bgFiles.length>0&&state.lbc.status==='parsed')}
+function updateExp(){const h=state.results.rows.length>0;document.getElementById('exportCsvBtn').disabled=!h;document.getElementById('exportXlsxBtn').disabled=!h}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800)}
+function prog(p){const b=document.getElementById('progressBar'),f=document.getElementById('progressFill');b.classList.toggle('active',p<100);f.style.width=p+'%'}
+
+// EVENTS
+document.getElementById('srFile').addEventListener('change',async e=>{for(const file of e.target.files){const buf=await file.arrayBuffer();const r=parseSR(buf);if(r.ok)state.srFiles.push({name:file.name,count:r.count,records:r.records});else toast('✗ '+file.name+': '+r.err)}renderFL('sr');updateBtn();e.target.value=''});
+document.getElementById('bgFile').addEventListener('change',async e=>{for(const file of e.target.files){const buf=await file.arrayBuffer();const r=parseBG(buf,file.size);if(r.ok)state.bgFiles.push({name:file.name,count:r.count,records:r.records});else toast('✗ '+file.name+': '+r.err)}renderFL('bg');updateBtn();e.target.value=''});
+document.addEventListener('click',e=>{const rm=e.target.closest('.file-remove');if(!rm)return;const s=rm.dataset.src,i=+rm.dataset.idx;if(s==='sr')state.srFiles.splice(i,1);else state.bgFiles.splice(i,1);renderFL(s);updateBtn()});
+document.getElementById('lbcTextarea').addEventListener('input',e=>{const text=e.target.value,info=document.getElementById('lbcInfo');if(!text.trim()){state.lbc={status:'idle',rows:[],count:0};info.textContent='';info.className='lbc-info'}else{const r=parseLBC(text);if(r.ok){state.lbc={status:'parsed',rows:r.rows,count:r.count};info.className='lbc-info success';info.textContent='✓ '+r.count+' rows'}else{state.lbc={status:'error',rows:[],count:0};info.className='lbc-info error';info.textContent='✗ '+r.err}}updateBtn()});
+document.getElementById('compareBtn').addEventListener('click',async()=>{const btn=document.getElementById('compareBtn');btn.disabled=true;btn.innerHTML='⏳ Comparing...';prog(0);const allSr=state.srFiles.flatMap(f=>f.records),allBg=state.bgFiles.flatMap(f=>f.records);const{rows,summary}=await runComparison(state.lbc.rows,allSr,allBg,(d,t)=>prog(Math.round(d/t*100)));state.results={rows,summary};prog(100);renderDash();updateFilters();renderTable();updateExp();btn.innerHTML='▶ Compare';updateBtn()});
+document.getElementById('clearBtn').addEventListener('click',()=>{state.srFiles=[];state.bgFiles=[];state.lbc={status:'idle',rows:[],count:0};state.results={rows:[],summary:{totalEvents:0,matched:0,notFound:0,malformed:0,dateMismatches:0,timeMismatches:0,leagueMismatches:0,teamEventMismatches:0}};state.filters={search:'',feed:'',region:'',sport:'',league:'',status:''};state.sort={col:null,asc:true};document.getElementById('srFile').value='';document.getElementById('bgFile').value='';document.getElementById('lbcTextarea').value='';document.getElementById('lbcInfo').textContent='';document.getElementById('searchInput').value='';['filterFeed','filterRegion','filterSport','filterLeague','filterStatus'].forEach(id=>{const s=document.getElementById(id);if(id==='filterStatus')s.value='';else s.innerHTML='<option value="">All</option>'});renderFL('sr');renderFL('bg');renderDash();renderTable();updateBtn();updateExp()});
+document.getElementById('searchInput').addEventListener('input',e=>{state.filters.search=e.target.value;renderTable()});
+document.getElementById('filterFeed').addEventListener('change',e=>{state.filters.feed=e.target.value;renderTable()});
+document.getElementById('filterRegion').addEventListener('change',e=>{state.filters.region=e.target.value;renderTable()});
+document.getElementById('filterSport').addEventListener('change',e=>{state.filters.sport=e.target.value;renderTable()});
+document.getElementById('filterLeague').addEventListener('change',e=>{state.filters.league=e.target.value;renderTable()});
+document.getElementById('filterStatus').addEventListener('change',e=>{state.filters.status=e.target.value;renderTable()});
+document.getElementById('tableWrapper').addEventListener('click',e=>{const th=e.target.closest('th');if(th&&th.dataset.col){const c=th.dataset.col;if(state.sort.col===c)state.sort.asc=!state.sort.asc;else{state.sort.col=c;state.sort.asc=true}renderTable();return}const td=e.target.closest('td');if(td)navigator.clipboard.writeText(td.textContent).then(()=>toast('📋 Copied')).catch(()=>{})});
+document.getElementById('exportCsvBtn').addEventListener('click',()=>{if(!state.results.rows.length)return;const d=[LABELS,...state.results.rows.map(r=>COLS.map(c=>r[c]||''))];const ws=XLSX.utils.aoa_to_sheet(d);const csv=XLSX.utils.sheet_to_csv(ws);dl(csv,'LBC_Results.csv','text/csv');toast('📄 CSV exported')});
+document.getElementById('exportXlsxBtn').addEventListener('click',()=>{if(!state.results.rows.length)return;const d=[LABELS,...state.results.rows.map(r=>COLS.map(c=>r[c]||''))];const ws=XLSX.utils.aoa_to_sheet(d);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Results');const buf=XLSX.write(wb,{bookType:'xlsx',type:'array'});dl(new Blob([buf]),'LBC_Results.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');toast('📊 Excel exported')});
+function dl(c,n,m){const b=c instanceof Blob?c:new Blob([c],{type:m});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=n;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u)}
+renderDash();
+</script>
+</body>
+</html>
