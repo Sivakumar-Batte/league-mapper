@@ -449,8 +449,60 @@ function calcSummary(rows){
 // PARSERS
 const SR_REQ=['eventid','date','time','sport','tournament','event'];
 const BG_REQ=['eventid','event','start (utc+2)','competition'];
-function parseSR(buf,fileName){try{const wb=XLSX.read(buf,{type:'array',cellDates:false,raw:true});const ws=wb.Sheets[wb.SheetNames[0]];if(!ws)return{ok:false,err:'No data'};const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});if(!rows.length)return{ok:false,err:'No records'};const h=Object.keys(rows[0]).map(x=>x.toLowerCase().trim());const miss=SR_REQ.filter(r=>!h.includes(r));if(miss.length)return{ok:false,err:'Missing: '+miss.join(', ')};const hm={};Object.keys(rows[0]).forEach(x=>{hm[x.toLowerCase().trim()]=x});return{ok:true,records:rows.map(r=>({__file:fileName||'',eventId:String(r[hm['eventid']]||'').replace(/^sr:match:/i,''),date:String(r[hm['date']]||''),time:String(r[hm['time']]||''),sport:String(r[hm['sport']]||''),tournament:String(r[hm['tournament']]||''),event:String(r[hm['event']]||'')})),count:rows.length}}catch(e){return{ok:false,err:'Invalid file'}}}
-function parseBG(buf,size,fileName){if(size>10*1024*1024)return{ok:false,err:'File exceeds 10MB'};try{const wb=XLSX.read(buf,{type:'array',cellDates:false,raw:true});const ws=wb.Sheets[wb.SheetNames[0]];if(!ws)return{ok:false,err:'No data'};const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});if(!rows.length)return{ok:false,err:'No records'};const hdrs=Object.keys(rows[0]);const hl=hdrs.map(x=>x.toLowerCase().trim());const miss=[];for(const r of BG_REQ){if(r==='start (utc+2)'){if(!hdrs.some(x=>x.toLowerCase().trim()==='start (utc+2)'))miss.push('Start (UTC+2)')}else{if(!hl.includes(r))miss.push(r)}}if(miss.length)return{ok:false,err:'Missing: '+miss.join(', ')};const hm={};hdrs.forEach(x=>{hm[x.toLowerCase().trim()]=x});const sc=hm['start (utc+2)']||'';return{ok:true,records:rows.map(r=>({__file:fileName||'',eventId:String(r[hm['eventid']]||''),event:String(r[hm['event']]||''),startUtcPlus2:String(r[sc]||''),competition:String(r[hm['competition']]||'')})),count:rows.length}}catch(e){return{ok:false,err:'Invalid file'}}}
+
+// ---------- EXCEL CELL COERCION ----------
+// Sportradar (and sometimes BetGenius) store Date/Time as real Excel cells.
+// With raw:true, sheet_to_json returns the underlying NUMBER (a date serial
+// like 46271 or a time fraction like 0.0833), NOT a formatted string. These
+// helpers convert those numbers to canonical strings using pure integer math
+// so there is NO timezone drift (a Date object would shift by the local zone
+// and could change the calendar day). If the cell is already a string it is
+// returned unchanged so the downstream normalizers handle it.
+// Excel serial 1 = 1900-01-01, with Excel's fake 1900-02-29 leap-year bug.
+function excelSerialToYMD(serial){
+  const whole=Math.floor(serial);
+  let dayCount=whole-1;                 // day 1 = 1900-01-01
+  if(dayCount>=60) dayCount--;          // skip Excel's non-existent 1900-02-29
+  let year=1900;
+  const diy=y=>(((y%4===0&&y%100!==0)||y%400===0)?366:365);
+  while(dayCount>=diy(year)){ dayCount-=diy(year); year++; }
+  const dim=[31,((year%4===0&&year%100!==0)||year%400===0)?29:28,31,30,31,30,31,31,30,31,30,31];
+  let month=0;
+  while(dayCount>=dim[month]){ dayCount-=dim[month]; month++; }
+  const day=dayCount+1;
+  return year+'-'+String(month+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+}
+// Convert a cell value to a date STRING our normalizeDate() understands.
+// - number with an integer part >= 1  -> Excel date serial -> YYYY-MM-DD
+// - anything else                      -> String() as-is
+function coerceExcelDate(v){
+  if(typeof v==='number' && isFinite(v) && v>=1 && v<60000) return excelSerialToYMD(v);
+  return String(v==null?'':v);
+}
+// Convert a cell value to a time STRING our normalizeTime() understands.
+// - number in [0,1) or with a fractional part -> Excel time fraction -> HH:MM
+// - anything else                              -> String() as-is
+function coerceExcelTime(v){
+  if(typeof v==='number' && isFinite(v)){
+    const frac=v-Math.floor(v);          // take only the time-of-day part
+    let mins=Math.round(frac*24*60);
+    if(mins>=1440) mins-=1440;           // 24:00 -> 00:00 (rounding guard)
+    const h=Math.floor(mins/60), m=mins%60;
+    return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+  }
+  return String(v==null?'':v);
+}
+// Convert a BetGenius "Start (UTC+2)" cell to a "YYYY-MM-DD HH:MM" string.
+// If Excel stored it as a datetime serial (integer part = date, fraction =
+// time) we rebuild both halves; otherwise we return the original string.
+function coerceExcelDateTime(v){
+  if(typeof v==='number' && isFinite(v) && v>=1 && v<60000){
+    return excelSerialToYMD(v)+' '+coerceExcelTime(v);
+  }
+  return String(v==null?'':v);
+}
+function parseSR(buf,fileName){try{const wb=XLSX.read(buf,{type:'array',cellDates:false,raw:true});const ws=wb.Sheets[wb.SheetNames[0]];if(!ws)return{ok:false,err:'No data'};const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});if(!rows.length)return{ok:false,err:'No records'};const h=Object.keys(rows[0]).map(x=>x.toLowerCase().trim());const miss=SR_REQ.filter(r=>!h.includes(r));if(miss.length)return{ok:false,err:'Missing: '+miss.join(', ')};const hm={};Object.keys(rows[0]).forEach(x=>{hm[x.toLowerCase().trim()]=x});return{ok:true,records:rows.map(r=>({__file:fileName||'',eventId:String(r[hm['eventid']]||'').replace(/^sr:match:/i,''),date:coerceExcelDate(r[hm['date']]),time:coerceExcelTime(r[hm['time']]),sport:String(r[hm['sport']]||''),tournament:String(r[hm['tournament']]||''),event:String(r[hm['event']]||'')})),count:rows.length}}catch(e){return{ok:false,err:'Invalid file'}}}
+function parseBG(buf,size,fileName){if(size>10*1024*1024)return{ok:false,err:'File exceeds 10MB'};try{const wb=XLSX.read(buf,{type:'array',cellDates:false,raw:true});const ws=wb.Sheets[wb.SheetNames[0]];if(!ws)return{ok:false,err:'No data'};const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});if(!rows.length)return{ok:false,err:'No records'};const hdrs=Object.keys(rows[0]);const hl=hdrs.map(x=>x.toLowerCase().trim());const miss=[];for(const r of BG_REQ){if(r==='start (utc+2)'){if(!hdrs.some(x=>x.toLowerCase().trim()==='start (utc+2)'))miss.push('Start (UTC+2)')}else{if(!hl.includes(r))miss.push(r)}}if(miss.length)return{ok:false,err:'Missing: '+miss.join(', ')};const hm={};hdrs.forEach(x=>{hm[x.toLowerCase().trim()]=x});const sc=hm['start (utc+2)']||'';return{ok:true,records:rows.map(r=>({__file:fileName||'',eventId:String(r[hm['eventid']]||''),event:String(r[hm['event']]||''),startUtcPlus2:coerceExcelDateTime(r[sc]),competition:String(r[hm['competition']]||'')})),count:rows.length}}catch(e){return{ok:false,err:'Invalid file'}}}
 function parseLBC(text){if(!text||!text.trim())return{ok:false,err:'No data pasted'};const lines=text.split(/\r?\n/);const hi=lines.findIndex(l=>l.trim().length>0);if(hi===-1)return{ok:false,err:'No data'};const headers=lines[hi].split('\t').map(h=>h.trim());const hl=headers.map(h=>h.toLowerCase());const req=['date','time','ticker channel','league','matches'];const miss=req.filter(r=>!hl.includes(r));if(miss.length)return{ok:false,err:'Missing columns: '+miss.join(', ')};const cm={};const MAP={'day':'day','date':'date','time':'time','ticker channel':'tickerChannel','stream':'stream','region':'region','sport':'sport','league':'league','info':'info','matches':'matches'};hl.forEach((h,i)=>{if(MAP[h])cm[MAP[h]]=i});const rows=[];for(let i=hi+1;i<lines.length;i++){if(!lines[i].trim())continue;const v=lines[i].split('\t');rows.push({day:(v[cm.day]||'').trim(),date:(v[cm.date]||'').trim(),time:(v[cm.time]||'').trim(),tickerChannel:(v[cm.tickerChannel]||'').trim(),stream:(v[cm.stream]||'').trim(),region:(v[cm.region]||'').trim(),sport:(v[cm.sport]||'').trim(),league:(v[cm.league]||'').trim(),info:(v[cm.info]||'').trim(),matches:(v[cm.matches]||'').trim()})}if(!rows.length)return{ok:false,err:'No data rows'};return{ok:true,rows,count:rows.length}}
 
 // STATE
