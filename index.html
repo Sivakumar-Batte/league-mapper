@@ -1266,10 +1266,10 @@ const BulkTab = {
         const dataRows = rows.slice(1).filter(r=>r.some(c=>String(c).trim()!==''));
         const parsed = dataRows.map(r=>{
           if (type==='league') {
-            return { sport:String(r[0]||'').trim()||'Basketball', country:String(r[1]||'').trim(), bcm_competition:String(r[2]||'').trim(), betradar:String(r[3]||'').trim()||'N/A', betgenius:String(r[4]||'').trim()||'N/A' };
+            return { sport:App.normalizeSport(String(r[0]||'').trim())||'Basketball', country:String(r[1]||'').trim(), bcm_competition:String(r[2]||'').trim(), betradar:String(r[3]||'').trim()||'N/A', betgenius:String(r[4]||'').trim()||'N/A' };
           }
           return {
-            sport:String(r[0]||'').trim()||'Basketball', country:String(r[1]||'').trim(), bcm_competition:String(r[2]||'').trim(), bcm_team:String(r[3]||'').trim(),
+            sport:App.normalizeSport(String(r[0]||'').trim())||'Basketball', country:String(r[1]||'').trim(), bcm_competition:String(r[2]||'').trim(), bcm_team:String(r[3]||'').trim(),
             betradar_competition:String(r[4]||'').trim()||'N/A', betradar_team:String(r[5]||'').trim()||'N/A',
             bg_competition:String(r[6]||'').trim()||'N/A', bg_team:String(r[7]||'').trim()||'N/A'
           };
@@ -1284,9 +1284,9 @@ const BulkTab = {
     const withFlags = rows.map(r=>{
       let isDup;
       if (type==='league') {
-        isDup = existing.some(e=>e.sport===r.sport && e.country.toLowerCase()===r.country.toLowerCase() && e.bcm_competition.toLowerCase()===r.bcm_competition.toLowerCase());
+        isDup = existing.some(e=>App.normalizeSport(e.sport)===App.normalizeSport(r.sport) && e.country.toLowerCase()===r.country.toLowerCase() && e.bcm_competition.toLowerCase()===r.bcm_competition.toLowerCase());
       } else {
-        isDup = existing.some(e=>e.sport===r.sport && e.country.toLowerCase()===r.country.toLowerCase() && e.bcm_competition.toLowerCase()===r.bcm_competition.toLowerCase() && (e.bcm_team||'').toLowerCase()===(r.bcm_team||'').toLowerCase());
+        isDup = existing.some(e=>App.normalizeSport(e.sport)===App.normalizeSport(r.sport) && e.country.toLowerCase()===r.country.toLowerCase() && e.bcm_competition.toLowerCase()===r.bcm_competition.toLowerCase() && (e.bcm_team||'').toLowerCase()===(r.bcm_team||'').toLowerCase());
       }
       return { data:r, isDup, checked: !isDup };
     });
@@ -1690,9 +1690,16 @@ const App = {
     // Refresh current view
     UI.switchTab(state.currentTab);
   },
-  // Helper to get leagues/teams for current sport
-  getLeagues(){ return state.leagues.filter(l => l.sport === state.sport); },
-  getTeams(){ return state.teams.filter(t => t.sport === state.sport); },
+  // Normalize sport values so variations (Icehockey, ice hockey, Ice-Hockey) all match "Ice Hockey"
+  normalizeSport(s){
+    const key = String(s || '').toLowerCase().replace(/[^a-z]/g, '');
+    if (key === 'icehockey') return 'Ice Hockey';
+    if (key === 'basketball') return 'Basketball';
+    return String(s || '').trim();
+  },
+  // Helper to get leagues/teams for current sport (normalized comparison)
+  getLeagues(){ return state.leagues.filter(l => this.normalizeSport(l.sport) === this.normalizeSport(state.sport)); },
+  getTeams(){ return state.teams.filter(t => this.normalizeSport(t.sport) === this.normalizeSport(state.sport)); },
   async init(){
     UI.initDark();
     if (Auth.restore()) {
