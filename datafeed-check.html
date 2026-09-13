@@ -99,8 +99,8 @@ tr.status-nomap{border-left:3px solid var(--text-faint);opacity:.7;}
     </div>
   </div>
   <div style="display:flex;gap:8px;">
-    <button class="tool-tab active" onclick="switchTool('datafeed')">📊 DataFeed Check</button>
-    <button class="tool-tab" onclick="switchTool('prepare')">📋 Prepare Mapping</button>
+    <button class="tool-tab active" data-tool="datafeed" onclick="switchTool('datafeed', this)">📊 DataFeed Check</button>
+    <button class="tool-tab" data-tool="prepare" onclick="switchTool('prepare', this)">📋 Prepare Mapping</button>
     <a href="index.html" class="back-btn">← Back to Mapper</a>
   </div>
 </div>
@@ -167,6 +167,8 @@ tr.status-nomap{border-left:3px solid var(--text-faint);opacity:.7;}
 
     <div class="stat-grid" id="result-stats"></div>
 
+    <div id="dfc-diagnostics" style="display:none;background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;"></div>
+
     <div class="panel">
       <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;">
         <span>✅ DataFeed Check Results</span>
@@ -212,6 +214,7 @@ tr.status-nomap{border-left:3px solid var(--text-faint);opacity:.7;}
         <small>Paste rows with columns: BCM Event Name, Feed Name. Or click "Use Current Results" if you just ran DataFeed Check.</small>
         <textarea id="prep-datafeed" style="width:100%;min-height:100px;padding:12px;border:2px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:14px;font-family:var(--font-mono);resize:vertical;" placeholder="BCM Event Name&#10;APR BBC - Patriots BC&#10;Greece - Cyprus&#10;KK SC Derby - KB Peja"></textarea>
         <button class="btn btn-secondary" style="margin-top:8px;" onclick="PREP.useCurrentResults()">↑ Use Current DataFeed Check Results (Correct only)</button>
+        <div id="prep-state" style="display:none;border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-top:10px;font-size:13px;"></div>
       </div>
 
       <div class="field">
@@ -262,7 +265,7 @@ Rwanda
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Sport</th><th>BCM Country</th><th>BCM Competition</th><th>BR Country</th><th>BR Competition</th><th>BG Country</th><th>BG Competition</th><th>Feed Provider ID</th></tr></thead>
+            <thead><tr><th>Sport</th><th>Country</th><th>BCM Competition</th><th>BR Competition</th><th>BG Competition</th></tr></thead>
             <tbody id="prep-leagues-tbody"></tbody>
           </table>
         </div>
@@ -278,7 +281,7 @@ Rwanda
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Sport</th><th>Country</th><th>BCM Competition</th><th>BCM Team</th><th>BR Competition</th><th>BR Team</th><th>BG Competition</th><th>BG Team</th><th>Feed Provider ID</th></tr></thead>
+            <thead><tr><th>Sport</th><th>Country</th><th>BCM Competition</th><th>BCM Team</th><th>BR Competition</th><th>BR Team</th><th>BG Competition</th><th>BG Team</th></tr></thead>
             <tbody id="prep-teams-tbody"></tbody>
           </table>
         </div>
@@ -328,21 +331,34 @@ const DFC = {
         bcmData = bcmData.concat(d);
       }
 
-      // Build lookup maps
-      const brMap = {};
-      brData.forEach(row => {
-        let id = String(row['EventId'] || row['eventid'] || row['EVENTID'] || row['Event Id'] || row['event_id'] || '').trim();
-        // Strip sr:match: or similar prefixes
-        id = id.replace(/^sr:match:/i, '').replace(/^sr:/i, '').trim();
-        if (id) brMap[id] = row;
-      });
+      // ---- Input validation: fail loudly instead of silently producing N/A rows ----
+      const problems = [];
+      if (bcmData.length === 0) problems.push('The BCM Dump file has no data rows.');
+      if (!this.hasColumn(bcmData, ['Event Name','EventName'])) problems.push('BCM file is missing a required "Event Name" column.');
+      if (!this.hasColumn(bcmData, ['Feed Provider ID','Feed Provider Id','FeedProviderID'])) problems.push('BCM file is missing a required "Feed Provider ID" column.');
+      if (brData.length && !this.hasColumn(brData, ['EventId','Event Id','event_id'])) problems.push('Betradar file is missing a required "EventId" column.');
+      if (bgData.length && !this.hasColumn(bgData, ['EventId','Event Id','event_id'])) problems.push('Betgenius file is missing a required "EventId" column.');
+      if (problems.length) {
+        alert('Cannot run the check:\n\n• ' + problems.join('\n• ') + '\n\nPlease check the column headers in your files.');
+        this.reset();
+        return;
+      }
 
-      const bgMap = {};
-      bgData.forEach(row => {
-        let id = String(row['EventId'] || row['eventid'] || row['EVENTID'] || row['Event Id'] || row['event_id'] || '').trim();
-        // Strip any prefix
-        id = id.replace(/^sr:match:/i, '').replace(/^sr:/i, '').trim();
-        if (id) bgMap[id] = row;
+      // Build lookup maps, tracking duplicate provider IDs (ambiguous → flagged, not silently overwritten).
+      this.diagnostics = { brDupes: [], bgDupes: [], unknownPrefix: 0, missingSourceDateTime: 0 };
+      const brMap = {}, brSeen = {};
+      brData.forEach((row, idx) => {
+        const id = this.stripProviderId(this.readId(row));
+        if (!id) return;
+        if (brSeen[id]) { this.diagnostics.brDupes.push(id); }
+        else { brSeen[id] = true; brMap[id] = row; } // keep FIRST occurrence deterministically
+      });
+      const bgMap = {}, bgSeen = {};
+      bgData.forEach((row, idx) => {
+        const id = this.stripProviderId(this.readId(row));
+        if (!id) return;
+        if (bgSeen[id]) { this.diagnostics.bgDupes.push(id); }
+        else { bgSeen[id] = true; bgMap[id] = row; }
       });
 
       // Process BCM rows
@@ -500,6 +516,24 @@ const DFC = {
       <div class="stat-card wrong"><div class="num">${issues}</div><div class="label">Issues</div></div>
       <div class="stat-card nomap"><div class="num">${nomap}</div><div class="label">No Mapping</div></div>
     `;
+
+    // Surface data-integrity diagnostics (duplicate provider IDs) as a non-blocking warning.
+    const d = this.diagnostics || {};
+    const brDupes = [...new Set(d.brDupes || [])];
+    const bgDupes = [...new Set(d.bgDupes || [])];
+    const warnEl = document.getElementById('dfc-diagnostics');
+    if (warnEl) {
+      if (brDupes.length || bgDupes.length) {
+        warnEl.style.display = 'block';
+        warnEl.innerHTML = `⚠ Data integrity: `
+          + (brDupes.length ? `${brDupes.length} duplicate Betradar EventId(s) ` : '')
+          + (bgDupes.length ? `${bgDupes.length} duplicate Betgenius EventId(s) ` : '')
+          + `— the first occurrence of each was used. Duplicates: `
+          + this.esc([...brDupes, ...bgDupes].slice(0, 20).join(', ')) + (brDupes.length + bgDupes.length > 20 ? '…' : '');
+      } else {
+        warnEl.style.display = 'none';
+      }
+    }
   },
 
   renderTable(){
@@ -563,6 +597,33 @@ const DFC = {
     this.results = [];
   },
 
+  // ---- shared helpers (used by both DataFeed Check and Prepare Mapping) ----
+
+  // True if ANY row has one of the given column names (case-insensitive, trimmed).
+  hasColumn(rows, names){
+    if (!rows || !rows.length) return false;
+    const keys = Object.keys(rows[0]).map(k => k.toLowerCase().trim());
+    return names.some(n => keys.includes(n.toLowerCase().trim()));
+  },
+
+  // Read the provider EventId from a row using the known header variations.
+  readId(row){
+    return String(row['EventId'] || row['eventid'] || row['EVENTID'] || row['Event Id'] || row['event_id'] || '').trim();
+  },
+
+  // Strip ONLY the agreed Sportradar prefixes ("sr:match:" / "sr:"). Anything else
+  // is preserved so we never accidentally mangle a real identifier.
+  stripProviderId(id){
+    return String(id || '').replace(/^sr:match:/i, '').replace(/^sr:/i, '').trim();
+  },
+
+  // Neutralise spreadsheet formula-injection: a cell starting with = + - @ can be
+  // executed as a formula when the CSV is opened in Excel. Prefix with an apostrophe.
+  csvSafe(val){
+    const s = String(val == null ? '' : val);
+    return /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
+  },
+
   // File parsing
   async parseFile(file){
     return new Promise((resolve, reject) => {
@@ -617,6 +678,14 @@ const DFC = {
     });
   },
 
+  // Split a "Home vs Away" style string into its two sides on vs / v / -.
+  // IMPORTANT: split BEFORE normalize(), because normalize() removes the "-"
+  // separator (punctuation), which would otherwise defeat the split and stop
+  // reversed home/away detection from ever working.
+  splitTeams(raw){
+    return String(raw || '').split(/\s+vs\.?\s+|\s+-\s+|\s+v\s+/i).map(s => this.normalize(s)).filter(s => s.length);
+  },
+
   // Fuzzy similarity
   calcSimilarity(str1, str2){
     if (!str1 || !str2) return 0;
@@ -624,9 +693,9 @@ const DFC = {
     const b = this.normalize(str2);
     if (a === b) return 100;
 
-    // Try reversed teams (Team B vs Team A)
-    const aParts = a.split(/\s+vs\s+|\s+-\s+|\s+v\s+/);
-    const bParts = b.split(/\s+vs\s+|\s+-\s+|\s+v\s+/);
+    // Try reversed teams (Team B vs Team A) — split on the raw strings first.
+    const aParts = this.splitTeams(str1);
+    const bParts = this.splitTeams(str2);
 
     if (aParts.length === 2 && bParts.length === 2) {
       const forward = (this.sim(aParts[0], bParts[0]) + this.sim(aParts[1], bParts[1])) / 2;
@@ -904,11 +973,16 @@ const DFC = {
 };
 
 // ============================= TOOL SWITCHING =============================
-function switchTool(tool) {
+function switchTool(tool, btn) {
   document.querySelectorAll('.tool-section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.tool-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tool-' + tool).classList.add('active');
-  event.target.classList.add('active');
+  // Robustly highlight the active tab whether or not an event object is available.
+  const target = btn || (typeof event !== 'undefined' && event ? event.target : null);
+  if (target) target.classList.add('active');
+  else { const tab = document.querySelector(`.tool-tab[data-tool="${tool}"]`); if (tab) tab.classList.add('active'); }
+  // Refresh the Prepare Mapping state banner when entering that tab.
+  if (tool === 'prepare' && typeof PREP !== 'undefined') PREP.renderState();
 }
 
 // ============================= PREPARE MAPPING =============================
@@ -944,6 +1018,32 @@ const PREP = {
     });
     const lines = [...new Set(correct.map(r => r.bcmEventName))];
     document.getElementById('prep-datafeed').value = lines.join('\n');
+
+    // Track verified-result state so the operator can see what's loaded and avoid stale data.
+    const verifiedIds = correct.filter(r => this.stripId(r.feedProviderId)).length;
+    this.loadedState = {
+      correctRows: correct.length,
+      verifiedIds,
+      uniqueEvents: lines.length,
+      loadedAt: new Date().toLocaleString()
+    };
+    this.renderState();
+  },
+
+  // Show whether verified DataFeed Check results are loaded (prevents accidental stale/empty runs).
+  renderState(){
+    const el = document.getElementById('prep-state');
+    if (!el) return;
+    const s = this.loadedState;
+    if (!s) {
+      el.style.display = 'block';
+      el.style.background = 'var(--warn-soft)'; el.style.color = 'var(--warn)'; el.style.borderColor = 'var(--warn)';
+      el.innerHTML = '⚠ No verified DataFeed Check results loaded. Run DataFeed Check, then click "Use Current DataFeed Check Results". Without verified IDs, provider columns will be N/A (no guessing).';
+      return;
+    }
+    el.style.display = 'block';
+    el.style.background = 'var(--success-soft)'; el.style.color = 'var(--success)'; el.style.borderColor = 'var(--success)';
+    el.innerHTML = `✓ DataFeed Check results loaded — <b>${s.correctRows}</b> Correct rows · <b>${s.verifiedIds}</b> verified provider IDs · <b>${s.uniqueEvents}</b> unique events · loaded ${DFC.esc(s.loadedAt)}`;
   },
 
   async run(){
@@ -951,6 +1051,18 @@ const PREP = {
     const hierarchyText = document.getElementById('prep-hierarchy').value.trim();
     if (!datafeedText) { alert('Please provide BCM Event Names (step 1)'); return; }
     if (!hierarchyText) { alert('Please paste BCM Hierarchy (step 2)'); return; }
+
+    // Guard against accidental use without verified Feed Provider IDs. Without them,
+    // provider (BR/BG) columns will be N/A — the tool will NOT fall back to guessing.
+    if (!this.loadedState || Object.keys(this.correctMap).length === 0) {
+      const proceed = confirm(
+        'No verified DataFeed Check results are loaded, so Betradar/Betgenius columns will be N/A '
+        + '(the tool never guesses provider events).\n\n'
+        + 'Recommended: run DataFeed Check first, then click "Use Current DataFeed Check Results".\n\n'
+        + 'Continue anyway (BCM-only sheet)?'
+      );
+      if (!proceed) return;
+    }
 
     const brFiles = document.getElementById('prep-br').files;
     const bgFiles = document.getElementById('prep-bg').files;
@@ -1012,13 +1124,16 @@ const PREP = {
     // came with each (all rows in a league share the same provider league).
     const leagueMap = {};
 
-    bcmEvents.forEach(bcmEvent => {
-      // 1) Split BCM event "Team A - Team B" into the two BCM teams.
-      const parts = bcmEvent.split(/\s+-\s+/);
-      const bcmTeam1 = parts[0] ? parts[0].trim() : bcmEvent;
-      const bcmTeam2 = parts[1] ? parts[1].trim() : '';
+    // Dedupe key set for team rows (Step 7 of spec).
+    const teamSeen = new Set();
 
-      // 2) BCM League: hierarchy lookup ONLY (this is the only place hierarchy is used).
+    bcmEvents.forEach(bcmEvent => {
+      // 1) Split the BCM EVENT NAME into two teams on the LAST " - ".
+      //    Using the last separator means qualifiers/competition suffixes that
+      //    contain a dash (e.g. "... - Women") don't get mis-split.
+      const { team1: bcmTeam1, team2: bcmTeam2 } = this.splitEvent(bcmEvent);
+
+      // 2) BCM League: hierarchy lookup ONLY (the only place hierarchy is used).
       let country = 'N/A', competition = 'N/A';
       for (const h of hierarchy) {
         const found = h.events.some(e => {
@@ -1032,70 +1147,68 @@ const PREP = {
         if (found) { country = h.country; competition = h.competition; break; }
       }
 
-      // 3) Feed Provider IDs for this event, captured from DataFeed Check "Correct" results.
+      // 3) Determine the SINGLE provider for this event from the Feed Provider ID.
+      //    ID starts with 7 → Betradar (BR); starts with 1 → Betgenius (BG).
       const providerInfo = this.correctMap[bcmEvent.toLowerCase().trim()] || null;
       const brId = providerInfo && providerInfo.br ? this.stripId(providerInfo.br.id) : '';
       const bgId = providerInfo && providerInfo.bg ? this.stripId(providerInfo.bg.id) : '';
-      // A single "Feed Provider ID" to carry on the row (prefer BR, else BG).
       const feedProviderId = brId || bgId || 'N/A';
+      const prefix = String(feedProviderId).charAt(0);
+      const isBR = brId && (prefix === '7' || !bgId);
+      const isBG = bgId && (prefix === '1' || !brId);
 
-      // 4) BR league + teams: DIRECT ID LOOKUP ONLY. No fuzzy, no hierarchy. N/A if not found.
-      const brMatch = brId && brById[brId] ? brById[brId] : null;
+      // Provider columns start as N/A and ONLY the matched provider gets filled.
       let brCountry = 'N/A', brComp = 'N/A', brTeam1 = 'N/A', brTeam2 = 'N/A';
-      if (brMatch) {
-        brCountry = brMatch.country || 'N/A';
-        brComp = brMatch.competition || 'N/A';
-        // Team pairing (similarity used ONLY to decide which side is which — not to find the event).
-        const pair = this.pairTeams(bcmTeam1, bcmTeam2, brMatch.home, brMatch.away);
-        brTeam1 = pair.a; brTeam2 = pair.b;
-      }
-
-      // 5) BG league + teams: DIRECT ID LOOKUP ONLY. N/A if not found.
-      const bgMatch = bgId && bgById[bgId] ? bgById[bgId] : null;
       let bgCountry = 'N/A', bgComp = 'N/A', bgTeam1 = 'N/A', bgTeam2 = 'N/A';
-      if (bgMatch) {
-        bgCountry = bgMatch.country || 'N/A';
-        bgComp = bgMatch.competition || 'N/A';
-        const pair = this.pairTeams(bcmTeam1, bcmTeam2, bgMatch.team1, bgMatch.team2);
-        bgTeam1 = pair.a; bgTeam2 = pair.b;
+
+      if (isBR) {
+        // 4A) BR: direct ID lookup only. N/A if the ID isn't in the file.
+        const m = brById[brId] || null;
+        if (m) {
+          brCountry = m.country || 'N/A';
+          brComp = m.competition || 'N/A';
+          const pair = this.pairTeams(bcmTeam1, bcmTeam2, m.home, m.away);
+          brTeam1 = pair.a; brTeam2 = pair.b;
+        }
+      } else if (isBG) {
+        // 4B) BG: direct ID lookup only. N/A if the ID isn't in the file.
+        const m = bgById[bgId] || null;
+        if (m) {
+          bgCountry = m.country || 'N/A';
+          bgComp = m.competition || 'N/A';
+          const pair = this.pairTeams(bcmTeam1, bcmTeam2, m.team1, m.team2);
+          bgTeam1 = pair.a; bgTeam2 = pair.b;
+        }
       }
 
-      // 6) League row (deduped). Carry provider league info + Feed Provider ID.
+      // 6) League row (deduped by BCM country|competition). A single BCM league
+      //    can span several source competitions (e.g. group stages), so we COLLECT
+      //    all unique BR/BG competitions rather than keeping only the first.
       const leagueKey = `${country}|${competition}`;
       if (!leagueMap[leagueKey]) {
-        leagueMap[leagueKey] = {
-          country, competition,
-          brCountry, brComp, bgCountry, bgComp, feedProviderId
-        };
-      } else {
-        // Fill any N/A gaps from later events in the same league.
-        const L = leagueMap[leagueKey];
-        if (L.brComp === 'N/A' && brComp !== 'N/A') { L.brComp = brComp; L.brCountry = brCountry; }
-        if (L.bgComp === 'N/A' && bgComp !== 'N/A') { L.bgComp = bgComp; L.bgCountry = bgCountry; }
-        if (L.feedProviderId === 'N/A' && feedProviderId !== 'N/A') L.feedProviderId = feedProviderId;
+        leagueMap[leagueKey] = { country, competition, brComps: [], bgComps: [] };
       }
+      this.addUnique(leagueMap[leagueKey].brComps, brComp);
+      this.addUnique(leagueMap[leagueKey].bgComps, bgComp);
 
-      // 7) Team rows — one per BCM team, carrying its own Feed Provider ID.
-      this.teamResults.push({
-        country, bcmCompetition: competition, bcmTeam: bcmTeam1,
-        brComp, brTeam: brTeam1, bgComp, bgTeam: bgTeam1, feedProviderId
-      });
+      // 7) Team rows — one per BCM team (Home, then Away). Skip duplicates.
+      this.pushTeamRow(teamSeen, { country, bcmCompetition: competition, bcmTeam: bcmTeam1,
+        brComp, brTeam: brTeam1, bgComp, bgTeam: bgTeam1, feedProviderId });
       if (bcmTeam2) {
-        this.teamResults.push({
-          country, bcmCompetition: competition, bcmTeam: bcmTeam2,
-          brComp, brTeam: brTeam2, bgComp, bgTeam: bgTeam2, feedProviderId
-        });
+        this.pushTeamRow(teamSeen, { country, bcmCompetition: competition, bcmTeam: bcmTeam2,
+          brComp, brTeam: brTeam2, bgComp, bgTeam: bgTeam2, feedProviderId });
       }
     });
 
     // Build league results — skip fully unmatched rows.
+    // Columns mirror the Team sheet: Sport, Country, BCM Competition, BR Competition, BG Competition.
+    // Multiple source competitions for one BCM league are joined with " & ".
     Object.values(leagueMap).forEach(l => {
       if (l.country === 'N/A' && l.competition === 'N/A') return;
       this.leagueResults.push({
         country: l.country, competition: l.competition,
-        brCountry: l.brCountry || 'N/A', betradar: l.brComp || 'N/A',
-        bgCountry: l.bgCountry || 'N/A', betgenius: l.bgComp || 'N/A',
-        feedProviderId: l.feedProviderId || 'N/A'
+        betradar: l.brComps.length ? l.brComps.join(' & ') : 'N/A',
+        betgenius: l.bgComps.length ? l.bgComps.join(' & ') : 'N/A'
       });
     });
 
@@ -1108,6 +1221,37 @@ const PREP = {
   // Strip Sportradar-style prefixes so IDs compare cleanly (e.g. "sr:match:123" → "123").
   stripId(id){
     return String(id || '').replace(/^sr:match:/i, '').replace(/^sr:/i, '').trim();
+  },
+
+  // Split a BCM Event Name "Home - Away" into two teams on the LAST " - ".
+  // Team names or qualifiers can contain a dash (e.g. "... (Women) - ... (Women)",
+  // or a suffix like "- Women"); splitting on the last separator keeps the two
+  // sides intact. If there's no " - " at all, treat the whole string as one team.
+  splitEvent(name){
+    const s = String(name || '').trim();
+    const idx = s.lastIndexOf(' - ');
+    if (idx === -1) return { team1: s, team2: '' };
+    return { team1: s.slice(0, idx).trim(), team2: s.slice(idx + 3).trim() };
+  },
+
+  // Add a competition name to a list only if it's real and not already present
+  // (case-insensitive). First-seen casing is preserved. "N/A"/blank are ignored.
+  addUnique(list, value){
+    const v = String(value || '').trim();
+    if (!v || v === 'N/A') return;
+    const lower = v.toLowerCase();
+    if (list.some(x => x.toLowerCase() === lower)) return;
+    list.push(v);
+  },
+
+  // Push a team row unless an identical one already exists (Step 7 dedupe).
+  // Unique key = Country + BCM Competition + BCM Team + BR Team + BG Team.
+  pushTeamRow(seen, row){
+    const key = [row.country, row.bcmCompetition, row.bcmTeam, row.brTeam, row.bgTeam]
+      .map(v => String(v || '').toLowerCase().trim()).join('|');
+    if (seen.has(key)) return;
+    seen.add(key);
+    this.teamResults.push(row);
   },
 
   // Decide which source team maps to which BCM team. Similarity is used ONLY for
@@ -1192,22 +1336,16 @@ const PREP = {
         <td><input type="text" value="${this.escAttr(l.sport || parsedSport)}" onchange="PREP.leagueResults[${i}].sport=this.value" style="${inp}"></td>
         <td><input type="text" value="${this.escAttr(l.country)}" onchange="PREP.leagueResults[${i}].country=this.value" style="${inp}"></td>
         <td><input type="text" value="${this.escAttr(l.competition)}" onchange="PREP.leagueResults[${i}].competition=this.value" style="${inp}font-weight:600;"></td>
-        <td><input type="text" value="${this.escAttr(l.brCountry)}" onchange="PREP.leagueResults[${i}].brCountry=this.value" style="${inp}"></td>
         <td><input type="text" value="${this.escAttr(l.betradar)}" onchange="PREP.leagueResults[${i}].betradar=this.value" style="${inp}"></td>
-        <td><input type="text" value="${this.escAttr(l.bgCountry)}" onchange="PREP.leagueResults[${i}].bgCountry=this.value" style="${inp}"></td>
         <td><input type="text" value="${this.escAttr(l.betgenius)}" onchange="PREP.leagueResults[${i}].betgenius=this.value" style="${inp}"></td>
-        <td><input type="text" value="${this.escAttr(l.feedProviderId)}" onchange="PREP.leagueResults[${i}].feedProviderId=this.value" style="${inp}font-family:var(--font-mono);"></td>
       </tr>`).join('');
     } else {
       ltbody.innerHTML = this.leagueResults.map(l => `<tr>
         <td>${DFC.esc(l.sport || parsedSport)}</td>
         <td>${DFC.esc(l.country)}</td>
         <td><strong>${DFC.esc(l.competition)}</strong></td>
-        <td>${DFC.esc(l.brCountry)}</td>
         <td>${DFC.esc(l.betradar)}</td>
-        <td>${DFC.esc(l.bgCountry)}</td>
         <td>${DFC.esc(l.betgenius)}</td>
-        <td style="font-family:var(--font-mono);">${DFC.esc(l.feedProviderId)}</td>
       </tr>`).join('');
     }
 
@@ -1222,7 +1360,6 @@ const PREP = {
         <td><input type="text" value="${this.escAttr(t.brTeam)}" onchange="PREP.teamResults[${i}].brTeam=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:12px;"></td>
         <td><input type="text" value="${this.escAttr(t.bgComp)}" onchange="PREP.teamResults[${i}].bgComp=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:12px;"></td>
         <td><input type="text" value="${this.escAttr(t.bgTeam)}" onchange="PREP.teamResults[${i}].bgTeam=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:12px;"></td>
-        <td><input type="text" value="${this.escAttr(t.feedProviderId)}" onchange="PREP.teamResults[${i}].feedProviderId=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:12px;font-family:var(--font-mono);"></td>
       </tr>`).join('');
     } else {
       ttbody.innerHTML = this.teamResults.map(t => `<tr>
@@ -1234,7 +1371,6 @@ const PREP = {
         <td>${DFC.esc(t.brTeam)}</td>
         <td>${DFC.esc(t.bgComp)}</td>
         <td>${DFC.esc(t.bgTeam)}</td>
-        <td style="font-family:var(--font-mono);">${DFC.esc(t.feedProviderId)}</td>
       </tr>`).join('');
     }
   },
@@ -1245,12 +1381,11 @@ const PREP = {
     const sport = this.lastParsedSport || 'Basketball';
     const today = new Date().toISOString().slice(0,10);
     const wb = XLSX.utils.book_new();
+    const S = DFC.csvSafe;
     const data = this.leagueResults.map(l => ({
-      Sport: l.sport || sport,
-      'BCM Country': l.country, 'BCM Competition': l.competition,
-      'BR Country': l.brCountry, 'BR Competition': l.betradar,
-      'BG Country': l.bgCountry, 'BG Competition': l.betgenius,
-      'Feed Provider ID': l.feedProviderId
+      Sport: S(l.sport || sport),
+      Country: S(l.country), 'BCM Competition': S(l.competition),
+      'Betradar': S(l.betradar), 'Betgenius': S(l.betgenius)
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     XLSX.utils.book_append_sheet(wb, ws, 'Leagues');
@@ -1261,11 +1396,11 @@ const PREP = {
     const sport = this.lastParsedSport || 'Basketball';
     const today = new Date().toISOString().slice(0,10);
     const wb = XLSX.utils.book_new();
+    const S = DFC.csvSafe;
     const data = this.teamResults.map(t => ({
-      Sport: t.sport || sport, Country: t.country, 'BCM Competition': t.bcmCompetition, 'BCM Unique Team': t.bcmTeam,
-      'Betradar Competition': t.brComp, 'Betradar Unique Team': t.brTeam,
-      'BG Competition': t.bgComp, 'BG Unique Team': t.bgTeam,
-      'Feed Provider ID': t.feedProviderId
+      Sport: S(t.sport || sport), Country: S(t.country), 'BCM Competition': S(t.bcmCompetition), 'BCM Unique Team': S(t.bcmTeam),
+      'Betradar Competition': S(t.brComp), 'Betradar Unique Team': S(t.brTeam),
+      'BG Competition': S(t.bgComp), 'BG Unique Team': S(t.bgTeam)
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     XLSX.utils.book_append_sheet(wb, ws, 'Teams');
