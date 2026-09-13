@@ -262,7 +262,7 @@ Rwanda
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Sport</th><th>Country</th><th>BCM Competition</th><th>Betradar</th><th>Betgenius</th></tr></thead>
+            <thead><tr><th>Sport</th><th>BCM Country</th><th>BCM Competition</th><th>BR Country</th><th>BR Competition</th><th>BG Country</th><th>BG Competition</th><th>Feed Provider ID</th></tr></thead>
             <tbody id="prep-leagues-tbody"></tbody>
           </table>
         </div>
@@ -278,7 +278,7 @@ Rwanda
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Sport</th><th>Country</th><th>BCM Competition</th><th>BCM Team</th><th>BR Competition</th><th>BR Team</th><th>BG Competition</th><th>BG Team</th></tr></thead>
+            <thead><tr><th>Sport</th><th>Country</th><th>BCM Competition</th><th>BCM Team</th><th>BR Competition</th><th>BR Team</th><th>BG Competition</th><th>BG Team</th><th>Feed Provider ID</th></tr></thead>
             <tbody id="prep-teams-tbody"></tbody>
           </table>
         </div>
@@ -931,10 +931,14 @@ const PREP = {
     correct.forEach(r => {
       const key = (r.bcmEventName || '').toLowerCase().trim();
       if (!this.correctMap[key]) this.correctMap[key] = { br: null, bg: null };
+      // Route by the source the DataFeed Check actually resolved (sourceType),
+      // falling back to the Feed Provider ID prefix (7 = Betradar, 1 = Betgenius).
       const prefix = String(r.feedProviderId).charAt(0);
-      if (prefix === '7') {
+      const isBR = r.sourceType === 'Betradar' || (!r.sourceType && prefix === '7');
+      const isBG = r.sourceType === 'Betgenius' || (!r.sourceType && prefix === '1');
+      if (isBR) {
         this.correctMap[key].br = { id: r.feedProviderId, sourceEventName: r.sourceEventName };
-      } else if (prefix === '1') {
+      } else if (isBG) {
         this.correctMap[key].bg = { id: r.feedProviderId, sourceEventName: r.sourceEventName };
       }
     });
@@ -971,191 +975,149 @@ const PREP = {
       bgData = bgData.concat(d);
     }
 
-    // Build source lookup: Betradar events
-    // Format: "Hometeam vs. Awayteam" — we need to match against BCM "Team A - Team B"
-    const brById = {}; // stripped EventId → betradar event object
-    const brEvents = brData.map(row => {
+    // ================= ID-BASED SOURCE INDEXES =================
+    // Index every Betradar source row by its (stripped) EventId. We capture the
+    // provider's Country (Category), Competition (Unique Tournament / Tournament)
+    // and the two team names — all read DIRECTLY from the source file, no guessing.
+    const brById = {};
+    brData.forEach(row => {
       const home = String(row['Hometeam'] || row['hometeam'] || '').trim();
       const away = String(row['Awayteam'] || row['awayteam'] || '').trim();
-      const tournament = String(row['Tournament'] || row['tournament'] || row['Unique Tournament'] || row['unique tournament'] || '').trim();
-      const category = String(row['Category'] || row['category'] || '').trim();
-      // Normalized for matching: "hometeam awayteam"
-      const norm = DFC.normalize(home + ' ' + away);
-      // Extract & strip EventId
+      const competition = String(row['Unique Tournament'] || row['unique tournament'] || row['Tournament'] || row['tournament'] || '').trim();
+      const country = String(row['Category'] || row['category'] || '').trim();
       let id = String(row['EventId'] || row['eventid'] || row['EVENTID'] || row['Event Id'] || row['event_id'] || '').trim();
-      id = id.replace(/^sr:match:/i, '').replace(/^sr:/i, '').trim();
-      const evt = { home, away, tournament, category, norm, id };
-      if (id) brById[id] = evt;
-      return evt;
+      id = this.stripId(id);
+      if (id) brById[id] = { home, away, competition, country, id };
     });
 
-    // Build source lookup: Betgenius events
-    // Format: "Team A v Team B"
-    const bgById = {}; // stripped EventId → betgenius event object
-    const bgEvents = bgData.map(row => {
+    // Index every Betgenius source row by its (stripped) EventId.
+    // BG "Event" is "Team A v Team B"; BG "Competition" holds the league.
+    const bgById = {};
+    bgData.forEach(row => {
       const eventName = String(row['Event'] || row['event'] || '').trim();
       const competition = String(row['Competition'] || row['competition'] || '').trim();
-      // Split "A v B" to get individual team names
+      const country = String(row['Country'] || row['country'] || '').trim(); // usually blank for BG
       const parts = eventName.split(/\s+v\s+/i);
       const team1 = parts[0] ? parts[0].trim() : '';
       const team2 = parts[1] ? parts[1].trim() : '';
-      const norm = DFC.normalize(eventName);
       let id = String(row['EventId'] || row['eventid'] || row['EVENTID'] || row['Event Id'] || row['event_id'] || '').trim();
-      id = id.replace(/^sr:match:/i, '').replace(/^sr:/i, '').trim();
-      const evt = { eventName, competition, team1, team2, norm, id };
-      if (id) bgById[id] = evt;
-      return evt;
+      id = this.stripId(id);
+      if (id) bgById[id] = { eventName, competition, country, team1, team2, id };
     });
 
-    // Process each BCM event
+    // ================= PROCESS EACH BCM EVENT (ID-BASED ONLY) =================
     this.leagueResults = [];
     this.teamResults = [];
-    const leagueMap = {}; // country|competition → {brComps, bgComps}
+    // Dedupe leagues by BCM country|competition, but keep the provider info that
+    // came with each (all rows in a league share the same provider league).
+    const leagueMap = {};
 
     bcmEvents.forEach(bcmEvent => {
-      // Split BCM event "Team A - Team B" into individual teams
+      // 1) Split BCM event "Team A - Team B" into the two BCM teams.
       const parts = bcmEvent.split(/\s+-\s+/);
       const bcmTeam1 = parts[0] ? parts[0].trim() : bcmEvent;
       const bcmTeam2 = parts[1] ? parts[1].trim() : '';
 
-      // Find country + competition from hierarchy
+      // 2) BCM League: hierarchy lookup ONLY (this is the only place hierarchy is used).
       let country = 'N/A', competition = 'N/A';
       for (const h of hierarchy) {
         const found = h.events.some(e => {
-          // Flexible matching: exact, case-insensitive, or team-name containment
           if (e.toLowerCase().trim() === bcmEvent.toLowerCase().trim()) return true;
-          // Check if both team names appear in the hierarchy event
           if (bcmTeam1 && bcmTeam2) {
             const eLower = e.toLowerCase();
             if (eLower.includes(bcmTeam1.toLowerCase()) && eLower.includes(bcmTeam2.toLowerCase())) return true;
           }
           return false;
         });
-        if (found) {
-          country = h.country;
-          competition = h.competition;
-          break;
-        }
+        if (found) { country = h.country; competition = h.competition; break; }
       }
 
-      const leagueKey = `${country}|${competition}`;
-      if (!leagueMap[leagueKey]) leagueMap[leagueKey] = { country, competition, brComps: new Set(), bgComps: new Set() };
-
-      const normBcm = DFC.normalize(bcmTeam1 + ' ' + bcmTeam2);
-
-      // Look up exact Feed Provider IDs captured from DataFeed Check "Correct" results
+      // 3) Feed Provider IDs for this event, captured from DataFeed Check "Correct" results.
       const providerInfo = this.correctMap[bcmEvent.toLowerCase().trim()] || null;
+      const brId = providerInfo && providerInfo.br ? this.stripId(providerInfo.br.id) : '';
+      const bgId = providerInfo && providerInfo.bg ? this.stripId(providerInfo.bg.id) : '';
+      // A single "Feed Provider ID" to carry on the row (prefer BR, else BG).
+      const feedProviderId = brId || bgId || 'N/A';
 
-      // ---- Betradar: prefer exact ID lookup, fall back to fuzzy ----
-      let brMatch = null;
-      if (providerInfo && providerInfo.br && providerInfo.br.id) {
-        const strippedId = String(providerInfo.br.id).replace(/^sr:match:/i, '').replace(/^sr:/i, '').trim();
-        if (brById[strippedId]) brMatch = brById[strippedId];
-      }
-      if (!brMatch) {
-        // Fuzzy fallback — lower threshold (60%) + token overlap
-        let bestBrScore = 0;
-        brEvents.forEach(br => {
-          const score = Math.max(
-            DFC.calcSimilarity(bcmTeam1 + ' - ' + bcmTeam2, br.home + ' - ' + br.away),
-            DFC.calcSimilarity(bcmTeam1 + ' - ' + bcmTeam2, br.away + ' - ' + br.home),
-            DFC.sim(normBcm, br.norm),
-            DFC.sim(normBcm, DFC.normalize(br.away + ' ' + br.home))
-          );
-          if (score > bestBrScore && score >= 60) {
-            bestBrScore = score;
-            brMatch = br;
-          }
-        });
-      }
-
-      // ---- Betgenius: prefer exact ID lookup, fall back to fuzzy ----
-      let bgMatch = null;
-      if (providerInfo && providerInfo.bg && providerInfo.bg.id) {
-        const strippedId = String(providerInfo.bg.id).replace(/^sr:match:/i, '').replace(/^sr:/i, '').trim();
-        if (bgById[strippedId]) bgMatch = bgById[strippedId];
-      }
-      if (!bgMatch) {
-        // Fuzzy fallback — lower threshold (60%) + token overlap
-        let bestBgScore = 0;
-        bgEvents.forEach(bg => {
-          const score = Math.max(
-            DFC.calcSimilarity(bcmTeam1 + ' - ' + bcmTeam2, bg.team1 + ' - ' + bg.team2),
-            DFC.calcSimilarity(bcmTeam1 + ' - ' + bcmTeam2, bg.team2 + ' - ' + bg.team1),
-            DFC.sim(normBcm, bg.norm),
-            DFC.sim(normBcm, DFC.normalize(bg.team2 + ' ' + bg.team1))
-          );
-          if (score > bestBgScore && score >= 60) {
-            bestBgScore = score;
-            bgMatch = bg;
-          }
-        });
-      }
-
-      // Determine BR team names (which Betradar team matches which BCM team)
-      let brTeam1 = 'N/A', brTeam2 = 'N/A', brComp = 'N/A';
+      // 4) BR league + teams: DIRECT ID LOOKUP ONLY. No fuzzy, no hierarchy. N/A if not found.
+      const brMatch = brId && brById[brId] ? brById[brId] : null;
+      let brCountry = 'N/A', brComp = 'N/A', brTeam1 = 'N/A', brTeam2 = 'N/A';
       if (brMatch) {
-        brComp = brMatch.tournament || brMatch.category || 'N/A';
-        leagueMap[leagueKey].brComps.add(brComp);
-        // Figure out which BR team is which
-        const s1h = DFC.sim(DFC.normalize(bcmTeam1), DFC.normalize(brMatch.home));
-        const s1a = DFC.sim(DFC.normalize(bcmTeam1), DFC.normalize(brMatch.away));
-        if (s1h >= s1a) {
-          brTeam1 = brMatch.home;
-          brTeam2 = brMatch.away;
-        } else {
-          brTeam1 = brMatch.away;
-          brTeam2 = brMatch.home;
-        }
+        brCountry = brMatch.country || 'N/A';
+        brComp = brMatch.competition || 'N/A';
+        // Team pairing (similarity used ONLY to decide which side is which — not to find the event).
+        const pair = this.pairTeams(bcmTeam1, bcmTeam2, brMatch.home, brMatch.away);
+        brTeam1 = pair.a; brTeam2 = pair.b;
       }
 
-      // Determine BG team names
-      let bgTeam1 = 'N/A', bgTeam2 = 'N/A', bgComp = 'N/A';
+      // 5) BG league + teams: DIRECT ID LOOKUP ONLY. N/A if not found.
+      const bgMatch = bgId && bgById[bgId] ? bgById[bgId] : null;
+      let bgCountry = 'N/A', bgComp = 'N/A', bgTeam1 = 'N/A', bgTeam2 = 'N/A';
       if (bgMatch) {
+        bgCountry = bgMatch.country || 'N/A';
         bgComp = bgMatch.competition || 'N/A';
-        leagueMap[leagueKey].bgComps.add(bgComp);
-        const s1t1 = DFC.sim(DFC.normalize(bcmTeam1), DFC.normalize(bgMatch.team1));
-        const s1t2 = DFC.sim(DFC.normalize(bcmTeam1), DFC.normalize(bgMatch.team2));
-        if (s1t1 >= s1t2) {
-          bgTeam1 = bgMatch.team1;
-          bgTeam2 = bgMatch.team2;
-        } else {
-          bgTeam1 = bgMatch.team2;
-          bgTeam2 = bgMatch.team1;
-        }
+        const pair = this.pairTeams(bcmTeam1, bcmTeam2, bgMatch.team1, bgMatch.team2);
+        bgTeam1 = pair.a; bgTeam2 = pair.b;
       }
 
-      // Add Team 1
+      // 6) League row (deduped). Carry provider league info + Feed Provider ID.
+      const leagueKey = `${country}|${competition}`;
+      if (!leagueMap[leagueKey]) {
+        leagueMap[leagueKey] = {
+          country, competition,
+          brCountry, brComp, bgCountry, bgComp, feedProviderId
+        };
+      } else {
+        // Fill any N/A gaps from later events in the same league.
+        const L = leagueMap[leagueKey];
+        if (L.brComp === 'N/A' && brComp !== 'N/A') { L.brComp = brComp; L.brCountry = brCountry; }
+        if (L.bgComp === 'N/A' && bgComp !== 'N/A') { L.bgComp = bgComp; L.bgCountry = bgCountry; }
+        if (L.feedProviderId === 'N/A' && feedProviderId !== 'N/A') L.feedProviderId = feedProviderId;
+      }
+
+      // 7) Team rows — one per BCM team, carrying its own Feed Provider ID.
       this.teamResults.push({
         country, bcmCompetition: competition, bcmTeam: bcmTeam1,
-        brComp, brTeam: brTeam1, bgComp, bgTeam: bgTeam1
+        brComp, brTeam: brTeam1, bgComp, bgTeam: bgTeam1, feedProviderId
       });
-
-      // Add Team 2 (if exists)
       if (bcmTeam2) {
         this.teamResults.push({
           country, bcmCompetition: competition, bcmTeam: bcmTeam2,
-          brComp, brTeam: brTeam2, bgComp, bgTeam: bgTeam2
+          brComp, brTeam: brTeam2, bgComp, bgTeam: bgTeam2, feedProviderId
         });
       }
     });
 
-    // Build league results — exclude N/A country/competition
+    // Build league results — skip fully unmatched rows.
     Object.values(leagueMap).forEach(l => {
-      if (l.country === 'N/A' && l.competition === 'N/A') return; // skip unmatched
-      const brNames = [...l.brComps].filter(n => n && n !== 'N/A');
-      const bgNames = [...l.bgComps].filter(n => n && n !== 'N/A');
+      if (l.country === 'N/A' && l.competition === 'N/A') return;
       this.leagueResults.push({
         country: l.country, competition: l.competition,
-        betradar: brNames.length > 0 ? brNames.join(' & ') : 'N/A',
-        betgenius: bgNames.length > 0 ? bgNames.join(' & ') : 'N/A'
+        brCountry: l.brCountry || 'N/A', betradar: l.brComp || 'N/A',
+        bgCountry: l.bgCountry || 'N/A', betgenius: l.bgComp || 'N/A',
+        feedProviderId: l.feedProviderId || 'N/A'
       });
     });
 
-    // Remove team rows where both country and competition are N/A
+    // Drop team rows with no usable BCM league at all.
     this.teamResults = this.teamResults.filter(t => !(t.country === 'N/A' && t.bcmCompetition === 'N/A'));
 
     this.renderResults();
+  },
+
+  // Strip Sportradar-style prefixes so IDs compare cleanly (e.g. "sr:match:123" → "123").
+  stripId(id){
+    return String(id || '').replace(/^sr:match:/i, '').replace(/^sr:/i, '').trim();
+  },
+
+  // Decide which source team maps to which BCM team. Similarity is used ONLY for
+  // this pairing decision — never to search for or replace the matched event.
+  pairTeams(bcmTeam1, bcmTeam2, srcA, srcB){
+    srcA = srcA || 'N/A'; srcB = srcB || 'N/A';
+    if (srcA === 'N/A' && srcB === 'N/A') return { a:'N/A', b:'N/A' };
+    const s1a = DFC.sim(DFC.normalize(bcmTeam1), DFC.normalize(srcA));
+    const s1b = DFC.sim(DFC.normalize(bcmTeam1), DFC.normalize(srcB));
+    return s1a >= s1b ? { a: srcA, b: srcB } : { a: srcB, b: srcA };
   },
 
   parseHierarchy(text){
@@ -1223,22 +1185,29 @@ const PREP = {
     document.getElementById('prep-results').style.display = 'block';
     const parsedSport = this.lastParsedSport || 'Basketball';
 
+    const inp = 'width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:13px;';
     const ltbody = document.getElementById('prep-leagues-tbody');
     if (this.editingLeagues) {
       ltbody.innerHTML = this.leagueResults.map((l, i) => `<tr>
-        <td><input type="text" value="${this.escAttr(l.sport || parsedSport)}" onchange="PREP.leagueResults[${i}].sport=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:13px;"></td>
-        <td><input type="text" value="${this.escAttr(l.country)}" onchange="PREP.leagueResults[${i}].country=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:13px;"></td>
-        <td><input type="text" value="${this.escAttr(l.competition)}" onchange="PREP.leagueResults[${i}].competition=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:13px;font-weight:600;"></td>
-        <td><input type="text" value="${this.escAttr(l.betradar)}" onchange="PREP.leagueResults[${i}].betradar=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:13px;"></td>
-        <td><input type="text" value="${this.escAttr(l.betgenius)}" onchange="PREP.leagueResults[${i}].betgenius=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:13px;"></td>
+        <td><input type="text" value="${this.escAttr(l.sport || parsedSport)}" onchange="PREP.leagueResults[${i}].sport=this.value" style="${inp}"></td>
+        <td><input type="text" value="${this.escAttr(l.country)}" onchange="PREP.leagueResults[${i}].country=this.value" style="${inp}"></td>
+        <td><input type="text" value="${this.escAttr(l.competition)}" onchange="PREP.leagueResults[${i}].competition=this.value" style="${inp}font-weight:600;"></td>
+        <td><input type="text" value="${this.escAttr(l.brCountry)}" onchange="PREP.leagueResults[${i}].brCountry=this.value" style="${inp}"></td>
+        <td><input type="text" value="${this.escAttr(l.betradar)}" onchange="PREP.leagueResults[${i}].betradar=this.value" style="${inp}"></td>
+        <td><input type="text" value="${this.escAttr(l.bgCountry)}" onchange="PREP.leagueResults[${i}].bgCountry=this.value" style="${inp}"></td>
+        <td><input type="text" value="${this.escAttr(l.betgenius)}" onchange="PREP.leagueResults[${i}].betgenius=this.value" style="${inp}"></td>
+        <td><input type="text" value="${this.escAttr(l.feedProviderId)}" onchange="PREP.leagueResults[${i}].feedProviderId=this.value" style="${inp}font-family:var(--font-mono);"></td>
       </tr>`).join('');
     } else {
       ltbody.innerHTML = this.leagueResults.map(l => `<tr>
         <td>${DFC.esc(l.sport || parsedSport)}</td>
         <td>${DFC.esc(l.country)}</td>
         <td><strong>${DFC.esc(l.competition)}</strong></td>
+        <td>${DFC.esc(l.brCountry)}</td>
         <td>${DFC.esc(l.betradar)}</td>
+        <td>${DFC.esc(l.bgCountry)}</td>
         <td>${DFC.esc(l.betgenius)}</td>
+        <td style="font-family:var(--font-mono);">${DFC.esc(l.feedProviderId)}</td>
       </tr>`).join('');
     }
 
@@ -1253,6 +1222,7 @@ const PREP = {
         <td><input type="text" value="${this.escAttr(t.brTeam)}" onchange="PREP.teamResults[${i}].brTeam=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:12px;"></td>
         <td><input type="text" value="${this.escAttr(t.bgComp)}" onchange="PREP.teamResults[${i}].bgComp=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:12px;"></td>
         <td><input type="text" value="${this.escAttr(t.bgTeam)}" onchange="PREP.teamResults[${i}].bgTeam=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:12px;"></td>
+        <td><input type="text" value="${this.escAttr(t.feedProviderId)}" onchange="PREP.teamResults[${i}].feedProviderId=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface-alt);color:var(--text);font-size:12px;font-family:var(--font-mono);"></td>
       </tr>`).join('');
     } else {
       ttbody.innerHTML = this.teamResults.map(t => `<tr>
@@ -1264,6 +1234,7 @@ const PREP = {
         <td>${DFC.esc(t.brTeam)}</td>
         <td>${DFC.esc(t.bgComp)}</td>
         <td>${DFC.esc(t.bgTeam)}</td>
+        <td style="font-family:var(--font-mono);">${DFC.esc(t.feedProviderId)}</td>
       </tr>`).join('');
     }
   },
@@ -1274,7 +1245,13 @@ const PREP = {
     const sport = this.lastParsedSport || 'Basketball';
     const today = new Date().toISOString().slice(0,10);
     const wb = XLSX.utils.book_new();
-    const data = this.leagueResults.map(l => ({ Sport: l.sport || sport, Country: l.country, Competition: l.competition, Betradar: l.betradar, Betgenius: l.betgenius }));
+    const data = this.leagueResults.map(l => ({
+      Sport: l.sport || sport,
+      'BCM Country': l.country, 'BCM Competition': l.competition,
+      'BR Country': l.brCountry, 'BR Competition': l.betradar,
+      'BG Country': l.bgCountry, 'BG Competition': l.betgenius,
+      'Feed Provider ID': l.feedProviderId
+    }));
     const ws = XLSX.utils.json_to_sheet(data);
     XLSX.utils.book_append_sheet(wb, ws, 'Leagues');
     XLSX.writeFile(wb, `prepared_leagues_${today}.csv`, { bookType: 'csv' });
@@ -1287,7 +1264,8 @@ const PREP = {
     const data = this.teamResults.map(t => ({
       Sport: t.sport || sport, Country: t.country, 'BCM Competition': t.bcmCompetition, 'BCM Unique Team': t.bcmTeam,
       'Betradar Competition': t.brComp, 'Betradar Unique Team': t.brTeam,
-      'BG Competition': t.bgComp, 'BG Unique Team': t.bgTeam
+      'BG Competition': t.bgComp, 'BG Unique Team': t.bgTeam,
+      'Feed Provider ID': t.feedProviderId
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     XLSX.utils.book_append_sheet(wb, ws, 'Teams');
