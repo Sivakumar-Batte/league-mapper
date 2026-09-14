@@ -340,6 +340,7 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
         <div class="panel-title">Recently added</div>
         <div id="dash-recent"></div>
       </div>
+      <div class="panel" id="dash-shift" style="display:none;"></div>
     </div>
 
     <!-- ---------- MAPPINGS (combined Leagues + Teams) ---------- -->
@@ -497,6 +498,102 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
     <!-- ---------- LBC EVENT ID MATCHER ---------- -->
     <div class="tab-panel" data-panel="lbc">
       <iframe id="lbc-frame" src="about:blank" data-src="lbc-matcher.html" style="width:100%;height:calc(100vh - 160px);min-height:700px;border:1px solid var(--border);border-radius:10px;background:#fff;"></iframe>
+    </div>
+
+    <!-- ---------- BR/BG SHIFT ---------- -->
+    <div class="tab-panel" data-panel="shift">
+      <div class="panel">
+        <div class="panel-title">🔀 BR/BG Shift — Fixture Creation Check</div>
+        <div style="color:var(--text-dim);font-size:13px;margin-bottom:16px;">Paste Betradar, Betgenius, and BCM hierarchy data, then parse and preview. Comparison, save, and export arrive in later phases.</div>
+
+        <!-- Check type + sport -->
+        <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:16px;">
+          <div>
+            <label style="display:block;font-size:11px;font-weight:600;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;">Check Type</label>
+            <div class="type-toggle" style="margin:0;">
+              <button id="shift-ct-3day" class="active" onclick="ShiftTab.setCheckType('3day')">3-Day Check</button>
+              <button id="shift-ct-10th" onclick="ShiftTab.setCheckType('10th')">10th-Day Check</button>
+            </div>
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:600;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;">Sport</label>
+            <div class="type-toggle" style="margin:0;">
+              <button id="shift-sp-bk" class="active" onclick="ShiftTab.setSport('Basketball')">🏀 Basketball</button>
+              <button id="shift-sp-ih" onclick="ShiftTab.setSport('Ice Hockey')">🏒 Ice Hockey</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paste areas -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+          <div class="fld">
+            <label style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;">Betradar Hierarchy <span style="color:var(--text-faint);text-transform:none;">(optional)</span></label>
+            <textarea id="shift-br" oninput="ShiftTab.markDirty()" placeholder=". Basketball&#10;. . World&#10;. . . League - Men&#10;. . . . . Team A - Team B" style="width:100%;min-height:150px;padding:11px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:13px;font-family:var(--font-mono);resize:vertical;"></textarea>
+          </div>
+          <div class="fld">
+            <label style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;">Betgenius Hierarchy <span style="color:var(--text-faint);text-transform:none;">(optional)</span></label>
+            <textarea id="shift-bg" oninput="ShiftTab.markDirty()" placeholder=". Basketball&#10;. . World&#10;. . . League - Men&#10;. . . . . Team A - Team B" style="width:100%;min-height:150px;padding:11px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:13px;font-family:var(--font-mono);resize:vertical;"></textarea>
+          </div>
+          <div class="fld">
+            <label style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;">BCM Hierarchy <span style="color:var(--text-faint);text-transform:none;">(required for comparison)</span></label>
+            <textarea id="shift-bcm" oninput="ShiftTab.markDirty()" placeholder=". Basketball&#10;. . World&#10;. . . League - Men&#10;. . . . . Team A - Team B" style="width:100%;min-height:150px;padding:11px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:13px;font-family:var(--font-mono);resize:vertical;"></textarea>
+          </div>
+        </div>
+
+        <div class="btn-group" style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-primary" id="shift-parse-btn" onclick="ShiftTab.parseAndPreview()">🔎 Parse & Preview</button>
+          <button class="btn btn-ghost" onclick="ShiftTab.clearAll()">Clear</button>
+          <button class="btn btn-primary" id="shift-compare-btn" onclick="ShiftTab.compareData()" disabled title="Parse BR/BG and BCM data first">⚖ Compare Data</button>
+          <button class="btn btn-secondary" id="shift-save-draft-btn" onclick="ShiftTab.saveDraft()">💾 Save Draft</button>
+          <button class="btn btn-secondary" id="shift-save-btn" onclick="ShiftTab.saveCheck()">💾 Save Check</button>
+          <button class="btn btn-secondary" id="shift-complete-btn" onclick="ShiftTab.completeCheck()">✅ Mark Completed</button>
+          <button class="btn btn-secondary" id="shift-export-btn" onclick="ShiftTab.exportResults()" disabled title="Run comparison first">⬇ Export Results</button>
+          <button class="btn btn-ghost" onclick="ShiftTab.reprocessCheck()">↻ Reprocess (current mappings)</button>
+          <button class="btn btn-ghost" onclick="ShiftTab.openHistory()">🗂️ Check History</button>
+        </div>
+        <div id="shift-identity" style="display:none;margin-top:8px;"></div>
+        <div id="shift-stale-note" style="display:none;color:var(--warn);font-size:12px;margin-top:8px;">⚠ Inputs or mappings changed since the last comparison. Run Compare Data again to refresh results.</div>
+      </div>
+
+      <!-- Validation warnings -->
+      <div id="shift-warnings" style="display:none;"></div>
+
+      <!-- Summary cards -->
+      <div id="shift-summary" style="display:none;"></div>
+
+      <!-- Preview -->
+      <div id="shift-preview" style="display:none;">
+        <div class="panel">
+          <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>Parsed Preview</span>
+            <div class="type-toggle" style="margin:0;">
+              <button id="shift-pv-BR" class="active" onclick="ShiftTab.setPreview('BR')">Betradar</button>
+              <button id="shift-pv-BG" onclick="ShiftTab.setPreview('BG')">Betgenius</button>
+              <button id="shift-pv-BCM" onclick="ShiftTab.setPreview('BCM')">BCM</button>
+            </div>
+          </div>
+          <div class="table-wrap" style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>Source</th><th>Sport</th><th>Country</th><th>League</th><th>Home Team</th><th>Away Team</th><th>Parse Status</th><th>Import Order</th></tr></thead>
+              <tbody id="shift-preview-tbody"></tbody>
+            </table>
+          </div>
+          <div id="shift-preview-note" style="color:var(--text-faint);font-size:12px;margin-top:8px;"></div>
+        </div>
+      </div>
+
+      <!-- Malformed review -->
+      <div id="shift-malformed" style="display:none;"></div>
+
+      <!-- Mapping validation (Phase 3) -->
+      <div id="shift-validation" style="display:none;"></div>
+
+      <!-- Comparison results (Phase 4) -->
+      <div id="shift-results-summary" style="display:none;"></div>
+      <div id="shift-results" style="display:none;"></div>
+
+      <!-- Check history (Phase 5) -->
+      <div id="shift-history" style="display:none;"></div>
     </div>
 
     <!-- ---------- TRAINING ---------- -->
@@ -782,7 +879,7 @@ const UI = {
     const isAdmin = state.user.role === 'admin';
     const tabs = [
       ['dashboard','Dashboard'],['search','Master Search'],['mappings','Mappings'],
-      ['add','Add New'],['bulk','Bulk Upload'],['lbc','⚡ LBC Matcher'],['training','📚 Training']
+      ['add','Add New'],['bulk','Bulk Upload'],['lbc','⚡ LBC Matcher'],['shift','🔀 BR/BG Shift'],['training','📚 Training']
     ];
     if (isAdmin) { tabs.push(['history','History'],['users','Users']); }
     const row = document.getElementById('tabs-row');
@@ -811,6 +908,7 @@ const UI = {
     if (id==='dashboard') DashboardTab.render();
     if (id==='mappings') MappingsTab.enter(subView);
     if (id==='lbc') { const f = document.getElementById('lbc-frame'); if (f && f.src.indexOf('lbc-matcher.html') === -1) f.src = f.dataset.src; }
+    if (id==='shift') ShiftTab.enter();
     if (id==='training') TrainingTab.enter();
     if (id==='history') HistoryTab.render();
     if (id==='users') UsersTab.render();
@@ -1001,6 +1099,38 @@ const DashboardTab = {
     document.getElementById('dash-recent').innerHTML = recent.length ? recent.map(h=>`
       <div class="hist-line"><span class="t">${fmtTime(h.created_at)}</span><span class="who">${escapeHtml(h.username)}</span><span>${escapeHtml(h.action)} — ${escapeHtml(h.table_name)}</span></div>
     `).join('') : `<div class="empty-state" style="padding:20px;"><div class="ic">🕒</div>No recent activity</div>`;
+
+    // BR/BG Shift summary — loaded lazily, metadata-only (never raw/results payloads),
+    // excludes archived by default. Degrades silently if the table isn't set up yet.
+    this.renderShiftSummary();
+  },
+
+  async renderShiftSummary(){
+    const el = document.getElementById('dash-shift');
+    if (!el) return;
+    try {
+      // One lightweight query: metadata columns only, non-archived.
+      const rows = await sb('shift_checks', { query: `?select=check_type,job_status,summary&archived=eq.false&limit=1000` });
+      const list = rows || [];
+      let active=0, c3=0, c10=0, toCreate=0, underReview=0, completed=0;
+      list.forEach(r=>{
+        const s = r.summary || {};
+        if (r.job_status !== 'Completed' && r.job_status !== 'Archived') active++;
+        if (r.job_status === 'Completed') { completed++; if (r.check_type==='3day') c3++; else c10++; }
+        if (r.job_status === 'Under Review' || r.job_status === 'Comparison Completed') underReview++;
+        toCreate += (s.toBeCreated || 0);
+      });
+      el.style.display = 'block';
+      const card=(n,l)=>`<div class="stat-card"><div class="num">${n}</div><div class="label">${escapeHtml(l)}</div></div>`;
+      el.innerHTML = `<div class="panel-title" style="margin-bottom:12px;">🔀 BR/BG Shift</div>
+        <div class="stat-grid">
+          ${card(active,'Active checks')}${card(c3,'3-Day completed')}${card(c10,'10th-Day completed')}
+          ${card(toCreate,'Matches to create')}${card(underReview,'Under review')}${card(completed,'Completed')}
+        </div>`;
+    } catch(e){
+      // Table not set up yet or unreachable — hide the section quietly (don't break dashboard).
+      el.style.display = 'none';
+    }
   }
 };
 
@@ -2093,7 +2223,33 @@ const UserGuide = {
       <p>Read the <b>Comments</b> column to investigate mismatches, use the filters to focus, and export the results to <b>CSV</b> or <b>Excel</b>.</p>`],
     ['Training', `<p>Two parts, switched by the toggle at the top:</p>
       <ul><li><b>Training Material:</b> video links and reference images by sport and category to help with tasks.</li><li><b>Daily Updates:</b> a shared log where anyone can post what happened today. Filter by date or author, search, and open any entry to read it in full. Your name and the time are recorded automatically — you never type them.</li></ul>`],
-    ['History', `<p>An audit trail of the last 500 actions (adds, edits, deletes, password changes, bulk uploads). Each row shows who did it, when, and a Details view of exactly what changed. Admins can export it.</p>`],
+    ['BR/BG Shift', `<p>The <b>BR/BG Shift</b> tab finds fixtures that still need to be created in BCM by comparing pasted Betradar (BR), Betgenius (BG), and BCM hierarchy data against your approved League and Team mappings. It never creates events — it prepares the list.</p>
+      <ol>
+        <li>Open <b>BR/BG Shift</b>.</li>
+        <li>Choose <b>3-Day</b> or <b>10th-Day</b> check.</li>
+        <li>Choose <b>Basketball</b> or <b>Ice Hockey</b>.</li>
+        <li>Paste the <b>Betradar</b>, <b>Betgenius</b>, and <b>BCM</b> hierarchy data (BR or BG may be empty; BCM is needed to compare).</li>
+        <li>Click <b>Parse &amp; Preview</b>.</li>
+        <li>Review malformed rows and any sport-mismatch warnings.</li>
+        <li>Review the <b>League</b> and <b>Team</b> mapping statuses.</li>
+        <li>For unresolved records, use <b>Open in Mappings</b> to add the mapping (your Shift session is preserved).</li>
+        <li>Come back and click <b>Reprocess (current mappings)</b>.</li>
+        <li>Click <b>Compare Data</b>.</li>
+        <li>Review <b>Matches To Be Created</b>, <b>Already Created</b>, and <b>Possible Reversed Fixtures</b>.</li>
+        <li>Set <b>Review Status</b> and add <b>Notes</b>.</li>
+        <li><b>Save Check</b> (or Save Draft at any time).</li>
+        <li><b>Export</b> the workbook.</li>
+        <li>Reopen a check any time from <b>Check History</b>.</li>
+        <li>After creating events in BCM, mark those rows <b>Created in BCM</b>.</li>
+      </ol>
+      <p><b>Important:</b></p>
+      <ul>
+        <li>The hierarchy has <b>no dates, times, or Event IDs</b>, so repeated team pairings can't be told apart reliably.</li>
+        <li><b>Fuzzy suggestions are not confirmed mappings</b> — always review them.</li>
+        <li><b>Possible reversed fixtures</b> need manual investigation and never enter the creation list automatically.</li>
+        <li>Only <b>fully mapped</b> fixtures (league + both teams) enter <b>Matches To Be Created</b>.</li>
+      </ul>`],
+    ['History', `<p>An audit trail of the last 500 actions (adds, edits, deletes, password changes, bulk uploads, BR/BG Shift checks). Each row shows who did it, when, and a Details view of exactly what changed. Admins can export it.</p>`],
     ['Users', `<p>Everyone can change their own password from the account menu (top-right). Administrators can additionally add users, reset any user's password, and remove accounts from the Users tab.</p>`]
   ],
   open(){ document.getElementById('guide-search').value=''; this.render(''); document.getElementById('guide-modal').classList.add('show'); },
@@ -2108,6 +2264,1312 @@ const UserGuide = {
         <summary>${escapeHtml(title)}</summary>
         <div class="guide-content">${html}</div>
       </details>`).join('');
+  }
+};
+
+/* ============================= BR/BG SHIFT — NORMALIZE (Phase 1, ported) ============================= */
+// Safe normalization for comparison. Preserves meaningful indicators
+// (Men/Women/U18-U23/Reserve/II/3x3/...). Builds a stable compare KEY; never
+// mutates display text. Ported verbatim from shift-tests.html (35/35 tests passed).
+const ShiftNormalize = {
+  foldAccents(s){ return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, ''); },
+  cleanText(s){
+    let t = String(s == null ? '' : s);
+    t = t.replace(/<\s*br\s*\/?\s*>/gi, ' ').replace(/<[^>]+>/g, ' ');
+    t = t.replace(/&amp;/gi, '&').replace(/&nbsp;/gi, ' ').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&#39;|&apos;/gi, "'").replace(/&quot;/gi, '"');
+    t = t.replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '');
+    return t;
+  },
+  key(s){
+    let t = this.cleanText(s).toLowerCase();
+    t = this.foldAccents(t);
+    t = t.replace(/[\u2018\u2019\u02bc`]/g, "'").replace(/[\u2013\u2014]/g, '-');
+    t = t.replace(/\s*\/\s*/g, '/').replace(/\s*-\s*/g, ' - ').replace(/3\s*x\s*3/g, '3x3');
+    t = t.replace(/[^a-z0-9'/\- ]/g, ' ').replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '');
+    return t;
+  },
+  tokens(s){ return this.key(s).split(/[ /]/).filter(Boolean); }
+};
+
+/* ============================= BR/BG SHIFT — HIERARCHY PARSER (Phase 1, ported) ============================= */
+const HierarchyParser = {
+  _stripDots(rawLine){
+    const m = String(rawLine).match(/^([.\s]*)/);
+    const lead = m ? m[1] : '';
+    const dots = (lead.match(/\./g) || []).length;
+    return { level: dots, content: String(rawLine).slice(lead.length) };
+  },
+  splitFixture(fixtureText){
+    const t = ShiftNormalize.cleanText(fixtureText);
+    const parts = t.split(/ - /);
+    if (parts.length === 2 && parts[0].trim() && parts[1].trim()) return { home: parts[0].trim(), away: parts[1].trim() };
+    return null;
+  },
+  parse(rawText, source, checkType){
+    const result = { source: source||'', checkType: checkType||'', leagues: [], fixtures: [], malformed: [], duplicatesRemoved: 0, totalLines: 0, emptyInput: false, sportsSeen: [] };
+    if (rawText == null || String(rawText).trim() === '') { result.emptyInput = true; return result; }
+    const lines = String(rawText).split(/\r?\n/);
+    let curSport = '', curCountry = '', curLeague = '', order = 0;
+    const seenF = {}, seenL = {}, sportsSet = {};
+    for (let i = 0; i < lines.length; i++){
+      const rawLine = lines[i];
+      if (String(rawLine).trim() === '') continue;
+      result.totalLines++;
+      const { level, content } = this._stripDots(rawLine);
+      const text = ShiftNormalize.cleanText(content);
+      if (!text) continue;
+      if (level <= 1) {
+        curSport = text; curCountry = ''; curLeague = '';
+        if (!sportsSet[ShiftNormalize.key(text)]) { sportsSet[ShiftNormalize.key(text)] = true; result.sportsSeen.push(text); }
+      } else if (level === 2) {
+        curCountry = text; curLeague = '';
+      } else if (level === 3) {
+        if (!curCountry) { result.malformed.push({ source, checkType, level, reason: 'League without a parent country', original: rawLine, text, sport: curSport, country: curCountry, league: curLeague }); continue; }
+        curLeague = text;
+        const lk = curSport + '|' + curCountry + '|' + curLeague;
+        if (!seenL[lk]) { seenL[lk] = true; result.leagues.push({ source, checkType, sport: curSport, country: curCountry, league: curLeague, original: rawLine }); }
+      } else {
+        if (!curLeague) { result.malformed.push({ source, checkType, level, reason: 'Fixture without a parent league', original: rawLine, text, sport: curSport, country: curCountry, league: curLeague }); continue; }
+        const split = this.splitFixture(text);
+        if (!split) { result.malformed.push({ source, checkType, level, reason: 'Fixture cannot be safely split into two teams', original: rawLine, text, sport: curSport, country: curCountry, league: curLeague }); continue; }
+        const fk = [curSport, curCountry, curLeague, split.home, split.away].map(v => ShiftNormalize.key(v)).join('|');
+        if (seenF[fk]) { result.duplicatesRemoved++; continue; }
+        seenF[fk] = true;
+        result.fixtures.push({ source, checkType, importOrder: order++, sport: curSport, country: curCountry, league: curLeague, fixture: text, home: split.home, away: split.away, parseStatus: 'Parsed', original: rawLine });
+      }
+    }
+    return result;
+  }
+};
+
+/* ============================= BR/BG SHIFT — MATCH CONFIG (Phase 3) ============================= */
+// All fuzzy thresholds live here — never scattered through the code.
+const ShiftConfig = {
+  leagueSuggestThreshold: 82,   // token-similarity % to surface a league suggestion
+  teamSuggestThreshold: 82,     // token-similarity % to surface a team suggestion
+  shortNameThreshold: 90,       // stricter cutoff for short names
+  shortNameMaxLen: 6,           // "short" = compare key length <= this
+  ambiguityGap: 6,              // if top two candidate scores are within this gap → Ambiguous
+  minTokenLen: 2,               // ignore trivially short tokens in token overlap
+  maxCandidates: 5              // cap suggestions displayed
+};
+
+/* ============================= BR/BG SHIFT — MATCH ENGINE (Phase 3) ============================= */
+// Accuracy-first resolution against the EXISTING League/Team Mappings.
+// Priority: exact normalized → authoritative alias → conservative fuzzy SUGGESTION.
+// Never writes mappings, never auto-confirms a fuzzy result.
+const ShiftMatch = {
+  // Split a provider league field on "&" into trimmed aliases (existing app convention).
+  aliases(field){
+    if (isNA(field)) return [];
+    return String(field).split('&').map(s => s.trim()).filter(Boolean);
+  },
+
+  // Qualifier tokens that MUST match between two names or the pair is unsafe.
+  _qualifiers: ['men','women','ladies','u16','u17','u18','u19','u20','u21','u22','u23',
+                'junior','juniors','youth','reserve','reserves','b','ii','iii','3x3'],
+
+  // Extract the set of qualifier tokens present in a normalized key.
+  _qualSet(key){
+    const toks = key.split(/[ /]/).filter(Boolean);
+    const s = {};
+    toks.forEach(t => { if (this._qualifiers.indexOf(t) !== -1) s[t] = true; });
+    return s;
+  },
+
+  // A qualifier conflict = one side has a qualifier the other lacks (gender/age/level/format).
+  qualifierConflict(keyA, keyB){
+    const a = this._qualSet(keyA), b = this._qualSet(keyB);
+    const keys = {}; Object.keys(a).forEach(k=>keys[k]=1); Object.keys(b).forEach(k=>keys[k]=1);
+    for (const k in keys) { if (!!a[k] !== !!b[k]) return true; }
+    return false;
+  },
+
+  // Token-set similarity (order-independent), ignoring trivially short tokens.
+  tokenSim(aKey, bKey){
+    const min = ShiftConfig.minTokenLen;
+    const A = aKey.split(/[ /]/).filter(t => t.length >= min);
+    const B = bKey.split(/[ /]/).filter(t => t.length >= min);
+    if (!A.length || !B.length) return aKey === bKey ? 100 : 0;
+    const setB = {}; B.forEach(t => setB[t] = true);
+    let inter = 0; const seen = {};
+    A.forEach(t => { if (setB[t] && !seen[t]) { inter++; seen[t] = true; } });
+    const uniqA = Object.keys(A.reduce((m,t)=>(m[t]=1,m),{})).length;
+    const uniqB = B.length ? Object.keys(setB).length : 0;
+    return Math.round((inter / Math.max(uniqA, uniqB)) * 100);
+  },
+
+  // Build in-memory indexes ONCE per resolve run (no per-record Supabase calls).
+  buildIndex(sport){
+    const nsport = App.normalizeSport(sport);
+    const leagues = state.leagues.filter(l => App.normalizeSport(l.sport) === nsport);
+    const teams = state.teams.filter(t => App.normalizeSport(t.sport) === nsport);
+    const idx = {
+      sport: nsport,
+      leagues, teams,
+      // provider-alias-key → [leagueRecord,...] (per provider)
+      brLeague: {}, bgLeague: {},
+      // "bcmCompKey|providerTeamKey" → [teamRecord,...]
+      brTeam: {}, bgTeam: {}
+    };
+    const push = (map, key, rec) => { if (!key) return; (map[key] = map[key] || []).push(rec); };
+    leagues.forEach(l => {
+      this.aliases(l.betradar).forEach(a => push(idx.brLeague, ShiftNormalize.key(a), l));
+      this.aliases(l.betgenius).forEach(a => push(idx.bgLeague, ShiftNormalize.key(a), l));
+    });
+    teams.forEach(t => {
+      const bcmKey = ShiftNormalize.key(t.bcm_competition);
+      if (!isNA(t.betradar_team)) push(idx.brTeam, bcmKey + '|' + ShiftNormalize.key(t.betradar_team), t);
+      if (!isNA(t.bg_team)) push(idx.bgTeam, bcmKey + '|' + ShiftNormalize.key(t.bg_team), t);
+    });
+    return idx;
+  },
+
+  // Resolve a provider league name → { status, bcm, mappingId, method, score, reason, warnings, suggestions }.
+  resolveLeague(idx, source, providerLeague, country){
+    const out = { status:'', bcm:'', mappingId:null, method:'Unresolved', score:0, reason:'', warnings:[], suggestions:[] };
+    if (isNA(providerLeague)) { out.status='Malformed'; out.reason='Provider league is empty/N/A'; return out; }
+    const map = source === 'BR' ? idx.brLeague : idx.bgLeague;
+    const key = ShiftNormalize.key(providerLeague);
+
+    // Priority 1+2: exact normalized alias match against authoritative mappings.
+    let cands = map[key] || [];
+    // Country restriction (safe): if country given and some candidates share it, prefer those.
+    if (country) {
+      const ck = ShiftNormalize.key(country);
+      const inCountry = cands.filter(l => ShiftNormalize.key(l.country) === ck);
+      if (inCountry.length) cands = inCountry;
+      else if (cands.length) out.warnings.push('Country mismatch: matched by league name within sport, country label differs');
+    }
+    // Distinct BCM competitions among exact candidates
+    const distinctBcm = {}; cands.forEach(l => { distinctBcm[ShiftNormalize.key(l.bcm_competition)] = l; });
+    const distinctKeys = Object.keys(distinctBcm);
+    if (distinctKeys.length === 1) {
+      const l = distinctBcm[distinctKeys[0]];
+      if (isNA(l.bcm_competition)) { out.status='Provider N/A'; out.reason='Mapping exists but BCM competition is N/A'; return out; }
+      out.status='Mapped'; out.bcm=l.bcm_competition; out.mappingId=l.id; out.method='Exact Alias'; out.score=100;
+      out.reason='Exact normalized league alias match'; return out;
+    }
+    if (distinctKeys.length > 1) {
+      out.status='Ambiguous League'; out.method='Unresolved';
+      out.reason='Multiple BCM competitions map to this provider league name';
+      out.suggestions = distinctKeys.slice(0, ShiftConfig.maxCandidates).map(k => ({ name:distinctBcm[k].betradar||distinctBcm[k].betgenius, bcm:distinctBcm[k].bcm_competition, score:100, context:distinctBcm[k].country, reason:'Exact alias, multiple BCM targets', mappingId:distinctBcm[k].id }));
+      return out;
+    }
+
+    // Priority 3: conservative fuzzy SUGGESTION only (never auto-mapped).
+    const short = key.length <= ShiftConfig.shortNameMaxLen;
+    const thresh = short ? ShiftConfig.shortNameThreshold : ShiftConfig.leagueSuggestThreshold;
+    const scored = [];
+    for (const aliasKey in map) {
+      if (this.qualifierConflict(key, aliasKey)) continue; // never cross gender/age/level/format
+      const sc = this.tokenSim(key, aliasKey);
+      if (sc >= thresh) map[aliasKey].forEach(l => scored.push({ l, score: sc, aliasKey }));
+    }
+    scored.sort((a,b)=>b.score-a.score);
+    if (!scored.length) { out.status='League Mapping Required'; out.reason='No verified provider-to-BCM league mapping found'; return out; }
+    // Ambiguous if top two are close OR resolve to different BCM comps.
+    const topBcm = ShiftNormalize.key(scored[0].l.bcm_competition);
+    const close = scored[1] && (scored[0].score - scored[1].score) <= ShiftConfig.ambiguityGap
+                  && ShiftNormalize.key(scored[1].l.bcm_competition) !== topBcm;
+    out.suggestions = scored.slice(0, ShiftConfig.maxCandidates).map(s => ({ name:(s.l.betradar||s.l.betgenius), bcm:s.l.bcm_competition, score:s.score, context:s.l.country, reason:'Fuzzy token suggestion (needs review)', mappingId:s.l.id }));
+    out.status = close ? 'Ambiguous League' : 'League Mapping Required';
+    out.method = 'Fuzzy Suggested'; out.score = scored[0].score;
+    out.reason = close ? 'Multiple close fuzzy candidates — review required' : 'Only a fuzzy suggestion found — confirm before use';
+    return out;
+  },
+
+  // Resolve a provider team → BCM team, restricted to the confirmed BCM competition.
+  resolveTeam(idx, source, bcmComp, providerTeam){
+    const out = { status:'', bcm:'', mappingId:null, method:'Unresolved', score:0, reason:'', warnings:[], suggestions:[] };
+    if (isNA(providerTeam)) { out.status='Malformed'; out.reason='Provider team is empty/N/A'; return out; }
+    const map = source === 'BR' ? idx.brTeam : idx.bgTeam;
+    const bcmKey = ShiftNormalize.key(bcmComp);
+    const teamKey = ShiftNormalize.key(providerTeam);
+
+    // Priority 1: exact within confirmed competition.
+    const exact = map[bcmKey + '|' + teamKey] || [];
+    const distinct = {}; exact.forEach(t => { distinct[ShiftNormalize.key(t.bcm_team)] = t; });
+    const dk = Object.keys(distinct);
+    if (dk.length === 1) {
+      const t = distinct[dk[0]];
+      if (isNA(t.bcm_team)) { out.status='Provider N/A'; out.reason='Team mapping exists but BCM team is N/A'; return out; }
+      out.status='Mapped'; out.bcm=t.bcm_team; out.mappingId=t.id; out.method='Exact Alias'; out.score=100; out.reason='Exact team match within competition'; return out;
+    }
+    if (dk.length > 1) {
+      out.status='Ambiguous Team'; out.reason='Multiple BCM teams for this provider team in the competition';
+      out.suggestions = dk.slice(0, ShiftConfig.maxCandidates).map(k => ({ name:providerTeam, bcm:distinct[k].bcm_team, score:100, context:bcmComp, reason:'Exact, multiple targets', mappingId:distinct[k].id }));
+      return out;
+    }
+
+    // Priority 3: conservative fuzzy within the SAME competition only.
+    const short = teamKey.length <= ShiftConfig.shortNameMaxLen;
+    const thresh = short ? ShiftConfig.shortNameThreshold : ShiftConfig.teamSuggestThreshold;
+    const scored = [];
+    const prefix = bcmKey + '|';
+    for (const k in map) {
+      if (k.indexOf(prefix) !== 0) continue; // competition-restricted
+      const ptKey = k.slice(prefix.length);
+      if (this.qualifierConflict(teamKey, ptKey)) continue;
+      const sc = this.tokenSim(teamKey, ptKey);
+      if (sc >= thresh) map[k].forEach(t => scored.push({ t, score: sc }));
+    }
+    scored.sort((a,b)=>b.score-a.score);
+    if (!scored.length) { out.status='Team Mapping Required'; out.reason='No verified team mapping in the confirmed competition'; return out; }
+    const topBcm = ShiftNormalize.key(scored[0].t.bcm_team);
+    const close = scored[1] && (scored[0].score - scored[1].score) <= ShiftConfig.ambiguityGap && ShiftNormalize.key(scored[1].t.bcm_team) !== topBcm;
+    out.suggestions = scored.slice(0, ShiftConfig.maxCandidates).map(s => ({ name:(source==='BR'?s.t.betradar_team:s.t.bg_team), bcm:s.t.bcm_team, score:s.score, context:bcmComp, reason:'Fuzzy team suggestion (needs review)', mappingId:s.t.id }));
+    out.status = close ? 'Ambiguous Team' : 'Team Mapping Required';
+    out.method = 'Fuzzy Suggested'; out.score = scored[0].score;
+    out.reason = close ? 'Multiple close fuzzy team candidates — review required' : 'Only a fuzzy team suggestion — confirm before use';
+    return out;
+  },
+
+  // Resolve one parsed fixture fully (league then both teams). BR and BG kept separate.
+  resolveFixture(idx, f, selectedSport){
+    const r = {
+      source:f.source, checkType:f.checkType, selectedSport, parsedSport:f.sport, country:f.country,
+      providerLeague:f.league, providerHomeTeam:f.home, providerAwayTeam:f.away,
+      bcmCompetition:'', bcmHomeTeam:'', bcmAwayTeam:'',
+      leagueMappingId:null, homeTeamMappingId:null, awayTeamMappingId:null,
+      leagueStatus:'', homeTeamStatus:'N/A', awayTeamStatus:'N/A', fixtureMappingStatus:'',
+      leagueMatchMethod:'', homeMatchMethod:'', awayMatchMethod:'',
+      leagueScore:0, homeScore:0, awayScore:0,
+      warnings:[], suggestions:{league:[],home:[],away:[]},
+      originalText:f.original, importOrder:f.importOrder
+    };
+    const L = this.resolveLeague(idx, f.source, f.league, f.country);
+    r.leagueStatus=L.status; r.bcmCompetition=L.bcm; r.leagueMappingId=L.mappingId;
+    r.leagueMatchMethod=L.method; r.leagueScore=L.score; r.warnings=r.warnings.concat(L.warnings);
+    r.suggestions.league=L.suggestions;
+    if (L.reason) r.warnings.push('League: '+L.reason);
+
+    if (L.status !== 'Mapped') {
+      r.fixtureMappingStatus = (L.status==='Ambiguous League') ? 'Ambiguous' : L.status;
+      return r;
+    }
+    // League mapped → resolve both teams within the confirmed BCM competition.
+    const H = this.resolveTeam(idx, f.source, L.bcm, f.home);
+    const A = this.resolveTeam(idx, f.source, L.bcm, f.away);
+    r.homeTeamStatus=H.status; r.bcmHomeTeam=H.bcm; r.homeTeamMappingId=H.mappingId; r.homeMatchMethod=H.method; r.homeScore=H.score; r.suggestions.home=H.suggestions;
+    r.awayTeamStatus=A.status; r.bcmAwayTeam=A.bcm; r.awayTeamMappingId=A.mappingId; r.awayMatchMethod=A.method; r.awayScore=A.score; r.suggestions.away=A.suggestions;
+    if (H.reason) r.warnings.push('Home: '+H.reason);
+    if (A.reason) r.warnings.push('Away: '+A.reason);
+
+    if (H.status==='Mapped' && A.status==='Mapped') r.fixtureMappingStatus='Mapping-Ready';
+    else if (H.status==='Ambiguous Team' || A.status==='Ambiguous Team') r.fixtureMappingStatus='Ambiguous';
+    else r.fixtureMappingStatus='Team Mapping Required';
+    return r;
+  },
+
+  // Resolve every parsed BR + BG fixture (BCM is not resolved — it's the comparison target in Phase 4).
+  resolveAll(){
+    const idx = this.buildIndex(shiftState.sport);
+    const out = { BR: [], BG: [] };
+    ['BR','BG'].forEach(src => {
+      const p = shiftState.parsed[src];
+      if (!p || p.emptyInput) return;
+      out[src] = p.fixtures.map(f => this.resolveFixture(idx, f, shiftState.sport));
+    });
+    return out;
+  }
+};
+
+/* ============================= BR/BG SHIFT — COMPARE ENGINE (Phase 4) ============================= */
+// Compares Mapping-Ready provider fixtures against the pasted BCM hierarchy,
+// detects reversed fixtures, consolidates BR+BG, and builds result buckets.
+// No Supabase calls; no automatic creation; possible-reversed stays out of the
+// creation-ready list. Does NOT mutate Phase-2 parsed or Phase-3 resolved objects.
+const ShiftCompare = {
+  buildBcmIndex(){
+    const bcm = shiftState.parsed.BCM;
+    const idx = { fixtureKeys: {}, reversedKeys: {}, competitions: {}, pairCount: {}, byKey: {} };
+    if (!bcm || bcm.emptyInput) return idx;
+    bcm.fixtures.forEach(f => {
+      const comp = ShiftNormalize.key(f.league);
+      const home = ShiftNormalize.key(f.home);
+      const away = ShiftNormalize.key(f.away);
+      const fkey = comp + '|' + home + '|' + away;
+      const rkey = comp + '|' + away + '|' + home;
+      idx.fixtureKeys[fkey] = true;
+      idx.byKey[fkey] = f;
+      idx.reversedKeys[rkey] = f;
+      idx.competitions[comp] = true;
+      idx.pairCount[fkey] = (idx.pairCount[fkey] || 0) + 1;
+    });
+    return idx;
+  },
+
+  compareFixture(r, bcmIdx){
+    const comp = ShiftNormalize.key(r.bcmCompetition);
+    const home = ShiftNormalize.key(r.bcmHomeTeam);
+    const away = ShiftNormalize.key(r.bcmAwayTeam);
+    const fkey = comp + '|' + home + '|' + away;
+    const out = { status:'', reason:'', method:'', bcmCompetitionFound:false, matchedBcmFixture:null, bcmImportOrder:null, warnings: r.warnings.slice() };
+    out.bcmCompetitionFound = !!bcmIdx.competitions[comp];
+    if (bcmIdx.fixtureKeys[fkey]) {
+      const m = bcmIdx.byKey[fkey];
+      out.status = 'Already Created';
+      out.reason = 'Mapped BCM competition, home team, and away team found in pasted BCM hierarchy';
+      out.method = 'Exact Mapped Fixture';
+      out.matchedBcmFixture = m ? m.fixture : '';
+      out.bcmImportOrder = m ? m.importOrder : null;
+      if (bcmIdx.pairCount[fkey] > 1) out.warnings.push('Duplicate BCM pairing: same mapped fixture appears more than once in BCM — cannot distinguish occurrences without dates/IDs');
+      return out;
+    }
+    if (bcmIdx.reversedKeys[fkey]) {
+      const m = bcmIdx.reversedKeys[fkey];
+      out.status = 'Possible Reversed Fixture';
+      out.reason = 'Same mapped teams found in BCM with home/away positions reversed';
+      out.method = 'Reversed Match';
+      out.matchedBcmFixture = m ? m.fixture : '';
+      out.bcmImportOrder = m ? m.importOrder : null;
+      return out;
+    }
+    out.status = 'To Be Created';
+    out.method = 'Not Found In BCM';
+    if (out.bcmCompetitionFound) { out.reason = 'Mapped fixture not found under the BCM competition'; }
+    else { out.reason = 'Mapped BCM competition not found in pasted BCM hierarchy'; out.warnings.push('BCM competition was absent from the pasted BCM hierarchy. Confirm that the BCM export covers the complete required check range.'); }
+    return out;
+  },
+
+  run(){
+    const resolved = shiftState.resolved || { BR:[], BG:[] };
+    const bcmIdx = this.buildBcmIndex();
+    shiftState.bcmIndex = bcmIdx;
+    const buckets = { 'League Mapping Required': [], 'Team Mapping Required': [], 'Ambiguous': [], 'Malformed': [], 'Possible Reversed Fixture': [], 'Needs Investigation': [], 'Already Created': [], 'To Be Created': [] };
+    const allProcessed = [];
+    const providerPairSeen = { BR:{}, BG:{} };
+    const consolMap = {};
+    ['BR','BG'].forEach(src => {
+      (resolved[src] || []).forEach(r => {
+        allProcessed.push(r);
+        const st = r.fixtureMappingStatus;
+        if (st !== 'Mapping-Ready') {
+          const key = (st === 'League Mapping Required' || st === 'Team Mapping Required' || st === 'Ambiguous' || st === 'Malformed') ? st : 'Team Mapping Required';
+          buckets[key].push(this._decorate(r, { status: st, reason: (r.warnings[0]||'Not mapping-ready'), warnings:r.warnings }));
+          return;
+        }
+        const cmp = this.compareFixture(r, bcmIdx);
+        const consKey = [ShiftNormalize.key(r.selectedSport), ShiftNormalize.key(r.bcmCompetition), ShiftNormalize.key(r.bcmHomeTeam), ShiftNormalize.key(r.bcmAwayTeam)].join('|');
+        if (providerPairSeen[src][consKey]) cmp.warnings.push('Duplicate provider pairing within ' + src + ' — multiple rows map to the same fixture');
+        providerPairSeen[src][consKey] = true;
+        if (cmp.status === 'Possible Reversed Fixture') { buckets['Possible Reversed Fixture'].push(this._decorate(r, cmp, 'Needs Investigation')); return; }
+        consolMap[consKey] = consolMap[consKey] || { key: consKey };
+        consolMap[consKey][src] = { r, cmp };
+      });
+    });
+    Object.keys(consolMap).forEach(k => {
+      const entry = consolMap[k], br = entry.BR, bg = entry.BG;
+      let provider, status, reason, cmp, brRec = br?br.r:null, bgRec = bg?bg.r:null, base;
+      if (br && bg) {
+        provider = 'BR and BG';
+        if (br.cmp.status === bg.cmp.status) { status = br.cmp.status; cmp = br.cmp; base = br.r; reason = br.cmp.reason; }
+        else { status = 'Needs Investigation'; cmp = br.cmp; base = br.r; reason = 'BR and BG resolved to the same BCM fixture but produced conflicting comparison outcomes (BR: ' + br.cmp.status + ', BG: ' + bg.cmp.status + ')'; }
+      } else if (br) { provider='BR Only'; status=br.cmp.status; cmp=br.cmp; base=br.r; reason=br.cmp.reason; }
+      else { provider='BG Only'; status=bg.cmp.status; cmp=bg.cmp; base=bg.r; reason=bg.cmp.reason; }
+      const row = this._buildConsolidated(base, brRec, bgRec, provider, status, reason, cmp);
+      if (status === 'Needs Investigation') buckets['Needs Investigation'].push(row);
+      else if (status === 'Already Created') buckets['Already Created'].push(row);
+      else if (status === 'To Be Created') buckets['To Be Created'].push(row);
+    });
+    shiftState.consolidatedResults = buckets;
+    shiftState.allProcessed = allProcessed;
+    shiftState.comparisonCompletedAt = new Date().toISOString();
+    shiftState.resultCounts = this._counts(buckets, allProcessed);
+    return buckets;
+  },
+
+  _decorate(r, cmp, defaultReview){
+    return {
+      resultId: 'R' + (ShiftCompare._rid++),
+      checkType: r.checkType, sport: r.selectedSport, country: r.country,
+      bcmCompetition: r.bcmCompetition, bcmHomeTeam: r.bcmHomeTeam, bcmAwayTeam: r.bcmAwayTeam,
+      brCompetition: r.source==='BR'?r.providerLeague:'', brFixture: r.source==='BR'?((r.providerHomeTeam||'')+' - '+(r.providerAwayTeam||'')):'',
+      bgCompetition: r.source==='BG'?r.providerLeague:'', bgFixture: r.source==='BG'?((r.providerHomeTeam||'')+' - '+(r.providerAwayTeam||'')):'',
+      availableProvider: r.source==='BR'?'BR Only':'BG Only',
+      matchStatus: cmp.status, reason: cmp.reason, comparisonMethod: cmp.method||'',
+      bcmCompetitionFound: cmp.bcmCompetitionFound||false, matchedBcmFixture: cmp.matchedBcmFixture||'',
+      bcmImportOrder: (cmp.bcmImportOrder==null?'':cmp.bcmImportOrder), reviewStatus: defaultReview || 'Pending Review', notes: '',
+      warnings: cmp.warnings||[],
+      brMappingIds: r.source==='BR'?{league:r.leagueMappingId,home:r.homeTeamMappingId,away:r.awayTeamMappingId}:null,
+      bgMappingIds: r.source==='BG'?{league:r.leagueMappingId,home:r.homeTeamMappingId,away:r.awayTeamMappingId}:null,
+      sourceRefs: [{source:r.source, importOrder:r.importOrder, original:r.originalText}]
+    };
+  },
+
+  _buildConsolidated(base, brRec, bgRec, provider, status, reason, cmp){
+    const defReview = (status==='Needs Investigation') ? 'Needs Investigation' : 'Pending Review';
+    const refs = [];
+    if (brRec) refs.push({source:'BR', importOrder:brRec.importOrder, original:brRec.originalText});
+    if (bgRec) refs.push({source:'BG', importOrder:bgRec.importOrder, original:bgRec.originalText});
+    return {
+      resultId: 'R' + (ShiftCompare._rid++),
+      checkType: base.checkType, sport: base.selectedSport, country: base.country,
+      bcmCompetition: base.bcmCompetition, bcmHomeTeam: base.bcmHomeTeam, bcmAwayTeam: base.bcmAwayTeam,
+      brCompetition: brRec ? brRec.providerLeague : '', brFixture: brRec ? ((brRec.providerHomeTeam||'')+' - '+(brRec.providerAwayTeam||'')) : '',
+      bgCompetition: bgRec ? bgRec.providerLeague : '', bgFixture: bgRec ? ((bgRec.providerHomeTeam||'')+' - '+(bgRec.providerAwayTeam||'')) : '',
+      availableProvider: provider, matchStatus: status, reason: reason, comparisonMethod: cmp.method||'',
+      bcmCompetitionFound: cmp.bcmCompetitionFound||false, matchedBcmFixture: cmp.matchedBcmFixture||'',
+      bcmImportOrder: (cmp.bcmImportOrder==null?'':cmp.bcmImportOrder), reviewStatus: defReview, notes: '',
+      warnings: (cmp.warnings||[]).slice(),
+      brMappingIds: brRec ? {league:brRec.leagueMappingId,home:brRec.homeTeamMappingId,away:brRec.awayTeamMappingId} : null,
+      bgMappingIds: bgRec ? {league:bgRec.leagueMappingId,home:bgRec.homeTeamMappingId,away:bgRec.awayTeamMappingId} : null,
+      sourceRefs: refs
+    };
+  },
+
+  _counts(buckets, allProcessed){
+    const p = shiftState.parsed;
+    const brF = p.BR && !p.BR.emptyInput ? p.BR.fixtures.length : 0;
+    const bgF = p.BG && !p.BG.emptyInput ? p.BG.fixtures.length : 0;
+    const bcmF = p.BCM && !p.BCM.emptyInput ? p.BCM.fixtures.length : 0;
+    const dup = (p.BR?p.BR.duplicatesRemoved:0)+(p.BG?p.BG.duplicatesRemoved:0)+(p.BCM?p.BCM.duplicatesRemoved:0);
+    const mappingReady = allProcessed.filter(r=>r.fixtureMappingStatus==='Mapping-Ready').length;
+    const consolidated = buckets['To Be Created'].concat(buckets['Already Created']).filter(r=>r.availableProvider==='BR and BG').length;
+    return {
+      brFixtures: brF, bgFixtures: bgF, bcmFixtures: bcmF, mappingReady,
+      toBeCreated: buckets['To Be Created'].length, alreadyCreated: buckets['Already Created'].length,
+      leagueMappingRequired: buckets['League Mapping Required'].length, teamMappingRequired: buckets['Team Mapping Required'].length,
+      ambiguous: buckets['Ambiguous'].length, possibleReversed: buckets['Possible Reversed Fixture'].length,
+      needsInvestigation: buckets['Needs Investigation'].length, malformed: buckets['Malformed'].length,
+      duplicatesRemoved: dup, consolidated
+    };
+  },
+  _rid: 1
+};
+
+/* ============================= BR/BG SHIFT — LIMITS (Phase 5) ============================= */
+const ShiftLimits = { maxRawChars: 500000, maxFixturesPerSource: 20000, maxNotesLen: 2000, maxSavedResults: 20000 };
+
+/* ============================= BR/BG SHIFT — CONSISTENCY VALIDATOR (Phase 5) ============================= */
+const ShiftValidate = {
+  run(){
+    const errors = [];
+    const b = shiftState.consolidatedResults, c = shiftState.resultCounts;
+    if (!b || !c) return { ok:false, errors:['No comparison results to validate'] };
+    b['To Be Created'].forEach(r => { if (r.matchStatus !== 'To Be Created') errors.push('Non "To Be Created" row in creation-ready list: '+r.resultId); });
+    if (c.toBeCreated !== b['To Be Created'].length) errors.push('To Be Created count mismatch');
+    if (c.alreadyCreated !== b['Already Created'].length) errors.push('Already Created count mismatch');
+    if (c.possibleReversed !== b['Possible Reversed Fixture'].length) errors.push('Possible Reversed count mismatch');
+    const totalRows = Object.keys(b).reduce((n,k)=>n+b[k].length,0);
+    if (totalRows === 0 && (c.brFixtures + c.bgFixtures) > 0) errors.push('Provider fixtures exist but produced no result rows');
+    Object.keys(b).forEach(k => b[k].forEach(r => { if ((r.notes||'').length > ShiftLimits.maxNotesLen) errors.push('Notes too long on '+r.resultId); }));
+    return { ok: errors.length === 0, errors };
+  }
+};
+
+/* ============================= BR/BG SHIFT — STORE (Phase 5 persistence) ============================= */
+// All Supabase reads/writes for saved checks. Never claims success before the DB
+// confirms; preserves local state on failure. History list selects metadata only.
+const ShiftStore = {
+  LIST_COLS: 'id,check_type,sport,job_status,created_by,created_at,updated_by,updated_at,summary,archived',
+  buildPayload(){
+    const s = shiftState;
+    return {
+      check_type: s.checkType, sport: s.sport, job_status: s.jobStatus || 'Draft',
+      created_by: (state.user && state.user.username) || 'unknown',
+      br_raw: (document.getElementById('shift-br').value || '').slice(0, ShiftLimits.maxRawChars),
+      bg_raw: (document.getElementById('shift-bg').value || '').slice(0, ShiftLimits.maxRawChars),
+      bcm_raw: (document.getElementById('shift-bcm').value || '').slice(0, ShiftLimits.maxRawChars),
+      summary: s.resultCounts || {}, results: s.consolidatedResults || null,
+      comparison_warnings: s.warnings || [], comparison_completed_at: s.comparisonCompletedAt || null
+    };
+  },
+  async insert(jobStatus){
+    const body = this.buildPayload(); body.job_status = jobStatus; body.updated_by = body.created_by;
+    const rows = await sb('shift_checks', { method:'POST', prefer:'return=representation', body:[body] });
+    return rows && rows[0];
+  },
+  async update(id, jobStatus, knownUpdatedAt){
+    const cur = await sb('shift_checks', { query:`?id=eq.${id}&select=updated_at` });
+    if (cur && cur[0] && knownUpdatedAt && cur[0].updated_at !== knownUpdatedAt) { const e = new Error('This check was updated elsewhere since you opened it.'); e.conflict = true; throw e; }
+    const body = this.buildPayload(); body.job_status = jobStatus; body.updated_by = (state.user && state.user.username) || 'unknown';
+    const rows = await sb('shift_checks', { method:'PATCH', query:`?id=eq.${id}`, prefer:'return=representation', body });
+    return rows && rows[0];
+  },
+  async listChecks(includeArchived){
+    const arch = includeArchived ? '' : '&archived=eq.false';
+    return await sb('shift_checks', { query:`?select=${this.LIST_COLS}${arch}&order=updated_at.desc&limit=500` });
+  },
+  async getCheck(id){ const rows = await sb('shift_checks', { query:`?id=eq.${id}&select=*` }); return rows && rows[0]; },
+  async archive(id){ return await sb('shift_checks', { method:'PATCH', query:`?id=eq.${id}`, body:{ archived:true, archived_by:(state.user&&state.user.username)||'unknown', archived_at:new Date().toISOString(), job_status:'Archived' } }); },
+  async remove(id){ return await sb('shift_checks', { method:'DELETE', query:`?id=eq.${id}` }); }
+};
+
+/* ============================= BR/BG SHIFT — STATE + TAB (Phase 2) ============================= */
+// Isolated state so BR/BG/BCM parsed results can never overwrite each other,
+// and so 3-Day / 10th-Day sessions are kept separate.
+const shiftState = {
+  checkType: '3day',
+  sport: 'Basketball',
+  parsed: { BR: null, BG: null, BCM: null },
+  resolved: null,          // { BR:[...], BG:[...] } from ShiftMatch.resolveAll()
+  warnings: [],
+  previewSource: 'BR',
+  valFilter: 'all',        // league/team validation status filter
+  dirty: false,
+  parsing: false,
+  // Phase 4
+  comparisonRunning: false,
+  bcmIndex: null,
+  consolidatedResults: null,   // buckets by status
+  allProcessed: null,
+  resultCounts: null,
+  resultTab: 'To Be Created',
+  resultSearch: '',
+  comparisonCompletedAt: null,
+  comparisonStale: false,
+  // Phase 5
+  checkId: null,            // active saved check UUID (null = unsaved)
+  jobStatus: 'Draft',
+  savedUpdatedAt: null,     // updated_at at open/save time (optimistic conflict guard)
+  savedCreatedBy: null, savedCreatedAt: null,
+  savingChecks: false,
+  historyLoaded: false, historyIncludeArchived: false
+};
+
+const ShiftTab = {
+  enter(){
+    // Default the sport toggle to the app's current sport on first entry.
+    if (!shiftState.parsed.BR && !shiftState.parsed.BG && !shiftState.parsed.BCM) {
+      this.setSport(App.normalizeSport(state.sport) === 'Ice Hockey' ? 'Ice Hockey' : 'Basketball', true);
+    }
+    this._syncToggles();
+  },
+  markDirty(){
+    shiftState.dirty = true;
+    // Editing raw input invalidates any completed comparison and disables export.
+    if (shiftState.consolidatedResults) {
+      shiftState.comparisonStale = true;
+      const note = document.getElementById('shift-stale-note'); if (note) note.style.display = 'block';
+      const ex = document.getElementById('shift-export-btn'); if (ex) ex.disabled = true;
+    }
+  },
+  _updateCompareEnabled(){
+    // Enable Compare when a provider fixture exists, BCM is parsed, and no blocking sport error.
+    const p = shiftState.parsed;
+    const hasProvider = (p.BR && !p.BR.emptyInput && p.BR.fixtures.length) || (p.BG && !p.BG.emptyInput && p.BG.fixtures.length);
+    const hasBcm = p.BCM && !p.BCM.emptyInput && p.BCM.fixtures.length;
+    const blockingSportError = shiftState.warnings.some(w => w.level === 'error');
+    const btn = document.getElementById('shift-compare-btn');
+    if (btn) {
+      const ok = hasProvider && hasBcm && !blockingSportError;
+      btn.disabled = !ok;
+      btn.title = ok ? 'Compare provider fixtures against BCM' : 'Parse BR/BG and BCM data first (and resolve any multiple-sport error)';
+    }
+  },
+
+  setCheckType(ct){
+    if (ct !== shiftState.checkType && (shiftState.parsed.BR || shiftState.parsed.BG || shiftState.parsed.BCM)) {
+      if (!confirm('Switching check type will clear the current parsed preview so 3-Day and 10th-Day data are never mixed. Continue?')) { this._syncToggles(); return; }
+      this._resetResults();
+    }
+    shiftState.checkType = ct;
+    this._syncToggles();
+  },
+  setSport(sp, silent){
+    if (!silent && sp !== shiftState.sport && (shiftState.parsed.BR || shiftState.parsed.BG || shiftState.parsed.BCM)) {
+      if (!confirm('Switching sport will clear the current parsed preview. Continue?')) { this._syncToggles(); return; }
+      this._resetResults();
+    }
+    shiftState.sport = sp;
+    this._syncToggles();
+  },
+  _syncToggles(){
+    const set = (id, on) => { const e = document.getElementById(id); if (e) e.classList.toggle('active', on); };
+    set('shift-ct-3day', shiftState.checkType === '3day');
+    set('shift-ct-10th', shiftState.checkType === '10th');
+    set('shift-sp-bk', shiftState.sport === 'Basketball');
+    set('shift-sp-ih', shiftState.sport === 'Ice Hockey');
+  },
+
+  clearAll(){
+    const hasData = ['shift-br','shift-bg','shift-bcm'].some(id => (document.getElementById(id).value || '').trim())
+      || shiftState.parsed.BR || shiftState.parsed.BG || shiftState.parsed.BCM;
+    if (hasData && !confirm('Clear all pasted and parsed BR/BG Shift data? This cannot be undone.')) return;
+    document.getElementById('shift-br').value = '';
+    document.getElementById('shift-bg').value = '';
+    document.getElementById('shift-bcm').value = '';
+    this._resetResults();
+    shiftState.dirty = false;
+    toast('BR/BG Shift inputs cleared');
+  },
+  _resetResults(){
+    shiftState.parsed = { BR: null, BG: null, BCM: null };
+    shiftState.resolved = null;
+    shiftState.warnings = [];
+    shiftState.consolidatedResults = null; shiftState.allProcessed = null; shiftState.resultCounts = null;
+    shiftState.bcmIndex = null; shiftState.comparisonCompletedAt = null; shiftState.comparisonStale = false;
+    shiftState.checkId = null; shiftState.jobStatus = 'Draft'; shiftState.savedUpdatedAt = null; shiftState.savedCreatedBy = null; shiftState.savedCreatedAt = null;
+    ['shift-warnings','shift-summary','shift-preview','shift-malformed','shift-validation','shift-results-summary','shift-results','shift-stale-note'].forEach(id => { const e = document.getElementById(id); if (e) e.style.display = 'none'; });
+    const cb = document.getElementById('shift-compare-btn'); if (cb) cb.disabled = true;
+    const ex = document.getElementById('shift-export-btn'); if (ex) ex.disabled = true;
+  },
+
+  async parseAndPreview(){
+    if (shiftState.parsing) return;
+    shiftState.parsing = true;
+    const btn = document.getElementById('shift-parse-btn');
+    btn.disabled = true; const label = btn.textContent; btn.textContent = 'Parsing…';
+    try {
+      // Yield so the "Parsing…" state paints for large inputs.
+      await new Promise(r => setTimeout(r, 30));
+      const ct = shiftState.checkType, sport = shiftState.sport;
+      const br = HierarchyParser.parse(document.getElementById('shift-br').value, 'BR', ct);
+      const bg = HierarchyParser.parse(document.getElementById('shift-bg').value, 'BG', ct);
+      const bcm = HierarchyParser.parse(document.getElementById('shift-bcm').value, 'BCM', ct);
+      shiftState.parsed = { BR: br, BG: bg, BCM: bcm };
+
+      // Validation: selected sport must agree with each non-empty input; one input must not carry multiple sports.
+      const warnings = [];
+      [['Betradar', br], ['Betgenius', bg], ['BCM', bcm]].forEach(([name, r]) => {
+        if (r.emptyInput) return;
+        if (r.sportsSeen.length > 1) {
+          warnings.push({ level: 'error', msg: `${name} input contains multiple sports: ${r.sportsSeen.join(', ')}. Process one sport at a time.` });
+        } else if (r.sportsSeen.length === 1 && App.normalizeSport(r.sportsSeen[0]) !== App.normalizeSport(sport)) {
+          warnings.push({ level: 'warn', msg: `${name} input sport "${r.sportsSeen[0]}" does not match the selected sport "${sport}".` });
+        }
+      });
+      if (br.emptyInput && bg.emptyInput && bcm.emptyInput) {
+        warnings.push({ level: 'warn', msg: 'All three inputs are empty. Paste at least one hierarchy to preview.' });
+      }
+      shiftState.warnings = warnings;
+
+      this._renderWarnings();
+      this._renderSummary();
+      this._renderMalformed();
+      // Choose a sensible default preview source (first non-empty).
+      shiftState.previewSource = !br.emptyInput ? 'BR' : (!bg.emptyInput ? 'BG' : 'BCM');
+      this.setPreview(shiftState.previewSource);
+      document.getElementById('shift-preview').style.display = 'block';
+
+      // Phase 3: resolve BR/BG leagues + teams against existing mappings.
+      this.resolveMappings();
+
+      const totF = br.fixtures.length + bg.fixtures.length + bcm.fixtures.length;
+      const totM = br.malformed.length + bg.malformed.length + bcm.malformed.length;
+      const totD = br.duplicatesRemoved + bg.duplicatesRemoved + bcm.duplicatesRemoved;
+      toast(`Parsed ${totF} fixtures · ${totM} malformed · ${totD} duplicates removed`);
+    } catch(e){
+      toast('Parse error: ' + e.message, true);
+    } finally {
+      shiftState.parsing = false; btn.disabled = false; btn.textContent = label;
+    }
+  },
+
+  _renderWarnings(){
+    const el = document.getElementById('shift-warnings');
+    if (!shiftState.warnings.length) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.innerHTML = shiftState.warnings.map(w => {
+      const isErr = w.level === 'error';
+      const c = isErr ? 'var(--danger)' : 'var(--warn)';
+      const bg = isErr ? 'var(--danger-soft)' : 'var(--warn-soft)';
+      return `<div style="background:${bg};color:${c};border:1px solid ${c};border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:13px;">${isErr?'⛔':'⚠'} ${escapeHtml(w.msg)}</div>`;
+    }).join('');
+  },
+
+  _renderSummary(){
+    const p = shiftState.parsed;
+    const el = document.getElementById('shift-summary');
+    el.style.display = 'block';
+    const card = (label, valBR, valBG, valBCM) => `
+      <div class="stat-card"><div class="num">${valBR + valBG + valBCM}</div><div class="label">${escapeHtml(label)}</div>
+      <div style="font-size:10px;color:var(--text-faint);margin-top:4px;font-family:var(--font-mono);">BR ${valBR} · BG ${valBG} · BCM ${valBCM}</div></div>`;
+    const emptyList = ['BR','BG','BCM'].filter(k => p[k] && p[k].emptyInput);
+    el.innerHTML = `<div class="stat-grid" style="margin-bottom:18px;">
+      ${card('Total lines', p.BR.totalLines, p.BG.totalLines, p.BCM.totalLines)}
+      ${card('Parsed leagues', p.BR.leagues.length, p.BG.leagues.length, p.BCM.leagues.length)}
+      ${card('Parsed fixtures', p.BR.fixtures.length, p.BG.fixtures.length, p.BCM.fixtures.length)}
+      ${card('Duplicates removed', p.BR.duplicatesRemoved, p.BG.duplicatesRemoved, p.BCM.duplicatesRemoved)}
+      ${card('Malformed rows', p.BR.malformed.length, p.BG.malformed.length, p.BCM.malformed.length)}
+      <div class="stat-card"><div class="num">${emptyList.length}</div><div class="label">Empty inputs</div>
+      <div style="font-size:10px;color:var(--text-faint);margin-top:4px;font-family:var(--font-mono);">${emptyList.length ? escapeHtml(emptyList.join(', ')) : 'none'}</div></div>
+    </div>`;
+  },
+
+  setPreview(src){
+    shiftState.previewSource = src;
+    ['BR','BG','BCM'].forEach(s => { const b = document.getElementById('shift-pv-'+s); if (b) b.classList.toggle('active', s===src); });
+    const r = shiftState.parsed[src];
+    const tbody = document.getElementById('shift-preview-tbody');
+    const note = document.getElementById('shift-preview-note');
+    if (!r || r.emptyInput) {
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state" style="padding:30px;"><div class="ic">📋</div>No ${escapeHtml(src)} data pasted.</div></td></tr>`;
+      note.textContent = ''; return;
+    }
+    if (!r.fixtures.length) {
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state" style="padding:30px;"><div class="ic">📋</div>No valid fixtures parsed from ${escapeHtml(src)}. Check the Malformed section below.</div></td></tr>`;
+      note.textContent = ''; return;
+    }
+    const LIMIT = 500;
+    const rows = r.fixtures.slice(0, LIMIT);
+    tbody.innerHTML = rows.map(f => `<tr>
+      <td>${escapeHtml(f.source)}</td>
+      <td>${escapeHtml(f.sport)}</td>
+      <td>${escapeHtml(f.country)}</td>
+      <td>${escapeHtml(f.league)}</td>
+      <td>${escapeHtml(f.home)}</td>
+      <td>${escapeHtml(f.away)}</td>
+      <td><span class="badge">${escapeHtml(f.parseStatus)}</span></td>
+      <td style="font-family:var(--font-mono);">${f.importOrder}</td>
+    </tr>`).join('');
+    note.textContent = r.fixtures.length > LIMIT ? `Showing first ${LIMIT} of ${r.fixtures.length} fixtures.` : `${r.fixtures.length} fixtures.`;
+  },
+
+  _renderMalformed(){
+    const p = shiftState.parsed;
+    const all = [].concat(p.BR.malformed, p.BG.malformed, p.BCM.malformed);
+    const el = document.getElementById('shift-malformed');
+    if (!all.length) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.innerHTML = `<div class="panel">
+      <div class="panel-title">⚠ Malformed Input — Review (${all.length})</div>
+      <div class="table-wrap" style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Source</th><th>Level</th><th>Reason</th><th>Sport</th><th>Country</th><th>League</th><th>Original Text</th></tr></thead>
+          <tbody>${all.slice(0,500).map(m => `<tr>
+            <td>${escapeHtml(m.source)}</td>
+            <td style="font-family:var(--font-mono);">${m.level}</td>
+            <td>${escapeHtml(m.reason)}</td>
+            <td>${escapeHtml(m.sport||'')}</td>
+            <td>${escapeHtml(m.country||'')}</td>
+            <td>${escapeHtml(m.league||'')}</td>
+            <td style="font-family:var(--font-mono);font-size:11px;">${escapeHtml(m.original||'')}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>`;
+  },
+
+  /* ---------- Phase 3: mapping resolution + validation UI ---------- */
+  resolveMappings(){
+    shiftState.resolved = ShiftMatch.resolveAll();
+    shiftState.valFilter = 'all';
+    this._renderValidation();
+    document.getElementById('shift-validation').style.display = 'block';
+    this._updateCompareEnabled();
+  },
+
+  _allResolved(){
+    const r = shiftState.resolved || { BR:[], BG:[] };
+    return [].concat(r.BR || [], r.BG || []);
+  },
+
+  setValFilter(f){ shiftState.valFilter = f; this._renderValidation(); },
+
+  _renderValidation(){
+    const all = this._allResolved();
+    const el = document.getElementById('shift-validation');
+    if (!all.length) {
+      el.innerHTML = `<div class="panel"><div class="empty-state" style="padding:30px;"><div class="ic">🔗</div>No BR/BG fixtures to validate. Paste Betradar or Betgenius data and parse first.</div></div>`;
+      return;
+    }
+    // Status counts (fixture-level).
+    const counts = {};
+    all.forEach(r => { counts[r.fixtureMappingStatus] = (counts[r.fixtureMappingStatus]||0)+1; });
+    const order = ['Mapping-Ready','Team Mapping Required','League Mapping Required','Ambiguous','Not in Euro Desk','Provider N/A','Malformed'];
+    const chips = order.filter(s=>counts[s]).map(s =>
+      `<button class="btn btn-sm ${shiftState.valFilter===s?'btn-primary':'btn-ghost'}" onclick="ShiftTab.setValFilter('${s}')">${escapeHtml(s)} (${counts[s]})</button>`
+    ).join(' ');
+    const allBtn = `<button class="btn btn-sm ${shiftState.valFilter==='all'?'btn-primary':'btn-ghost'}" onclick="ShiftTab.setValFilter('all')">All (${all.length})</button>`;
+
+    const rows = shiftState.valFilter==='all' ? all : all.filter(r=>r.fixtureMappingStatus===shiftState.valFilter);
+
+    // League validation rows (one per fixture, league-level).
+    const leagueRows = rows.map((r,i) => {
+      const idx = all.indexOf(r);
+      const action = (r.leagueStatus==='League Mapping Required' || r.leagueStatus==='Ambiguous League')
+        ? `<button class="btn btn-sm btn-secondary" onclick="ShiftTab.openInMappings(${idx},'league')">Open in Mappings</button>` : '';
+      return `<tr>
+        <td>${escapeHtml(r.source)}</td>
+        <td>${escapeHtml(r.selectedSport)}</td>
+        <td>${escapeHtml(r.country)}</td>
+        <td>${escapeHtml(r.providerLeague)}</td>
+        <td>${r.bcmCompetition?escapeHtml(r.bcmCompetition):'<span class="na-tag">—</span>'}</td>
+        <td>${this._statusBadge(r.leagueStatus)}</td>
+        <td>${escapeHtml(r.leagueMatchMethod)}</td>
+        <td>${r.leagueScore?escapeHtml(r.leagueScore+'%'):''}</td>
+        <td style="font-size:11px;color:var(--text-dim);">${escapeHtml((r.warnings.find(w=>w.indexOf('League:')===0)||'').replace('League:','').trim())}</td>
+        <td>${action}</td>
+      </tr>`;
+    }).join('');
+
+    // Team validation rows (home + away when league mapped).
+    let teamRows = '';
+    rows.forEach(r => {
+      const idx = all.indexOf(r);
+      if (r.leagueStatus !== 'Mapped') return;
+      [['Home',r.providerHomeTeam,r.bcmHomeTeam,r.homeTeamStatus,r.homeMatchMethod,r.homeScore,'home'],
+       ['Away',r.providerAwayTeam,r.bcmAwayTeam,r.awayTeamStatus,r.awayMatchMethod,r.awayScore,'away']].forEach(([side,pt,bt,st,mm,sc,key])=>{
+        const action = (st==='Team Mapping Required'||st==='Ambiguous Team')
+          ? `<button class="btn btn-sm btn-secondary" onclick="ShiftTab.openInMappings(${idx},'${key}')">Open in Mappings</button>` : '';
+        teamRows += `<tr>
+          <td>${escapeHtml(r.source)}</td>
+          <td>${escapeHtml(r.providerLeague)}</td>
+          <td>${escapeHtml(pt)}</td>
+          <td>${escapeHtml(side)}</td>
+          <td>${escapeHtml(r.bcmCompetition)}</td>
+          <td>${bt?escapeHtml(bt):'<span class="na-tag">—</span>'}</td>
+          <td>${this._statusBadge(st)}</td>
+          <td>${escapeHtml(mm)}</td>
+          <td>${sc?escapeHtml(sc+'%'):''}</td>
+          <td>${action}</td>
+        </tr>`;
+      });
+    });
+
+    el.innerHTML = `
+      <div class="panel">
+        <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <span>🔗 Mapping Validation</span>
+          <button class="btn btn-sm btn-secondary" onclick="ShiftTab.reprocessAll()">↻ Refresh mappings & reprocess</button>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">${allBtn} ${chips}</div>
+
+        <div style="font-weight:700;font-size:14px;margin:6px 0;">League Validation</div>
+        <div class="table-wrap" style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Source</th><th>Sport</th><th>Country</th><th>Provider League</th><th>BCM Competition</th><th>Status</th><th>Method</th><th>Score</th><th>Reason</th><th>Action</th></tr></thead>
+            <tbody>${leagueRows || `<tr><td colspan="10"><div class="empty-state" style="padding:20px;">No leagues for this filter.</div></td></tr>`}</tbody>
+          </table>
+        </div>
+
+        <div style="font-weight:700;font-size:14px;margin:18px 0 6px;">Team Validation <span style="font-weight:400;color:var(--text-faint);font-size:12px;">(only for mapped leagues)</span></div>
+        <div class="table-wrap" style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Source</th><th>Provider League</th><th>Provider Team</th><th>Side</th><th>BCM Competition</th><th>BCM Team</th><th>Status</th><th>Method</th><th>Score</th><th>Action</th></tr></thead>
+            <tbody>${teamRows || `<tr><td colspan="10"><div class="empty-state" style="padding:20px;">No teams to validate for this filter.</div></td></tr>`}</tbody>
+          </table>
+        </div>
+      </div>`;
+  },
+
+  _statusBadge(status){
+    const cls = (status==='Mapped'||status==='Mapping-Ready') ? 'style="background:var(--success-soft);color:var(--success);"'
+      : (/Ambiguous/.test(status)) ? 'style="background:var(--warn-soft);color:var(--warn);"'
+      : (/Required/.test(status)) ? 'style="background:var(--warn-soft);color:var(--warn);"'
+      : (status==='Malformed') ? 'style="background:var(--danger-soft);color:var(--danger);"'
+      : 'style="background:var(--surface-alt);color:var(--text-dim);"';
+    return `<span class="badge" ${cls}>${escapeHtml(status)}</span>`;
+  },
+
+  // Open the existing Mappings/Add flow, prefilled, WITHOUT losing the Shift session.
+  openInMappings(idx, which){
+    const r = this._allResolved()[idx];
+    if (!r) return;
+    logHistory('Open Mappings','shift', `BR/BG Shift → Mappings for ${which} (${r.source} / ${r.providerLeague})`);
+    UI.switchTab('add');
+    if (which === 'league') {
+      AddTab.setType('league');
+      document.getElementById('al-country').value = r.country || '';
+      document.getElementById('al-bcm').value = r.bcmCompetition || '';
+      // Prefill the provider field for the correct source.
+      if (r.source === 'BR') document.getElementById('al-br').value = r.providerLeague || '';
+      else document.getElementById('al-bg').value = r.providerLeague || '';
+      toast('Prefilled a League mapping. Save it, then return to BR/BG Shift and reprocess.');
+    } else {
+      AddTab.setType('team');
+      // Team form uses cascading selects; set country then trigger comp population.
+      const cSel = document.getElementById('at-country');
+      if (cSel) { cSel.value = r.country || ''; AddTab.onCountryChange(); }
+      // Prefill provider comp/team text fields.
+      const provTeam = which==='home' ? r.providerHomeTeam : r.providerAwayTeam;
+      if (r.source === 'BR') {
+        document.getElementById('at-brcomp').value = r.providerLeague || '';
+        document.getElementById('at-brteam').value = provTeam || '';
+      } else {
+        document.getElementById('at-bgcomp').value = r.providerLeague || '';
+        document.getElementById('at-bgteam').value = provTeam || '';
+      }
+      toast(`Prefilled a Team mapping (${which}). Pick the BCM competition/team, save, then reprocess in BR/BG Shift.`);
+    }
+  },
+
+  // Reprocess: refresh mapping data from Supabase, then re-resolve using preserved parsed results.
+  async reprocessAll(){
+    if (!shiftState.parsed.BR && !shiftState.parsed.BG) { toast('Nothing to reprocess — parse first', true); return; }
+    try {
+      toast('Refreshing mappings…');
+      const [leagues, teams] = await Promise.all([ sbLoadAll('leagues'), sbLoadAll('teams') ]);
+      state.leagues = leagues; state.teams = teams;
+      this.resolveMappings();
+      // A fresh resolve invalidates any prior comparison.
+      if (shiftState.consolidatedResults) { shiftState.comparisonStale = true; const n=document.getElementById('shift-stale-note'); if(n) n.style.display='block'; const ex=document.getElementById('shift-export-btn'); if(ex) ex.disabled=true; }
+      toast('Reprocessed with the latest mappings');
+    } catch(e){ toast('Reprocess failed: '+e.message, true); }
+  },
+
+  /* ---------- Phase 4: comparison, results, review, export ---------- */
+  async compareData(){
+    if (shiftState.comparisonRunning) return;
+    const p = shiftState.parsed;
+    if (!p.BCM || p.BCM.emptyInput || !p.BCM.fixtures.length) { toast('BCM hierarchy data is required before comparing fixtures.', true); return; }
+    if (!shiftState.resolved) this.resolveMappings();
+    shiftState.comparisonRunning = true;
+    const btn = document.getElementById('shift-compare-btn'); btn.disabled = true; const lbl = btn.textContent; btn.textContent = 'Comparing…';
+    try {
+      await new Promise(r => setTimeout(r, 30));
+      ShiftCompare._rid = 1;
+      ShiftCompare.run();
+      shiftState.comparisonStale = false;
+      document.getElementById('shift-stale-note').style.display = 'none';
+      shiftState.resultTab = 'To Be Created';
+      this._renderResultsSummary();
+      this._renderResults();
+      document.getElementById('shift-results-summary').style.display = 'block';
+      document.getElementById('shift-results').style.display = 'block';
+      document.getElementById('shift-export-btn').disabled = false;
+      const c = shiftState.resultCounts;
+      toast(`Comparison done — ${c.toBeCreated} to create · ${c.alreadyCreated} already · ${c.possibleReversed} reversed · ${c.needsInvestigation} to investigate`);
+    } catch(e){ toast('Comparison failed: '+e.message, true); }
+    finally { shiftState.comparisonRunning = false; btn.disabled = false; btn.textContent = lbl; }
+  },
+
+  _renderResultsSummary(){
+    const c = shiftState.resultCounts;
+    const el = document.getElementById('shift-results-summary');
+    const card = (n,l)=>`<div class="stat-card"><div class="num">${n}</div><div class="label">${escapeHtml(l)}</div></div>`;
+    el.innerHTML = `<div class="stat-grid" style="margin-bottom:8px;">
+      ${card(c.brFixtures,'BR fixtures')}${card(c.bgFixtures,'BG fixtures')}${card(c.bcmFixtures,'BCM fixtures')}
+      ${card(c.mappingReady,'Mapping-Ready')}${card(c.toBeCreated,'To Be Created')}${card(c.alreadyCreated,'Already Created')}
+      ${card(c.leagueMappingRequired,'League Map Req')}${card(c.teamMappingRequired,'Team Map Req')}${card(c.ambiguous,'Ambiguous')}
+      ${card(c.possibleReversed,'Poss. Reversed')}${card(c.needsInvestigation,'Needs Investig.')}${card(c.malformed,'Malformed')}
+      ${card(c.consolidated,'BR+BG merged')}${card(c.duplicatesRemoved,'Duplicates removed')}
+    </div>`;
+  },
+
+  _resultTabs(){
+    return ['To Be Created','Already Created','League Mapping Required','Team Mapping Required','Ambiguous','Possible Reversed Fixture','Malformed','Needs Investigation','All Processed'];
+  },
+  setResultTab(t){ shiftState.resultTab = t; this._renderResults(); },
+  onResultSearch(v){ shiftState.resultSearch = (v||'').toLowerCase(); this._renderResults(); },
+
+  _rowsForTab(tab){
+    const b = shiftState.consolidatedResults || {};
+    if (tab === 'All Processed') {
+      // Flatten every result row across buckets.
+      let all = [];
+      Object.keys(b).forEach(k => { all = all.concat(b[k]); });
+      return all;
+    }
+    return b[tab] || [];
+  },
+
+  _renderResults(){
+    const el = document.getElementById('shift-results');
+    const b = shiftState.consolidatedResults;
+    if (!b) { el.innerHTML=''; return; }
+    const count = (t)=> (t==='All Processed') ? this._rowsForTab('All Processed').length : (b[t]?b[t].length:0);
+    const tabs = this._resultTabs().map(t =>
+      `<button class="btn btn-sm ${shiftState.resultTab===t?'btn-primary':'btn-ghost'}" onclick="ShiftTab.setResultTab('${t.replace(/'/g,"\\'")}')">${escapeHtml(t)} (${count(t)})</button>`
+    ).join(' ');
+
+    let rows = this._rowsForTab(shiftState.resultTab).slice();
+    const q = shiftState.resultSearch;
+    if (q) rows = rows.filter(r => [r.bcmCompetition,r.bcmHomeTeam,r.bcmAwayTeam,r.brCompetition,r.bgCompetition,r.country,r.availableProvider].some(v=>String(v||'').toLowerCase().includes(q)));
+
+    const LIMIT = 500;
+    const shown = rows.slice(0, LIMIT);
+    const reviewOpts = ['Pending Review','Reviewed','Created in BCM','Excluded','Needs Investigation'];
+    const body = shown.length ? shown.map(r => `<tr>
+      <td>${escapeHtml(r.availableProvider)}</td>
+      <td>${escapeHtml(r.country)}</td>
+      <td>${escapeHtml(r.bcmCompetition)}</td>
+      <td>${escapeHtml(r.bcmHomeTeam)}</td>
+      <td>${escapeHtml(r.bcmAwayTeam)}</td>
+      <td style="font-size:11px;">${escapeHtml(r.brFixture||'')}${r.brFixture&&r.bgFixture?'<br>':''}${escapeHtml(r.bgFixture||'')}</td>
+      <td>${ShiftTab._statusBadge(r.matchStatus)}</td>
+      <td style="font-size:11px;color:var(--text-dim);">${escapeHtml(r.reason)}${(r.warnings&&r.warnings.length)?('<br><span style="color:var(--warn);">⚠ '+escapeHtml(r.warnings[r.warnings.length-1])+'</span>'):''}</td>
+      <td><select onchange="ShiftTab.setReview('${r.resultId}',this.value)" style="padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface-alt);color:var(--text);font-size:12px;">${reviewOpts.map(o=>`<option ${r.reviewStatus===o?'selected':''}>${o}</option>`).join('')}</select></td>
+      <td><input type="text" value="${escapeHtml(r.notes)}" oninput="ShiftTab.setNote('${r.resultId}',this.value)" placeholder="Notes…" style="width:140px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface-alt);color:var(--text);font-size:12px;"></td>
+    </tr>`).join('') : `<tr><td colspan="10"><div class="empty-state" style="padding:24px;"><div class="ic">📋</div>No records in "${escapeHtml(shiftState.resultTab)}".</div></td></tr>`;
+
+    const title = shiftState.resultTab === 'To Be Created' ? '✅ Matches To Be Created' : ('📋 ' + shiftState.resultTab);
+    el.innerHTML = `<div class="panel">
+      <div class="panel-title">${escapeHtml(title)}</div>
+      <div style="color:var(--warn);font-size:12px;margin-bottom:10px;">Review status and notes are stored locally until this check is saved (Phase 5). No dates/times/IDs exist in hierarchy data, so repeated pairings cannot be distinguished.</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">${tabs}</div>
+      <input type="text" placeholder="Search results…" oninput="ShiftTab.onResultSearch(this.value)" value="${escapeHtml(shiftState.resultSearch)}" style="width:100%;max-width:340px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:14px;margin-bottom:12px;">
+      <div class="table-wrap" style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Provider</th><th>Country</th><th>BCM Competition</th><th>BCM Home</th><th>BCM Away</th><th>Provider Fixture</th><th>Status</th><th>Reason</th><th>Review</th><th>Notes</th></tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+      ${rows.length>LIMIT?`<div style="color:var(--text-faint);font-size:12px;margin-top:8px;">Showing first ${LIMIT} of ${rows.length}.</div>`:''}
+    </div>`;
+  },
+
+  _findResult(id){
+    const b = shiftState.consolidatedResults || {};
+    for (const k in b) { const hit = b[k].find(r=>r.resultId===id); if (hit) return hit; }
+    return null;
+  },
+  setReview(id, val){ const r=this._findResult(id); if(r) r.reviewStatus=val; },
+  setNote(id, val){ const r=this._findResult(id); if(r) r.notes=val; },
+
+  /* ---------- Excel export ---------- */
+  exportResults(){
+    if (!shiftState.consolidatedResults) { toast('Run comparison first', true); return; }
+    const S = (v)=>{ const s = String(v==null?'':v); return /^[=+\-@\t\r]/.test(s) ? "'"+s : s; }; // formula-injection guard
+    const b = shiftState.consolidatedResults, c = shiftState.resultCounts;
+    const wb = XLSX.utils.book_new();
+    const mapRow = (r)=>({
+      'Check Type': S(r.checkType), 'Sport': S(r.sport), 'Country': S(r.country),
+      'BCM Competition': S(r.bcmCompetition), 'BCM Home Team': S(r.bcmHomeTeam), 'BCM Away Team': S(r.bcmAwayTeam),
+      'BR Competition': S(r.brCompetition), 'BR Fixture': S(r.brFixture), 'BG Competition': S(r.bgCompetition), 'BG Fixture': S(r.bgFixture),
+      'Available Provider': S(r.availableProvider), 'Match Status': S(r.matchStatus), 'Reason': S(r.reason),
+      'Review Status': S(r.reviewStatus), 'Notes': S(r.notes), 'Warnings': S((r.warnings||[]).join('; '))
+    });
+    const addSheet = (name, rows) => {
+      const data = rows.length ? rows.map(mapRow) : [{ 'Check Type':'', 'Sport':'', 'Note':'(no records)' }];
+      const ws = XLSX.utils.json_to_sheet(data);
+      XLSX.utils.book_append_sheet(wb, ws, name.slice(0,31));
+    };
+    addSheet('Matches To Be Created', b['To Be Created']);
+    addSheet('Already Created', b['Already Created']);
+    addSheet('League Mapping Required', b['League Mapping Required']);
+    addSheet('Team Mapping Required', b['Team Mapping Required']);
+    addSheet('Ambiguous', b['Ambiguous']);
+    addSheet('Possible Reversed', b['Possible Reversed Fixture']);
+    addSheet('Malformed Input', b['Malformed']);
+    addSheet('Needs Investigation', b['Needs Investigation']);
+    addSheet('All Processed', this._rowsForTab('All Processed'));
+    // Summary sheet
+    const ct = shiftState.checkType === '3day' ? '3-Day' : '10th-Day';
+    const summary = [
+      { Field:'Check Type', Value: ct }, { Field:'Sport', Value: shiftState.sport },
+      { Field:'Operator', Value: (state.user && state.user.username) || '' },
+      { Field:'Processing Date', Value: new Date().toLocaleString() },
+      { Field:'BR fixtures', Value: c.brFixtures }, { Field:'BG fixtures', Value: c.bgFixtures }, { Field:'BCM fixtures', Value: c.bcmFixtures },
+      { Field:'Mapping-Ready', Value: c.mappingReady }, { Field:'Matches To Be Created', Value: c.toBeCreated }, { Field:'Already Created', Value: c.alreadyCreated },
+      { Field:'League Mapping Required', Value: c.leagueMappingRequired }, { Field:'Team Mapping Required', Value: c.teamMappingRequired },
+      { Field:'Ambiguous', Value: c.ambiguous }, { Field:'Possible Reversed', Value: c.possibleReversed }, { Field:'Needs Investigation', Value: c.needsInvestigation },
+      { Field:'Malformed', Value: c.malformed }, { Field:'Duplicates removed', Value: c.duplicatesRemoved }, { Field:'BR+BG consolidated', Value: c.consolidated },
+      { Field:'Limitation', Value: 'Hierarchy has no dates/times/Event IDs; repeated team pairings cannot be distinguished. Fixture existence is set-based.' }
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'Summary');
+    const safeSport = String(shiftState.sport).replace(/[^A-Za-z0-9]+/g,'_');
+    const fname = `BR_BG_Shift_${safeSport}_${ct.replace('-','')}_${new Date().toISOString().slice(0,10)}.xlsx`;
+    XLSX.writeFile(wb, fname);
+    logHistory('Export','shift', `BR/BG Shift export${shiftState.checkId?(' #'+shiftState.checkId):' (unsaved)'} (${ct}, ${shiftState.sport}) — ${c.toBeCreated} to create`);
+    if (!shiftState.checkId) toast('Exported (unsaved). Save the check to retain status, notes & history.', false);
+    else toast('Exported ' + fname);
+  },
+
+  /* ---------- Phase 5: persistence, history, lifecycle ---------- */
+  _isAdmin(){ return state.user && state.user.role === 'admin'; },
+
+  // Save as Draft — allowed even before comparison.
+  async saveDraft(){ return this._save('Draft', true); },
+  // Save current check — persists comparison results if present.
+  async saveCheck(){
+    const status = shiftState.consolidatedResults ? (shiftState.jobStatus === 'Completed' ? 'Completed' : 'Comparison Completed') : 'Draft';
+    return this._save(status, false);
+  },
+
+  async _save(jobStatus, isDraft){
+    if (shiftState.savingChecks) return;
+    // Basic input presence for a draft.
+    const anyInput = ['shift-br','shift-bg','shift-bcm'].some(id => (document.getElementById(id).value||'').trim());
+    if (!anyInput) { toast('Nothing to save — paste some hierarchy data first', true); return; }
+    // Consistency gate for non-draft saves.
+    if (!isDraft && shiftState.consolidatedResults) {
+      const v = ShiftValidate.run();
+      if (!v.ok) { toast('Cannot save: consistency check failed — ' + v.errors[0], true); return; }
+    }
+    shiftState.savingChecks = true;
+    const btns = document.querySelectorAll('#shift-save-draft-btn,#shift-save-btn');
+    btns.forEach(b=>b.disabled=true);
+    try {
+      shiftState.jobStatus = jobStatus;
+      let row;
+      if (shiftState.checkId) {
+        row = await ShiftStore.update(shiftState.checkId, jobStatus, shiftState.savedUpdatedAt);
+        await logHistory('Update','shift', `BR/BG Shift check #${shiftState.checkId} saved (${jobStatus})`, { checkId:shiftState.checkId, jobStatus, counts:shiftState.resultCounts||null });
+      } else {
+        row = await ShiftStore.insert(jobStatus);
+        if (row) { shiftState.checkId = row.id; shiftState.savedCreatedBy = row.created_by; shiftState.savedCreatedAt = row.created_at; }
+        await logHistory('Create','shift', `BR/BG Shift ${jobStatus} created (${shiftState.checkType}, ${shiftState.sport})`, { checkId: row&&row.id, jobStatus });
+      }
+      if (row) shiftState.savedUpdatedAt = row.updated_at;
+      shiftState.historyLoaded = false; // refresh history next time
+      toast(`Saved${row&&row.id?(' — Check ID '+String(row.id).slice(0,8)+'…'):''} (${jobStatus})`);
+      this._renderIdentity();
+    } catch(e){
+      if (e.conflict) toast('Save blocked: ' + e.message + ' Reopen the check to get the latest, then re-save.', true);
+      else toast('Save failed: ' + e.message + ' — your work is preserved, please retry.', true);
+      console.error('[shift save]', e);
+    } finally {
+      shiftState.savingChecks = false; btns.forEach(b=>b.disabled=false);
+    }
+  },
+
+  // Mark check Completed (warns if unresolved/reversed/investigation records remain).
+  async completeCheck(){
+    if (!shiftState.consolidatedResults) { toast('Run comparison first', true); return; }
+    const c = shiftState.resultCounts;
+    const remaining = c.leagueMappingRequired + c.teamMappingRequired + c.ambiguous + c.malformed + c.possibleReversed + c.needsInvestigation;
+    if (remaining > 0) {
+      const proceed = confirm(`${remaining} record(s) still need attention (mapping required / ambiguous / malformed / reversed / investigation). Mark this check Completed anyway?`);
+      if (!proceed) return;
+    }
+    shiftState.jobStatus = 'Completed';
+    await this._save('Completed', false);
+    await logHistory('Complete','shift', `BR/BG Shift check #${shiftState.checkId} marked Completed`, { checkId:shiftState.checkId });
+  },
+
+  _renderIdentity(){
+    const el = document.getElementById('shift-identity');
+    if (!el) return;
+    if (!shiftState.checkId) { el.style.display='none'; return; }
+    el.style.display='block';
+    el.innerHTML = `<span style="color:var(--text-dim);font-size:12px;">Active check <b class="mono">${escapeHtml(String(shiftState.checkId).slice(0,8))}…</b> · status <b>${escapeHtml(shiftState.jobStatus)}</b>${shiftState.savedCreatedBy?(' · by '+escapeHtml(shiftState.savedCreatedBy)):''}${shiftState.savedUpdatedAt?(' · updated '+escapeHtml(fmtTime(shiftState.savedUpdatedAt))):''}</span>`;
+  },
+
+  /* ---------- Check History ---------- */
+  async openHistory(){
+    const panel = document.getElementById('shift-history');
+    panel.style.display = 'block';
+    panel.innerHTML = `<div class="panel"><div class="loading"><div class="spinner"></div><p>Loading check history…</p></div></div>`;
+    try {
+      const rows = await ShiftStore.listChecks(shiftState.historyIncludeArchived);
+      shiftState.historyRows = rows || [];
+      shiftState.historyLoaded = true;
+      this._renderHistory();
+    } catch(e){
+      panel.innerHTML = `<div class="panel"><div class="empty-state" style="padding:24px;color:var(--danger);"><div class="ic">⚠</div>Could not load check history: ${escapeHtml(e.message)}<br><button class="btn btn-sm btn-secondary" style="margin-top:10px;" onclick="ShiftTab.openHistory()">Retry</button></div></div>`;
+    }
+  },
+  toggleArchived(){ shiftState.historyIncludeArchived = !shiftState.historyIncludeArchived; this.openHistory(); },
+  _renderHistory(){
+    const rows = shiftState.historyRows || [];
+    const panel = document.getElementById('shift-history');
+    const isAdmin = this._isAdmin();
+    const body = rows.length ? rows.map(r => {
+      const s = r.summary || {};
+      const ct = r.check_type === '3day' ? '3-Day' : '10th-Day';
+      return `<tr>
+        <td class="mono" style="font-size:11px;">${escapeHtml(String(r.id).slice(0,8))}…</td>
+        <td>${escapeHtml(ct)}</td>
+        <td>${escapeHtml(r.sport)}</td>
+        <td>${ShiftTab._statusBadge(r.job_status)}</td>
+        <td>${escapeHtml(r.created_by||'')}</td>
+        <td style="font-size:11px;">${escapeHtml(fmtTime(r.created_at))}</td>
+        <td style="font-size:11px;">${escapeHtml(fmtTime(r.updated_at))}</td>
+        <td>${s.brFixtures||0}</td><td>${s.bgFixtures||0}</td><td>${s.bcmFixtures||0}</td>
+        <td>${s.toBeCreated||0}</td><td>${s.alreadyCreated||0}</td>
+        <td>${r.archived?'Yes':'No'}</td>
+        <td class="row-actions">
+          <button class="btn btn-sm btn-ghost" onclick="ShiftTab.openCheck('${r.id}')">Open</button>
+          ${isAdmin && !r.archived ? `<button class="btn btn-sm btn-ghost" onclick="ShiftTab.archiveCheck('${r.id}')">Archive</button>` : ''}
+          ${isAdmin ? `<button class="btn btn-sm btn-danger" onclick="ShiftTab.deleteCheck('${r.id}')">Delete</button>` : ''}
+        </td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="14"><div class="empty-state" style="padding:24px;"><div class="ic">🗂️</div>No saved checks${shiftState.historyIncludeArchived?'':' (excluding archived)'}.</div></td></tr>`;
+    panel.innerHTML = `<div class="panel">
+      <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <span>🗂️ Check History</span>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-sm btn-ghost" onclick="ShiftTab.toggleArchived()">${shiftState.historyIncludeArchived?'Hide archived':'Show archived'}</button>
+          <button class="btn btn-sm btn-secondary" onclick="ShiftTab.openHistory()">↻ Refresh</button>
+        </div>
+      </div>
+      <div class="table-wrap" style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Check ID</th><th>Type</th><th>Sport</th><th>Status</th><th>Created By</th><th>Created</th><th>Updated</th><th>BR</th><th>BG</th><th>BCM</th><th>To Create</th><th>Already</th><th>Archived</th><th>Actions</th></tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    </div>`;
+  },
+
+  async openCheck(id){
+    try {
+      toast('Opening check…');
+      const chk = await ShiftStore.getCheck(id);
+      if (!chk) { toast('Check not found (it may have been deleted)', true); shiftState.historyLoaded=false; this.openHistory(); return; }
+      // Restore raw inputs, type, sport.
+      document.getElementById('shift-br').value = chk.br_raw || '';
+      document.getElementById('shift-bg').value = chk.bg_raw || '';
+      document.getElementById('shift-bcm').value = chk.bcm_raw || '';
+      shiftState.checkType = (chk.check_type === '3day') ? '3day' : '10th';
+      shiftState.sport = App.normalizeSport(chk.sport) === 'Ice Hockey' ? 'Ice Hockey' : 'Basketball';
+      this._syncToggles();
+      // Identity.
+      shiftState.checkId = chk.id; shiftState.jobStatus = chk.job_status;
+      shiftState.savedUpdatedAt = chk.updated_at; shiftState.savedCreatedBy = chk.created_by; shiftState.savedCreatedAt = chk.created_at;
+      // Reparse deterministically (raw is the source of truth), then re-resolve.
+      await this.parseAndPreview();
+      // Restore saved comparison results if present (preserve saved review/notes),
+      // but flag if current mappings differ (user can reprocess explicitly).
+      if (chk.results) {
+        shiftState.consolidatedResults = chk.results;
+        shiftState.resultCounts = chk.summary || ShiftCompare._counts(chk.results, shiftState.allProcessed||[]);
+        shiftState.comparisonCompletedAt = chk.comparison_completed_at;
+        this._renderResultsSummary(); this._renderResults();
+        document.getElementById('shift-results-summary').style.display='block';
+        document.getElementById('shift-results').style.display='block';
+        document.getElementById('shift-export-btn').disabled = false;
+        const note = document.getElementById('shift-stale-note');
+        if (note) { note.style.display='block'; note.textContent='⚠ Loaded saved comparison results. If mappings changed since this check was saved, use "Reprocess Using Current Mappings" to refresh (the saved result is kept until you save again).'; }
+      }
+      this._renderIdentity();
+      logHistory('Open','shift', `BR/BG Shift check #${chk.id} reopened`, { checkId: chk.id });
+      toast(`Opened check ${String(chk.id).slice(0,8)}… (${chk.job_status})`);
+    } catch(e){ toast('Failed to open check: '+e.message, true); console.error('[shift open]', e); }
+  },
+
+  // Reprocess a saved/open check with current mappings; preserve review/notes by stable key.
+  async reprocessCheck(){
+    if (!shiftState.parsed.BR && !shiftState.parsed.BG) { toast('Parse or open a check first', true); return; }
+    try {
+      toast('Refreshing mappings & reprocessing…');
+      const prior = shiftState.consolidatedResults; // keep to carry notes forward
+      const [leagues, teams] = await Promise.all([ sbLoadAll('leagues'), sbLoadAll('teams') ]);
+      state.leagues = leagues; state.teams = teams;
+      this.resolveMappings();
+      ShiftCompare._rid = 1; ShiftCompare.run();
+      // Carry Review Status/Notes forward on STABLE identity (sport|comp|home|away|status).
+      if (prior) this._carryReviewForward(prior, shiftState.consolidatedResults);
+      shiftState.comparisonStale = false;
+      this._renderResultsSummary(); this._renderResults();
+      document.getElementById('shift-results-summary').style.display='block';
+      document.getElementById('shift-results').style.display='block';
+      document.getElementById('shift-export-btn').disabled = false;
+      const note=document.getElementById('shift-stale-note'); if(note){ note.style.display='block'; note.textContent='⚠ Reprocessed with current mappings. Review changes, then Save Check to persist (the previous saved version remains until you save).'; }
+      if (shiftState.checkId) logHistory('Reprocess','shift', `BR/BG Shift check #${shiftState.checkId} reprocessed with current mappings`, { checkId: shiftState.checkId });
+      toast('Reprocessed. Review and Save to persist.');
+    } catch(e){ toast('Reprocess failed: '+e.message, true); }
+  },
+  _stableKey(r){ return [ShiftNormalize.key(r.sport),ShiftNormalize.key(r.bcmCompetition),ShiftNormalize.key(r.bcmHomeTeam),ShiftNormalize.key(r.bcmAwayTeam),r.matchStatus].join('|'); },
+  _carryReviewForward(prior, next){
+    const priorMap = {};
+    Object.keys(prior).forEach(k => prior[k].forEach(r => { priorMap[this._stableKey(r)] = r; }));
+    Object.keys(next).forEach(k => next[k].forEach(r => {
+      const p = priorMap[this._stableKey(r)];
+      // Only carry when the stable identity (incl. status) is unchanged.
+      if (p) { r.reviewStatus = p.reviewStatus; r.notes = p.notes; }
+    }));
+  },
+
+  async archiveCheck(id){
+    if (!this._isAdmin()) { toast('Only admins can archive', true); return; }
+    if (!confirm('Archive this check? It will be hidden from the default history view (not deleted).')) return;
+    try { await ShiftStore.archive(id); await logHistory('Archive','shift', `BR/BG Shift check #${id} archived`, { checkId:id }); toast('Check archived'); this.openHistory(); }
+    catch(e){ toast('Archive failed: '+e.message, true); }
+  },
+  async deleteCheck(id){
+    if (!this._isAdmin()) { toast('Only admins can delete', true); return; }
+    if (!confirm('Permanently DELETE this check? This cannot be undone. Prefer Archive unless deletion is required.')) return;
+    try {
+      await logHistory('Delete','shift', `BR/BG Shift check #${id} deleted`, { checkId:id }); // log before delete
+      await ShiftStore.remove(id);
+      if (shiftState.checkId === id) { shiftState.checkId=null; this._renderIdentity(); }
+      toast('Check deleted'); this.openHistory();
+    } catch(e){ toast('Delete failed: '+e.message, true); }
   }
 };
 
