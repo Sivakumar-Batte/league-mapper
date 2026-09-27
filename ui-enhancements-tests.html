@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UI Enhancements — Logic Tests</title>
+<style>
+  body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:#0f1420;color:#e6e9ef;margin:0;padding:24px;}
+  h1{font-size:20px;margin:0 0 6px;}
+  .sub{color:#94a3b8;font-size:13px;margin-bottom:18px;}
+  .grp{border:1px solid #263042;border-radius:10px;margin-bottom:14px;overflow:hidden;}
+  .grp>h2{font-size:14px;margin:0;padding:10px 14px;background:#161d2b;border-bottom:1px solid #263042;}
+  .case{display:flex;gap:10px;padding:8px 14px;font-size:13px;border-bottom:1px solid #1b2432;}
+  .case:last-child{border-bottom:none;}
+  .badge{font-family:ui-monospace,monospace;font-size:11px;padding:2px 8px;border-radius:99px;min-width:44px;text-align:center;height:fit-content;}
+  .pass{background:#0f2e1d;color:#4ade80;}
+  .fail{background:#3a1420;color:#f87171;}
+  .desc{flex:1;}
+  .detail{color:#94a3b8;font-family:ui-monospace,monospace;font-size:11.5px;margin-top:3px;white-space:pre-wrap;}
+  #summary{font-size:15px;font-weight:700;padding:12px 14px;border-radius:10px;margin-bottom:18px;}
+  #summary.ok{background:#0f2e1d;color:#4ade80;}
+  #summary.bad{background:#3a1420;color:#f87171;}
+</style>
+</head>
+<body>
+<h1>UI Enhancements — Logic Tests</h1>
+<div class="sub">Verbatim copies of the deterministic logic from <b>index.html</b> (sport normalization, daily-update date handling, edit/delete permissions, user-guide search). Backend calls are not exercised here — they require live Supabase and are covered by the manual test checklist in the report.</div>
+<div id="summary">Running…</div>
+<div id="out"></div>
+
+<script>
+/* ---------- VERBATIM: App.normalizeSport (from index.html) ---------- */
+function normalizeSport(s){
+  const key = String(s || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (key === 'icehockey') return 'Ice Hockey';
+  if (key === 'basketball') return 'Basketball';
+  return String(s || '').trim();
+}
+
+/* ---------- VERBATIM: DailyTab.todayISO / fmtDate ---------- */
+function todayISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function fmtDate(iso){ if(!iso) return ''; const p=String(iso).split('-'); if(p.length!==3) return iso; return p[2]+'/'+p[1]+'/'+p[0]; }
+
+/* ---------- VERBATIM logic: DailyTab edit/delete permission ---------- */
+// canEdit = admin OR owns the record
+function canEdit(user, record){ return (user.role==='admin') || (record.created_by === user.username); }
+
+/* ---------- VERBATIM logic: DailyTab.render filtering ---------- */
+function filterUpdates(data, dateF, authorF, search){
+  let rows = data.slice();
+  if (dateF) rows = rows.filter(u=>u.update_date===dateF);
+  if (authorF) rows = rows.filter(u=>u.created_by===authorF);
+  if (search) { search = search.toLowerCase(); rows = rows.filter(u=>(u.title||'').toLowerCase().includes(search)||(u.description||'').toLowerCase().includes(search)||(u.created_by||'').toLowerCase().includes(search)); }
+  return rows;
+}
+
+/* ---------- VERBATIM logic: UserGuide.render matching ---------- */
+function guideMatches(sections, q){
+  q = (q||'').toLowerCase();
+  return sections.filter(([title,html]) => !q || title.toLowerCase().includes(q) || html.toLowerCase().includes(q));
+}
+
+/* ---------- test harness ---------- */
+let groups = [];
+function group(name){ const g={name,cases:[]}; groups.push(g); return g; }
+function eq(g, desc, actual, expected){
+  const ok = JSON.stringify(actual)===JSON.stringify(expected);
+  g.cases.push({ok, desc, detail: ok?'':`expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`});
+}
+function truthy(g, desc, actual){ const ok=!!actual; g.cases.push({ok,desc,detail: ok?'':`expected truthy, got ${JSON.stringify(actual)}`}); }
+function falsy(g, desc, actual){ const ok=!actual; g.cases.push({ok,desc,detail: ok?'':`expected falsy, got ${JSON.stringify(actual)}`}); }
+
+/* ===== 1. Sport normalization (the original Ice Hockey bug) ===== */
+(()=>{ const g=group('Sport normalization — Ice Hockey visibility fix');
+  eq(g,'"Icehockey" (bulk-upload form) normalizes to "Ice Hockey"', normalizeSport('Icehockey'), 'Ice Hockey');
+  eq(g,'"ice hockey" normalizes to "Ice Hockey"', normalizeSport('ice hockey'), 'Ice Hockey');
+  eq(g,'"Ice-Hockey" normalizes to "Ice Hockey"', normalizeSport('Ice-Hockey'), 'Ice Hockey');
+  eq(g,'"ICE  HOCKEY" (extra spaces) normalizes to "Ice Hockey"', normalizeSport('ICE  HOCKEY'), 'Ice Hockey');
+  eq(g,'"Basketball" stays "Basketball"', normalizeSport('Basketball'), 'Basketball');
+  eq(g,'"basketBALL" normalizes to "Basketball"', normalizeSport('basketBALL'), 'Basketball');
+  eq(g,'selector "Ice Hockey" matches stored "Icehockey"', normalizeSport('Ice Hockey')===normalizeSport('Icehockey'), true);
+  eq(g,'unknown sport passes through trimmed', normalizeSport('  Tennis '), 'Tennis');
+  eq(g,'empty/undefined returns empty string', normalizeSport(undefined), '');
+})();
+
+/* ===== 2. Daily update date handling (audit / display) ===== */
+(()=>{ const g=group('Daily Updates — date handling');
+  eq(g,'fmtDate ISO -> dd/mm/yyyy', fmtDate('2026-02-09'), '09/02/2026');
+  eq(g,'fmtDate empty -> empty', fmtDate(''), '');
+  eq(g,'fmtDate malformed passes through', fmtDate('not-a-date'), 'not-a-date');
+  const t = todayISO();
+  truthy(g,'todayISO produces YYYY-MM-DD', /^\d{4}-\d{2}-\d{2}$/.test(t));
+  eq(g,'todayISO round-trips through fmtDate back to same date parts',
+     fmtDate(t), t.split('-').reverse().join('/'));
+})();
+
+/* ===== 3. Edit/Delete permissions ===== */
+(()=>{ const g=group('Daily Updates — edit/delete permission');
+  const admin={role:'admin',username:'boss'};
+  const userA={role:'user',username:'alice'};
+  const userB={role:'user',username:'bob'};
+  const recA={created_by:'alice'};
+  truthy(g,'admin can edit anyone\u2019s update', canEdit(admin, recA));
+  truthy(g,'author (alice) can edit her own update', canEdit(userA, recA));
+  falsy(g,'other user (bob) cannot edit alice\u2019s update', canEdit(userB, recA));
+})();
+
+/* ===== 4. Daily update filtering ===== */
+(()=>{ const g=group('Daily Updates — filter/search');
+  const data=[
+    {id:1,title:'Feed outage',description:'BCM down',created_by:'alice',update_date:'2026-02-09'},
+    {id:2,title:'New league added',description:'NBA G-League',created_by:'bob',update_date:'2026-02-09'},
+    {id:3,title:'Weekly review',description:'all good',created_by:'alice',update_date:'2026-02-08'},
+  ];
+  eq(g,'no filters returns all', filterUpdates(data,'','','').length, 3);
+  eq(g,'date filter narrows to that day', filterUpdates(data,'2026-02-08','','').map(u=>u.id), [3]);
+  eq(g,'author filter narrows to author', filterUpdates(data,'','alice','').map(u=>u.id), [1,3]);
+  eq(g,'search matches title', filterUpdates(data,'','','outage').map(u=>u.id), [1]);
+  eq(g,'search matches description', filterUpdates(data,'','','g-league').map(u=>u.id), [2]);
+  eq(g,'search matches author name', filterUpdates(data,'','','bob').map(u=>u.id), [2]);
+  eq(g,'combined date+author', filterUpdates(data,'2026-02-09','alice','').map(u=>u.id), [1]);
+})();
+
+/* ===== 5. User guide search ===== */
+(()=>{ const g=group('User Guide — search filter');
+  const sections=[
+    ['Getting Started','central console for BCM Betradar Betgenius'],
+    ['LBC Matcher','matches LBC schedule to provider Event IDs'],
+    ['Training','Training Material and Daily Updates log'],
+  ];
+  eq(g,'empty query returns all sections', guideMatches(sections,'').length, 3);
+  eq(g,'query matches title', guideMatches(sections,'lbc').map(s=>s[0]), ['LBC Matcher']);
+  eq(g,'query matches body text', guideMatches(sections,'daily updates').map(s=>s[0]), ['Training']);
+  eq(g,'no match returns empty', guideMatches(sections,'zzzzz').length, 0);
+})();
+
+/* ---------- render ---------- */
+let total=0, passed=0;
+const out=document.getElementById('out');
+groups.forEach(g=>{
+  const div=document.createElement('div'); div.className='grp';
+  let html=`<h2>${g.name}</h2>`;
+  g.cases.forEach(c=>{
+    total++; if(c.ok) passed++;
+    html+=`<div class="case"><span class="badge ${c.ok?'pass':'fail'}">${c.ok?'PASS':'FAIL'}</span><div class="desc">${c.desc}${c.detail?`<div class="detail">${c.detail}</div>`:''}</div></div>`;
+  });
+  div.innerHTML=html; out.appendChild(div);
+});
+const s=document.getElementById('summary');
+s.className = passed===total ? 'ok' : 'bad';
+s.textContent = `${passed} / ${total} tests passed` + (passed===total?'  ✓ all green':'  ✗ failures above');
+</script>
+</body>
+</html>

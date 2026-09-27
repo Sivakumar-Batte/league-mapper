@@ -340,7 +340,6 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
         <div class="panel-title">Recently added</div>
         <div id="dash-recent"></div>
       </div>
-      <div class="panel" id="dash-shift" style="display:none;"></div>
     </div>
 
     <!-- ---------- MAPPINGS (combined Leagues + Teams) ---------- -->
@@ -500,100 +499,9 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
       <iframe id="lbc-frame" src="about:blank" data-src="lbc-matcher.html" style="width:100%;height:calc(100vh - 160px);min-height:700px;border:1px solid var(--border);border-radius:10px;background:#fff;"></iframe>
     </div>
 
-    <!-- ---------- BR/BG SHIFT ---------- -->
+    <!-- ---------- BR/BG SHIFT (embedded standalone tool) ---------- -->
     <div class="tab-panel" data-panel="shift">
-      <div class="panel">
-        <div class="panel-title">🔀 BR/BG Shift — Fixture Creation Check</div>
-        <div style="color:var(--text-dim);font-size:13px;margin-bottom:16px;">Paste Betradar, Betgenius, and BCM hierarchy data, then parse and preview. Comparison, save, and export arrive in later phases.</div>
-
-        <!-- Check type + sport -->
-        <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:16px;">
-          <div>
-            <label style="display:block;font-size:11px;font-weight:600;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;">Check Type</label>
-            <div class="type-toggle" style="margin:0;">
-              <button id="shift-ct-3day" class="active" onclick="ShiftTab.setCheckType('3day')">3-Day Check</button>
-              <button id="shift-ct-10th" onclick="ShiftTab.setCheckType('10th')">10th-Day Check</button>
-            </div>
-          </div>
-          <div>
-            <label style="display:block;font-size:11px;font-weight:600;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;">Sport</label>
-            <div class="type-toggle" style="margin:0;">
-              <button id="shift-sp-bk" class="active" onclick="ShiftTab.setSport('Basketball')">🏀 Basketball</button>
-              <button id="shift-sp-ih" onclick="ShiftTab.setSport('Ice Hockey')">🏒 Ice Hockey</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Paste areas -->
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-          <div class="fld">
-            <label style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;">Betradar Hierarchy <span style="color:var(--text-faint);text-transform:none;">(optional)</span></label>
-            <textarea id="shift-br" oninput="ShiftTab.markDirty()" placeholder=". Basketball&#10;. . World&#10;. . . League - Men&#10;. . . . . Team A - Team B" style="width:100%;min-height:150px;padding:11px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:13px;font-family:var(--font-mono);resize:vertical;"></textarea>
-          </div>
-          <div class="fld">
-            <label style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;">Betgenius Hierarchy <span style="color:var(--text-faint);text-transform:none;">(optional)</span></label>
-            <textarea id="shift-bg" oninput="ShiftTab.markDirty()" placeholder=". Basketball&#10;. . World&#10;. . . League - Men&#10;. . . . . Team A - Team B" style="width:100%;min-height:150px;padding:11px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:13px;font-family:var(--font-mono);resize:vertical;"></textarea>
-          </div>
-          <div class="fld">
-            <label style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;">BCM Hierarchy <span style="color:var(--text-faint);text-transform:none;">(required for comparison)</span></label>
-            <textarea id="shift-bcm" oninput="ShiftTab.markDirty()" placeholder=". Basketball&#10;. . World&#10;. . . League - Men&#10;. . . . . Team A - Team B" style="width:100%;min-height:150px;padding:11px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:13px;font-family:var(--font-mono);resize:vertical;"></textarea>
-          </div>
-        </div>
-
-        <div class="btn-group" style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
-          <button class="btn btn-primary" id="shift-parse-btn" onclick="ShiftTab.parseAndPreview()">🔎 Parse & Preview</button>
-          <button class="btn btn-ghost" onclick="ShiftTab.clearAll()">Clear</button>
-          <button class="btn btn-primary" id="shift-compare-btn" onclick="ShiftTab.compareData()" disabled title="Parse BR/BG and BCM data first">⚖ Compare Data</button>
-          <button class="btn btn-secondary" id="shift-save-draft-btn" onclick="ShiftTab.saveDraft()">💾 Save Draft</button>
-          <button class="btn btn-secondary" id="shift-save-btn" onclick="ShiftTab.saveCheck()">💾 Save Check</button>
-          <button class="btn btn-secondary" id="shift-complete-btn" onclick="ShiftTab.completeCheck()">✅ Mark Completed</button>
-          <button class="btn btn-secondary" id="shift-export-btn" onclick="ShiftTab.exportResults()" disabled title="Run comparison first">⬇ Export Results</button>
-          <button class="btn btn-ghost" onclick="ShiftTab.reprocessCheck()">↻ Reprocess (current mappings)</button>
-          <button class="btn btn-ghost" onclick="ShiftTab.openHistory()">🗂️ Check History</button>
-        </div>
-        <div id="shift-identity" style="display:none;margin-top:8px;"></div>
-        <div id="shift-stale-note" style="display:none;color:var(--warn);font-size:12px;margin-top:8px;">⚠ Inputs or mappings changed since the last comparison. Run Compare Data again to refresh results.</div>
-      </div>
-
-      <!-- Validation warnings -->
-      <div id="shift-warnings" style="display:none;"></div>
-
-      <!-- Summary cards -->
-      <div id="shift-summary" style="display:none;"></div>
-
-      <!-- Preview -->
-      <div id="shift-preview" style="display:none;">
-        <div class="panel">
-          <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;">
-            <span>Parsed Preview</span>
-            <div class="type-toggle" style="margin:0;">
-              <button id="shift-pv-BR" class="active" onclick="ShiftTab.setPreview('BR')">Betradar</button>
-              <button id="shift-pv-BG" onclick="ShiftTab.setPreview('BG')">Betgenius</button>
-              <button id="shift-pv-BCM" onclick="ShiftTab.setPreview('BCM')">BCM</button>
-            </div>
-          </div>
-          <div class="table-wrap" style="overflow-x:auto;">
-            <table>
-              <thead><tr><th>Source</th><th>Sport</th><th>Country</th><th>League</th><th>Home Team</th><th>Away Team</th><th>Parse Status</th><th>Import Order</th></tr></thead>
-              <tbody id="shift-preview-tbody"></tbody>
-            </table>
-          </div>
-          <div id="shift-preview-note" style="color:var(--text-faint);font-size:12px;margin-top:8px;"></div>
-        </div>
-      </div>
-
-      <!-- Malformed review -->
-      <div id="shift-malformed" style="display:none;"></div>
-
-      <!-- Mapping validation (Phase 3) -->
-      <div id="shift-validation" style="display:none;"></div>
-
-      <!-- Comparison results (Phase 4) -->
-      <div id="shift-results-summary" style="display:none;"></div>
-      <div id="shift-results" style="display:none;"></div>
-
-      <!-- Check history (Phase 5) -->
-      <div id="shift-history" style="display:none;"></div>
+      <iframe id="shift-frame" src="about:blank" data-src="basketball-shift.html" style="width:100%;height:calc(100vh - 160px);min-height:700px;border:1px solid var(--border);border-radius:10px;background:#fff;"></iframe>
     </div>
 
     <!-- ---------- TRAINING ---------- -->
@@ -908,7 +816,7 @@ const UI = {
     if (id==='dashboard') DashboardTab.render();
     if (id==='mappings') MappingsTab.enter(subView);
     if (id==='lbc') { const f = document.getElementById('lbc-frame'); if (f && f.src.indexOf('lbc-matcher.html') === -1) f.src = f.dataset.src; }
-    if (id==='shift') ShiftTab.enter();
+    if (id==='shift') { const f = document.getElementById('shift-frame'); if (f && f.src.indexOf('basketball-shift.html') === -1) f.src = f.dataset.src; }
     if (id==='training') TrainingTab.enter();
     if (id==='history') HistoryTab.render();
     if (id==='users') UsersTab.render();
@@ -1100,37 +1008,8 @@ const DashboardTab = {
       <div class="hist-line"><span class="t">${fmtTime(h.created_at)}</span><span class="who">${escapeHtml(h.username)}</span><span>${escapeHtml(h.action)} — ${escapeHtml(h.table_name)}</span></div>
     `).join('') : `<div class="empty-state" style="padding:20px;"><div class="ic">🕒</div>No recent activity</div>`;
 
-    // BR/BG Shift summary — loaded lazily, metadata-only (never raw/results payloads),
-    // excludes archived by default. Degrades silently if the table isn't set up yet.
-    this.renderShiftSummary();
-  },
-
-  async renderShiftSummary(){
-    const el = document.getElementById('dash-shift');
-    if (!el) return;
-    try {
-      // One lightweight query: metadata columns only, non-archived.
-      const rows = await sb('shift_checks', { query: `?select=check_type,job_status,summary&archived=eq.false&limit=1000` });
-      const list = rows || [];
-      let active=0, c3=0, c10=0, toCreate=0, underReview=0, completed=0;
-      list.forEach(r=>{
-        const s = r.summary || {};
-        if (r.job_status !== 'Completed' && r.job_status !== 'Archived') active++;
-        if (r.job_status === 'Completed') { completed++; if (r.check_type==='3day') c3++; else c10++; }
-        if (r.job_status === 'Under Review' || r.job_status === 'Comparison Completed') underReview++;
-        toCreate += (s.toBeCreated || 0);
-      });
-      el.style.display = 'block';
-      const card=(n,l)=>`<div class="stat-card"><div class="num">${n}</div><div class="label">${escapeHtml(l)}</div></div>`;
-      el.innerHTML = `<div class="panel-title" style="margin-bottom:12px;">🔀 BR/BG Shift</div>
-        <div class="stat-grid">
-          ${card(active,'Active checks')}${card(c3,'3-Day completed')}${card(c10,'10th-Day completed')}
-          ${card(toCreate,'Matches to create')}${card(underReview,'Under review')}${card(completed,'Completed')}
-        </div>`;
-    } catch(e){
-      // Table not set up yet or unreachable — hide the section quietly (don't break dashboard).
-      el.style.display = 'none';
-    }
+    // BR/BG Shift has been removed from this app (moved to the standalone
+    // basketball-shift tool). No dashboard summary to render here.
   }
 };
 

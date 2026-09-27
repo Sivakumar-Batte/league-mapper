@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Basketball BR/BG Shift Automation — V1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#1E1B2E;--surface:#2A2640;--surface-alt:#332F4A;--border:#4A4563;
+  --text:#F0ECF9;--text-dim:#B8B0D0;--text-faint:#8A80A8;
+  --accent:#A855F7;--accent-hover:#C084FC;--accent-soft:rgba(168,85,247,.18);
+  --success:#10B981;--success-soft:rgba(16,185,129,.15);
+  --warn:#F59E0B;--warn-soft:rgba(245,158,11,.15);
+  --danger:#EF4444;--danger-soft:rgba(239,68,68,.12);
+  --shadow:0 2px 4px rgba(0,0,0,.3);--radius:10px;
+  --font-display:'Space Grotesk',sans-serif;--font-body:'Inter',sans-serif;--font-mono:'IBM Plex Mono',monospace;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:15px;}
+h1,h2,h3,h4{font-family:var(--font-display);margin:0;}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;background:var(--surface);border-bottom:1px solid var(--border);}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand-mark{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent-hover));display:flex;align-items:center;justify-content:center;font-size:16px;}
+.brand-title{font-size:20px;font-weight:700;}
+.brand-sub{font-size:11px;color:var(--text-faint);font-family:var(--font-mono);}
+.back-btn{padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text-dim);font-size:14px;cursor:pointer;text-decoration:none;}
+.back-btn:hover{background:var(--border);color:var(--text);}
+
+/* Euro Desk source toggle (Upload file vs Saved data grid) */
+.ed-src-toggle{display:inline-flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:8px;}
+.ed-src-toggle button{padding:6px 12px;border:none;background:var(--surface-alt);color:var(--text-dim);font-size:12px;cursor:pointer;}
+.ed-src-toggle button.active{background:var(--accent);color:#fff;}
+.ed-grid-wrap{border:1px solid var(--border);border-radius:8px;overflow:auto;max-height:340px;margin-top:6px;}
+.ed-grid{width:100%;border-collapse:collapse;font-size:13px;}
+.ed-grid th{position:sticky;top:0;background:var(--surface-alt);color:var(--text-dim);font-size:11px;text-transform:uppercase;padding:7px 8px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
+.ed-grid td{padding:3px 5px;border-bottom:1px solid var(--border);}
+.ed-grid input{width:100%;min-width:120px;padding:5px 7px;border:1px solid transparent;border-radius:5px;background:transparent;color:var(--text);font-size:13px;}
+.ed-grid input:focus{border-color:var(--accent);background:var(--surface-alt);outline:none;}
+.ed-grid td.rn{color:var(--text-faint);font-family:var(--font-mono);font-size:11px;text-align:right;width:34px;}
+.ed-grid-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;}
+.ed-status{font-size:12px;color:var(--text-faint);}
+.container{max-width:1400px;margin:0 auto;padding:24px;}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:20px;}
+.panel-title{font-size:18px;font-weight:700;margin-bottom:16px;}
+.step-label{font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;}
+.toggle{display:inline-flex;gap:8px;}
+.toggle button{padding:10px 18px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text-dim);font-weight:600;font-size:14px;cursor:pointer;}
+.toggle button.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.daterange{margin-top:14px;padding:12px 16px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:8px;font-size:14px;}
+.field{margin-bottom:18px;}
+.field label{display:block;font-size:13px;font-weight:600;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:.03em;}
+.field small{color:var(--text-faint);font-size:12px;display:block;margin-top:4px;}
+.field input[type=file],.field input[type=number]{width:100%;padding:12px;border:2px dashed var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:14px;cursor:pointer;}
+.field input[type=number]{border-style:solid;cursor:text;}
+.fstat{font-size:12px;margin-top:6px;font-family:var(--font-mono);}
+.fstat.ok{color:var(--success);} .fstat.err{color:var(--danger);} .fstat.pending{color:var(--text-faint);}
+.btn{padding:12px 20px;border-radius:8px;border:none;font-size:15px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;}
+.btn-primary{background:var(--accent);color:#fff;} .btn-primary:hover{background:var(--accent-hover);}
+.btn-secondary{background:var(--surface-alt);color:var(--text);border:1px solid var(--border);} .btn-secondary:hover{background:var(--border);}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+.btn-group{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px;}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px;}
+.stat-card{background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center;}
+.stat-card .num{font-family:var(--font-display);font-size:26px;font-weight:700;}
+.stat-card .label{color:var(--text-dim);font-size:11px;margin-top:4px;text-transform:uppercase;}
+.stat-card.good .num{color:var(--success);} .stat-card.warn .num{color:var(--warn);} .stat-card.bad .num{color:var(--danger);}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
+.rtab{padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text-dim);font-size:13px;font-weight:600;cursor:pointer;}
+.rtab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+thead th{text-align:left;padding:9px 11px;background:var(--surface-alt);color:var(--text-dim);font-size:11px;text-transform:uppercase;font-weight:700;white-space:nowrap;border-bottom:1px solid var(--border);}
+tbody td{padding:8px 11px;border-bottom:1px solid var(--border);vertical-align:top;}
+tbody tr:hover{background:var(--surface-alt);}
+.badge{padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600;font-family:var(--font-mono);white-space:nowrap;}
+.b-good{background:var(--success-soft);color:var(--success);}
+.b-warn{background:var(--warn-soft);color:var(--warn);}
+.b-bad{background:var(--danger-soft);color:var(--danger);}
+.b-dim{background:var(--surface-alt);color:var(--text-faint);}
+.empty-state{text-align:center;padding:40px 20px;color:var(--text-faint);}
+.empty-state .ic{font-size:30px;margin-bottom:8px;}
+.note{font-size:12.5px;color:var(--text-dim);margin-bottom:12px;}
+.warnbox{background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;}
+.errbox{background:var(--danger-soft);color:var(--danger);border:1px solid var(--danger);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;}
+.loading{text-align:center;padding:40px;color:var(--text-dim);}
+.spinner{width:30px;height:30px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--accent);animation:spin .7s linear infinite;margin:0 auto 12px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+#toast-wrap{position:fixed;bottom:20px;right:20px;z-index:200;display:flex;flex-direction:column;gap:8px;}
+.toast{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);padding:12px 16px;border-radius:8px;font-size:13px;box-shadow:var(--shadow);min-width:240px;}
+.toast.err{border-left-color:var(--danger);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark">🏀</div>
+    <div>
+      <div class="brand-title">BR/BG Shift Automation</div>
+      <div class="brand-sub">VERSION 1 · BASKETBALL &amp; ICE HOCKEY</div>
+    </div>
+  </div>
+  <a href="index.html" class="back-btn">← Back to Mapper</a>
+</div>
+
+<div class="container">
+
+  <!-- STEP 1: Sport + Check type -->
+  <div class="panel">
+    <div class="step-label">Step 1 — Select Sport &amp; Check</div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:12px;color:var(--text-dim);text-transform:uppercase;">Sport</label>
+      <div class="toggle" style="margin-top:4px;">
+        <button id="sp-bk" class="active" onclick="V1.setSport('Basketball')">🏀 Basketball</button>
+        <button id="sp-ih" onclick="V1.setSport('Ice Hockey')">🏒 Ice Hockey</button>
+        <button id="sp-ms" onclick="V1.setSport('Minor Sports')">🎯 Minor Sports</button>
+      </div>
+      <div id="minor-sport-wrap" style="display:none;margin-top:10px;">
+        <label style="font-size:12px;color:var(--text-dim);text-transform:uppercase;">Minor Sport</label>
+        <div class="toggle" style="margin-top:4px;flex-wrap:wrap;">
+          <button id="ms-bandy" class="active" onclick="V1.setMinorSport('Bandy')">Bandy</button>
+          <button id="ms-curling" onclick="V1.setMinorSport('Curling')">Curling</button>
+          <button id="ms-floorball" onclick="V1.setMinorSport('Floorball')">Floorball</button>
+          <button id="ms-hockey" onclick="V1.setMinorSport('Hockey')">Hockey</button>
+          <button id="ms-rinkhockey" onclick="V1.setMinorSport('Rink Hockey')">Rink Hockey</button>
+          <button id="ms-waterpolo" onclick="V1.setMinorSport('Water Polo')">Water Polo</button>
+        </div>
+      </div>
+    </div>
+    <label style="font-size:12px;color:var(--text-dim);text-transform:uppercase;">Check type</label>
+    <div class="toggle" style="margin-top:4px;">
+      <button id="ct-3day" class="active" onclick="V1.setCheck('3day')">3-Day Check</button>
+      <button id="ct-10th" onclick="V1.setCheck('10th')">10th-Day Check</button>
+    </div>
+    <div id="ms-check-note" style="display:none;font-size:11px;color:var(--text-faint);margin-top:6px;">Minor Sports supports the 3-Day Check only.</div>
+    <div style="margin-top:14px;display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;">
+      <div>
+        <label style="font-size:12px;color:var(--text-dim);text-transform:uppercase;">Reference "today"</label><br>
+        <input type="date" id="ref-today" onchange="V1.recalcRange()" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:14px;margin-top:4px;">
+        <div style="font-size:11px;color:var(--text-faint);margin-top:4px;">Defaults to your local today. Change it to test other dates.</div>
+      </div>
+    </div>
+    <div class="daterange" id="daterange">Date range will appear here.</div>
+  </div>
+
+  <!-- STEP 2: Uploads -->
+  <div class="panel">
+    <div class="step-label">Step 2 — Upload Files</div>
+
+    <!-- BASKETBALL uploads (BR + BG + two Euro Desk sheets) -->
+    <div id="uploads-basketball">
+      <div class="field">
+        <label>BR Dump (Betradar) — .xlsx / .xls / .xml</label>
+        <input type="file" id="file-br" accept=".xlsx,.xls,.xml,.csv" onchange="V1.onFile('br',this)">
+        <div class="fstat pending" id="fstat-br">No file selected.</div>
+      </div>
+      <div class="field">
+        <label>BG Dump (Betgenius) — .csv / .xlsx</label>
+        <input type="file" id="file-bg" accept=".csv,.xlsx,.xls" onchange="V1.onFile('bg',this)">
+        <div class="fstat pending" id="fstat-bg">No file selected.</div>
+      </div>
+      <div class="field">
+        <label>Basketball Euro Desk BR Sheet</label>
+        <div class="ed-src-toggle">
+          <button id="edsrc-edbr-file" class="active" onclick="V1.setEdSource('edbr','file')">📁 Upload File</button>
+          <button id="edsrc-edbr-grid" onclick="V1.setEdSource('edbr','grid')">📝 Use Saved Data</button>
+        </div>
+        <div id="edwrap-edbr-file">
+          <input type="file" id="file-edbr" accept=".xlsx,.xls,.csv" onchange="V1.onFile('edbr',this)">
+          <div class="fstat pending" id="fstat-edbr">No file selected.</div>
+          <small>BR priority league list — used to validate Betradar competitions. Leagues highlighted red are treated as Disregarded.</small>
+        </div>
+        <div id="edwrap-edbr-grid" style="display:none;" data-ed-grid="edbr" data-ed-sport="Basketball" data-ed-sheet="br" data-ed-provlabel="Betradar Name"></div>
+      </div>
+      <div class="field">
+        <label>Basketball BG Euro Desk Sheet</label>
+        <div class="ed-src-toggle">
+          <button id="edsrc-edbg-file" class="active" onclick="V1.setEdSource('edbg','file')">📁 Upload File</button>
+          <button id="edsrc-edbg-grid" onclick="V1.setEdSource('edbg','grid')">📝 Use Saved Data</button>
+        </div>
+        <div id="edwrap-edbg-file">
+          <input type="file" id="file-edbg" accept=".xlsx,.xls,.csv" onchange="V1.onFile('edbg',this)">
+          <div class="fstat pending" id="fstat-edbg">No file selected.</div>
+          <small>BG priority league list — used to validate Betgenius competitions.</small>
+        </div>
+        <div id="edwrap-edbg-grid" style="display:none;" data-ed-grid="edbg" data-ed-sport="Basketball" data-ed-sheet="bg" data-ed-provlabel="Betgenius Name"></div>
+      </div>
+    </div>
+
+    <!-- MINOR SPORTS uploads (BR dump + one Euro Desk sheet; no BG) -->
+    <div id="uploads-minor" style="display:none;">
+      <div class="field">
+        <label>Betradar BR Dump — .xlsx / .xls / .xml</label>
+        <input type="file" id="file-msbr" accept=".xlsx,.xls,.xml,.csv" onchange="V1.onFile('msbr',this)">
+        <div class="fstat pending" id="fstat-msbr">No file selected.</div>
+      </div>
+      <div class="field">
+        <label>Minor Sports Euro Desk Sheet</label>
+        <div class="ed-src-toggle">
+          <button id="edsrc-msed-file" class="active" onclick="V1.setEdSource('msed','file')">📁 Upload File</button>
+          <button id="edsrc-msed-grid" onclick="V1.setEdSource('msed','grid')">📝 Use Saved Data</button>
+        </div>
+        <div id="edwrap-msed-file">
+          <input type="file" id="file-msed" accept=".xlsx,.xls,.csv" onchange="V1.onFile('msed',this)">
+          <div class="fstat pending" id="fstat-msed">No file selected.</div>
+          <small>Master config for Minor Sports. V1 uses Sport, Region and League columns only. Betradar alias also checked. No BG source.</small>
+        </div>
+        <div id="edwrap-msed-grid" style="display:none;" data-ed-grid="msed" data-ed-sheet="br" data-ed-provlabel="Betradar Name" data-ed-sport-dynamic="minor"></div>
+      </div>
+    </div>
+
+    <!-- ICE HOCKEY uploads (BR dump + one Euro Desk sheet; no BG) -->
+    <div id="uploads-icehockey" style="display:none;">
+      <div class="field">
+        <label>Ice Hockey BR Dump (Betradar) — .xlsx / .xls / .xml</label>
+        <input type="file" id="file-ihbr" accept=".xlsx,.xls,.xml,.csv" onchange="V1.onFile('ihbr',this)">
+        <div class="fstat pending" id="fstat-ihbr">No file selected.</div>
+      </div>
+      <div class="field">
+        <label>Ice Hockey Euro Desk Sheet</label>
+        <div class="ed-src-toggle">
+          <button id="edsrc-ihed-file" class="active" onclick="V1.setEdSource('ihed','file')">📁 Upload File</button>
+          <button id="edsrc-ihed-grid" onclick="V1.setEdSource('ihed','grid')">📝 Use Saved Data</button>
+        </div>
+        <div id="edwrap-ihed-file">
+          <input type="file" id="file-ihed" accept=".xlsx,.xls,.csv" onchange="V1.onFile('ihed',this)">
+          <div class="fstat pending" id="fstat-ihed">No file selected.</div>
+          <small>Ice Hockey priority league list — used to validate Betradar competitions. Ice Hockey has no BG source in V1. Leagues highlighted red are treated as Disregarded.</small>
+        </div>
+        <div id="edwrap-ihed-grid" style="display:none;" data-ed-grid="ihed" data-ed-sport="Ice Hockey" data-ed-sheet="br" data-ed-provlabel="Betradar Name"></div>
+      </div>
+    </div>
+
+    <div class="btn-group">
+      <button class="btn btn-secondary" id="btn-validate" onclick="V1.validate()">✓ Validate Files</button>
+      <button class="btn btn-primary" id="btn-run" onclick="V1.run()" disabled title="Validate first">▶ Run Shift Check</button>
+    </div>
+    <div id="validation-msg" style="margin-top:14px;"></div>
+  </div>
+
+  <!-- Processing -->
+  <div class="panel" id="processing" style="display:none;">
+    <div class="loading"><div class="spinner"></div><p>Processing…</p></div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results" style="display:none;">
+    <div class="panel">
+      <div class="panel-title">Summary</div>
+      <div id="summary-head" class="note"></div>
+      <div style="font-weight:700;margin:10px 0 8px;color:var(--text-dim);" id="br-summary-label">BR Summary</div>
+      <div class="stat-grid" id="br-summary"></div>
+      <div id="bg-summary-wrap">
+        <div style="font-weight:700;margin:10px 0 8px;color:var(--text-dim);">BG Summary</div>
+        <div class="stat-grid" id="bg-summary"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="tabs" id="result-tabs"></div>
+      <div id="result-body"></div>
+      <div class="btn-group">
+        <button class="btn btn-secondary" id="btn-export-br" onclick="V1.exportBR()">⬇ Export Eligible BR</button>
+        <button class="btn btn-secondary" id="btn-export-bg" onclick="V1.exportBG()">⬇ Export Eligible BG</button>
+        <button class="btn btn-primary" onclick="V1.exportAll()">⬇ Export All Results</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast-wrap"></div>
+
+<script>
+/* =====================================================================
+   Supabase (publishable/anon key) — used ONLY for the saved Euro Desk
+   grids (euro_desk_lists table). No mapping-DB structures are touched.
+   ===================================================================== */
+const SUPABASE_URL = "https://ywfvifcityihcfvyeisd.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Oym01Q8PYn7Xp8kuWLmRNQ_H3RI4B5l";
+const ED_REST = SUPABASE_URL + "/rest/v1/euro_desk_lists";
+
+const EDStore = {
+  // Phase 16: client-side request timeout (ms). Generous enough that normal
+  // Supabase requests never trip it; only genuine hangs are aborted.
+  TIMEOUT_MS: 15000,
+  _headers(extra){
+    const h = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' };
+    if (extra) for (const k in extra) h[k] = extra[k];
+    return h;
+  },
+  // fetch with an AbortController timeout. On timeout the request is aborted and
+  // rejects, so the existing try/catch in load/save reports the normal error and
+  // the finally restores busy state. No retry.
+  async _fetch(url, opts){
+    const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(()=>ctrl.abort(), this.TIMEOUT_MS) : null;
+    try {
+      const o = ctrl ? Object.assign({}, opts, { signal: ctrl.signal }) : opts;
+      return await fetch(url, o);
+    } catch(e){
+      if (e && (e.name === 'AbortError')) throw new Error('Request timed out after '+(this.TIMEOUT_MS/1000)+'s');
+      throw e;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  },
+  // Phase 16: keep only genuine row objects from a persisted rows array; skip
+  // null / primitives / arrays. Preserves order. Returns { rows, skipped }.
+  _sanitizeRows(arr){
+    if (!Array.isArray(arr)) return { rows: [], skipped: 0 };
+    const out = []; let skipped = 0;
+    for (let i=0;i<arr.length;i++){
+      const r = arr[i];
+      if (r && typeof r === 'object' && !Array.isArray(r)) out.push(r);
+      else skipped++;
+    }
+    return { rows: out, skipped: skipped };
+  },
+  // Sentinel thrown on an optimistic-concurrency conflict so callers can react
+  // specifically (show a "reload & reapply" message) instead of a generic error.
+  ConflictError: (function(){ function C(msg){ this.name='EDConflict'; this.message=msg; this.isConflict=true; } C.prototype = Object.create(Error.prototype); return C; })(),
+
+  // Load the saved grid for a (sport, sheetType).
+  // Returns { rows, version } where version is the persisted row's updated_at
+  // (the optimistic-concurrency marker), or null when no row exists yet.
+  async load(sport, sheetType){
+    const q = `?select=rows,updated_at&sport=eq.${encodeURIComponent(sport)}&sheet_type=eq.${encodeURIComponent(sheetType)}&limit=1`;
+    const res = await this._fetch(ED_REST + q, { headers: this._headers() });
+    if (!res.ok) throw new Error('Load failed ('+res.status+')');
+    const data = await res.json();
+    const row = (data && data[0]) ? data[0] : null;
+    // Phase 16: defensively skip corrupted (null / non-object) persisted rows.
+    const san = this._sanitizeRows(row ? row.rows : []);
+    return {
+      rows: san.rows,
+      skipped: san.skipped,
+      version: (row && row.updated_at) ? row.updated_at : null
+    };
+  },
+
+  // Save with OPTIMISTIC CONCURRENCY.
+  //   expectedVersion = the updated_at captured at load time (or null if the
+  //   grid was never loaded from an existing row).
+  // Behaviour:
+  //   • expectedVersion == null → INSERT a new row (POST, no merge). If a row
+  //     already exists (unique violation / 409) another agent created it since
+  //     → CONFLICT.
+  //   • expectedVersion set → conditional PATCH filtered by updated_at=eq.<ver>.
+  //     If 0 rows come back, the persisted version changed (or row vanished)
+  //     → CONFLICT. Otherwise confirm rows and return the NEW version.
+  // Returns { count, version } on confirmed success; throws ConflictError on
+  // a stale/lost-update conflict; throws Error on other failures.
+  async save(sport, sheetType, rows, expectedVersion){
+    const Conflict = this.ConflictError;
+    if (!expectedVersion){
+      // First save for this (sport, sheet_type): plain INSERT (no merge) so a
+      // concurrently-created row causes a unique violation instead of a silent
+      // overwrite.
+      const res = await this._fetch(ED_REST, {
+        method: 'POST',
+        headers: this._headers({ 'Prefer': 'return=representation' }),
+        body: JSON.stringify([{ sport, sheet_type: sheetType, rows, updated_by: 'shift-tool' }])
+      });
+      if (res.status === 409){
+        throw new Conflict('Another agent created this Euro Desk list since you started. Reload Saved, review the newer data, then reapply your changes.');
+      }
+      if (!res.ok){ const t = await res.text(); throw new Error('Save failed ('+res.status+'): '+t); }
+      return this._confirm(await this._json(res), sport, sheetType, rows);
+    }
+    // Existing row: conditional update guarded by the loaded version.
+    const q = `?sport=eq.${encodeURIComponent(sport)}&sheet_type=eq.${encodeURIComponent(sheetType)}&updated_at=eq.${encodeURIComponent(expectedVersion)}`;
+    const res = await this._fetch(ED_REST + q, {
+      method: 'PATCH',
+      headers: this._headers({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify({ rows, updated_by: 'shift-tool' })
+    });
+    if (!res.ok){ const t = await res.text(); throw new Error('Save failed ('+res.status+'): '+t); }
+    const data = await this._json(res);
+    if (!Array.isArray(data) || data.length === 0){
+      // Zero rows updated → the version guard did not match → someone else saved.
+      throw new Conflict('This Euro Desk list changed since you loaded it. Reload Saved, review the newer data, then reapply your changes.');
+    }
+    return this._confirm(data, sport, sheetType, rows);
+  },
+
+  async _json(res){
+    try { return await res.json(); }
+    catch(e){ throw new Error('Save could not be confirmed: response was not readable.'); }
+  },
+  // Confirm the persisted row echoes what we sent; return { count, version }.
+  _confirm(data, sport, sheetType, rows){
+    const saved = Array.isArray(data) ? data.find(r => r && r.sport===sport && r.sheet_type===sheetType) : null;
+    if (!saved || !Array.isArray(saved.rows)){
+      throw new Error('Save could not be confirmed: the database did not return the expected row.');
+    }
+    if (saved.rows.length !== rows.length){
+      throw new Error('Save mismatch: sent '+rows.length+' row(s) but the database stored '+saved.rows.length+'.');
+    }
+    return { count: saved.rows.length, version: saved.updated_at || null };
+  }
+};
+</script>
+<script src="basketball-shift.js"></script>
+</body>
+</html>

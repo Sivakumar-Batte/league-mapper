@@ -76,6 +76,12 @@ tr.status-nomap{border-left:3px solid var(--text-faint);opacity:.7;}
 .status-badge.review{background:var(--warn-soft);color:var(--warn);}
 .status-badge.wrong{background:var(--danger-soft);color:var(--danger);}
 .status-badge.nomap{background:var(--surface-alt);color:var(--text-faint);}
+.status-badge.op3{background:rgba(59,130,246,.18);color:#60A5FA;}
+.status-badge.dq{background:var(--danger-soft);color:var(--danger);}
+.status-badge.info{background:rgba(99,102,241,.18);color:#A5B4FC;}
+.mtick{color:var(--success);font-weight:700;}
+.mcross{color:var(--danger);font-weight:700;}
+.mdash{color:var(--text-faint);}
 
 .step{display:none;} .step.active{display:block;}
 .progress-bar{display:flex;gap:4px;margin-bottom:24px;}
@@ -137,8 +143,33 @@ tr.status-nomap{border-left:3px solid var(--text-faint);opacity:.7;}
         <small>Columns: Event ID, Event Open Date GMT, Event Date GMT, Sport, Event Name, Feed Name, Feed Provider ID, Similarity %</small>
       </div>
 
+      <div class="field">
+        <label>LBC OP3 Reference Data (paste TSV or CSV)</label>
+        <textarea id="dq-op3" style="width:100%;min-height:120px;padding:12px;border:2px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:13px;font-family:var(--font-mono);resize:vertical;" placeholder="Day&#9;Date&#9;Time&#9;Ticker Channel&#9;...&#9;Matches&#9;...&#9;Op&#10;Tu&#9;9/19/2026&#9;12:30&#9;Genius Sports&#9;...&#9;HK Mogo v Kyiv Capitals&#9;...&#9;op3"></textarea>
+        <small>OP3 is authoritative. A confirmed OP3 event must remain unmapped. Tab-separated (TSV) LBC exports are supported.</small>
+      </div>
+
+      <div class="field" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">
+        <div>
+          <label>BG ID prefix(es)</label>
+          <input type="text" id="dq-bg-prefix" value="1" style="padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);width:120px;">
+        </div>
+        <div>
+          <label>BR ID prefix(es)</label>
+          <input type="text" id="dq-br-prefix" value="7,8" style="padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);width:120px;">
+        </div>
+        <div>
+          <label>OP3 time tolerance (min)</label>
+          <input type="number" id="dq-op3-tol" value="15" min="0" style="padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);width:120px;">
+        </div>
+        <div>
+          <label>Event-name match threshold (%)</label>
+          <input type="number" id="dq-name-th" value="70" min="0" max="100" style="padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);width:120px;">
+        </div>
+      </div>
+
       <div class="btn-group">
-        <button class="btn btn-primary" onclick="DFC.run()">▶ Run Check</button>
+        <button class="btn btn-primary" onclick="DFC.run()">▶ Run DQ Check</button>
       </div>
     </div>
   </div>
@@ -182,19 +213,21 @@ tr.status-nomap{border-left:3px solid var(--text-faint);opacity:.7;}
       <div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;">
         <select id="filter-status" onchange="DFC.renderTable()" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text);font-size:14px;">
           <option value="all">All Statuses</option>
-          <option value="correct">Correct</option>
-          <option value="issues">Issues (Any Mismatch)</option>
-          <option value="nomap">No Mapping</option>
         </select>
-        <input type="text" id="filter-search" placeholder="Search..." oninput="DFC.renderTable()" style="flex:1;min-width:200px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text);font-size:14px;">
+        <select id="filter-provider" onchange="DFC.renderTable()" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text);font-size:14px;">
+          <option value="all">All Providers</option>
+        </select>
+        <input type="text" id="filter-search" placeholder="Search event / league / provider ID..." oninput="DFC.renderTable()" style="flex:1;min-width:200px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text);font-size:14px;">
       </div>
 
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>Event ID</th><th>Event Date</th><th>Sport</th><th>BCM Event Name</th>
-            <th>Feed Name</th><th>Feed Provider ID</th><th>Feed Date/Time</th>
-            <th>Source Event Name</th><th>Similarity %</th><th>Status</th>
+            <th>DQ Status</th><th>Event ID</th><th>BCM Event Date</th><th>Sport</th><th>BCM Event Name</th>
+            <th>Feed Name</th><th>Provider</th><th>Provider ID</th>
+            <th>Provider Event Name</th><th>Provider League</th><th>Provider Date</th><th>Provider Time</th>
+            <th>Provider ID Match</th><th>Date Match</th><th>Time Match</th><th>Event Match</th><th>League Match</th>
+            <th>Similarity %</th><th>Reason</th><th>Source File</th>
           </tr></thead>
           <tbody id="results-tbody"></tbody>
         </table>
@@ -213,7 +246,7 @@ tr.status-nomap{border-left:3px solid var(--text-faint);opacity:.7;}
         <label>1. DataFeed Check Output (Paste from Excel or use current results)</label>
         <small>Paste rows with columns: BCM Event Name, Feed Name. Or click "Use Current Results" if you just ran DataFeed Check.</small>
         <textarea id="prep-datafeed" style="width:100%;min-height:100px;padding:12px;border:2px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:14px;font-family:var(--font-mono);resize:vertical;" placeholder="BCM Event Name&#10;APR BBC - Patriots BC&#10;Greece - Cyprus&#10;KK SC Derby - KB Peja"></textarea>
-        <button class="btn btn-secondary" style="margin-top:8px;" onclick="PREP.useCurrentResults()">↑ Use Current DataFeed Check Results (Correct only)</button>
+        <button class="btn btn-secondary" style="margin-top:8px;" onclick="PREP.useCurrentResults()">↑ Use Current DataFeed Check Results (Valid Mapped only)</button>
         <div id="prep-state" style="display:none;border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-top:10px;font-size:13px;"></div>
       </div>
 
@@ -299,7 +332,36 @@ Rwanda
 const DFC = {
   results: [],
 
+  // DQ Validator entry point. Delegates the classification pipeline to the DQ
+  // namespace (new, clearly-named functions) while reusing all DFC file/parse/
+  // date/similarity helpers. The legacy prefix-only pipeline is preserved below
+  // as _runLegacy() for reference but is no longer wired to the button.
   async run(){
+    const brFiles = document.getElementById('file-br').files;
+    const bgFiles = document.getElementById('file-bg').files;
+    const bcmFiles = document.getElementById('file-bcm').files;
+
+    if (bcmFiles.length === 0) { alert('BCM Dump file is required'); return; }
+
+    document.getElementById('step-upload').classList.remove('active');
+    document.getElementById('step-processing').classList.add('active');
+    await new Promise(r => setTimeout(r, 60));
+
+    try {
+      await DQ.validateDataFeedRows();
+      document.getElementById('step-processing').classList.remove('active');
+      document.getElementById('step-results').classList.add('active');
+      this.results = DQ.results;
+      this.renderStats();
+      this.renderTable();
+    } catch(e){
+      alert('Error processing: ' + e.message);
+      console.error(e);
+      this.reset();
+    }
+  },
+
+  async _runLegacy(){
     const brFiles = document.getElementById('file-br').files;
     const bgFiles = document.getElementById('file-bg').files;
     const bcmFiles = document.getElementById('file-bcm').files;
@@ -504,87 +566,171 @@ const DFC = {
     }
   },
 
-  renderStats(){
-    const total = this.results.length;
-    const correct = this.results.filter(r=>r.status==='correct').length;
-    const nomap = this.results.filter(r=>r.status==='nomap').length;
-    const issues = total - correct - nomap;
-
-    document.getElementById('result-stats').innerHTML = `
-      <div class="stat-card"><div class="num">${total}</div><div class="label">Total</div></div>
-      <div class="stat-card correct"><div class="num">${correct}</div><div class="label">Correct</div></div>
-      <div class="stat-card wrong"><div class="num">${issues}</div><div class="label">Issues</div></div>
-      <div class="stat-card nomap"><div class="num">${nomap}</div><div class="label">No Mapping</div></div>
-    `;
-
-    // Surface data-integrity diagnostics (duplicate provider IDs) as a non-blocking warning.
-    const d = this.diagnostics || {};
-    const brDupes = [...new Set(d.brDupes || [])];
-    const bgDupes = [...new Set(d.bgDupes || [])];
-    const warnEl = document.getElementById('dfc-diagnostics');
-    if (warnEl) {
-      if (brDupes.length || bgDupes.length) {
-        warnEl.style.display = 'block';
-        warnEl.innerHTML = `⚠ Data integrity: `
-          + (brDupes.length ? `${brDupes.length} duplicate Betradar EventId(s) ` : '')
-          + (bgDupes.length ? `${bgDupes.length} duplicate Betgenius EventId(s) ` : '')
-          + `— the first occurrence of each was used. Duplicates: `
-          + this.esc([...brDupes, ...bgDupes].slice(0, 20).join(', ')) + (brDupes.length + bgDupes.length > 20 ? '…' : '');
-      } else {
-        warnEl.style.display = 'none';
-      }
-    }
+  // Map a DQ status to a badge CSS class.
+  badgeClass(status){
+    return DQ.STATUS_BADGE[status] || 'nomap';
   },
+
+  // Agent override: promote a reviewed "Mapping Review" row to "Valid Mapped"
+  // (checked), or revert a previously promoted row back to "Mapping Review"
+  // (unchecked). The original status/reason are preserved for a clean revert.
+  // Promoted rows are marked `overridden:true` so Prepare Mapping and the export
+  // can distinguish an agent-verified mapping from an engine-verified one.
+  overrideValid(index, checked){
+    const r = this.results[index];
+    if (!r) return;
+    if (checked){
+      if (r.dqStatus === 'Valid Mapped') return;
+      r._origStatus = r.dqStatus;
+      r._origReason = r.reason;
+      r.dqStatus = 'Valid Mapped';
+      r.overridden = true;
+      r.reason = 'Agent-verified after review (was: ' + (r._origStatus || 'Mapping Review') + '). ' + (r._origReason || '');
+    } else {
+      if (!r.overridden) return;
+      r.dqStatus = r._origStatus || 'Mapping Review';
+      r.reason = r._origReason || r.reason;
+      r.overridden = false;
+    }
+    // Keep the KPI counts and filter dropdowns in sync with the override.
+    this.renderStats();
+    this.renderTable();
+  },
+
+  renderStats(){
+    const rows = this.results;
+    const total = rows.length;
+    const count = s => rows.filter(r => r.dqStatus === s).length;
+    const cards = [
+      ['Total', total, ''],
+      ['Valid Mapped', count('Valid Mapped'), 'correct'],
+      ['Mapping Review', count('Mapping Review'), 'review'],
+      ['Provider Data Not Available', count('Provider Data Not Available'), 'review'],
+      ['Potential Missed Mapping', count('Potential Missed Mapping'), 'wrong'],
+      ['OP3', count('OP3'), ''],
+      ['OP3 Mapping DQ', count('OP3 Mapping DQ'), 'wrong'],
+      ['Coverage Review', count('Coverage Review'), 'nomap'],
+      ['Out of Scope', count('Out of Scope'), 'nomap']
+    ];
+    document.getElementById('result-stats').innerHTML = cards.map(([l,n,c]) =>
+      `<div class="stat-card ${c}"><div class="num">${n}</div><div class="label">${this.esc(l)}</div></div>`).join('');
+
+    // Diagnostics box — proves provider data was genuinely indexed.
+    const d = DQ.diag || {};
+    const warnEl = document.getElementById('dfc-diagnostics');
+    if (warnEl){
+      warnEl.style.display = 'block';
+      warnEl.style.background = 'var(--surface-alt)'; warnEl.style.color = 'var(--text-dim)'; warnEl.style.borderColor = 'var(--border)';
+      warnEl.innerHTML =
+        `<b>Diagnostics:</b> BCM rows loaded <b>${d.bcmRows||0}</b>`
+        + (d.bcmSkipped ? ` (validated <b>${d.bcmValid||0}</b>, skipped <b>${d.bcmSkipped}</b> blank row(s))` : '')
+        + ` · `
+        + `BG files <b>${d.bgFiles||0}</b> / unique events <b>${d.bgEvents||0}</b> · `
+        + `BR files <b>${d.brFiles||0}</b> / unique events <b>${d.brEvents||0}</b> · `
+        + `LBC rows parsed <b>${d.op3Rows||0}</b> (OP3 <b>${d.op3Count||0}</b>) · `
+        + `BG Provider-ID index <b>${d.bgIndex||0}</b> · BR Provider-ID index <b>${d.brIndex||0}</b>.`
+        + ((d.bgDupes&&d.bgDupes.length)||(d.brDupes&&d.brDupes.length)
+            ? `<br>⚠ Duplicate EventIds (first kept): BG ${[...new Set(d.bgDupes)].length}, BR ${[...new Set(d.brDupes)].length}.` : '');
+    }
+
+    // Populate status + provider filter dropdowns from actual results, preserving
+    // the current selection across re-renders (e.g. after an agent override).
+    const statusSel = document.getElementById('filter-status');
+    const provSel = document.getElementById('filter-provider');
+    const prevStatus = statusSel ? statusSel.value : 'all';
+    const prevProv = provSel ? provSel.value : 'all';
+    const statuses = [...new Set(rows.map(r=>r.dqStatus))].sort();
+    statusSel.innerHTML = '<option value="all">All Statuses</option>' +
+      statuses.map(s=>`<option value="${this.esc(s)}">${this.esc(s)}</option>`).join('');
+    if ([...statusSel.options].some(o=>o.value===prevStatus)) statusSel.value = prevStatus;
+    const provs = [...new Set(rows.map(r=>r.provider).filter(Boolean))].sort();
+    provSel.innerHTML = '<option value="all">All Providers</option>' +
+      provs.map(p=>`<option value="${this.esc(p)}">${this.esc(p)}</option>`).join('');
+    if ([...provSel.options].some(o=>o.value===prevProv)) provSel.value = prevProv;
+  },
+
+  _tick(v){ return v === true ? '<span class="mtick">✓</span>' : v === false ? '<span class="mcross">✗</span>' : '<span class="mdash">—</span>'; },
 
   renderTable(){
     const statusFilter = document.getElementById('filter-status').value;
+    const provFilter = (document.getElementById('filter-provider')||{}).value || 'all';
     const search = (document.getElementById('filter-search').value || '').toLowerCase();
     let rows = this.results;
-    if (statusFilter === 'correct') rows = rows.filter(r => r.status === 'correct');
-    else if (statusFilter === 'nomap') rows = rows.filter(r => r.status === 'nomap');
-    else if (statusFilter === 'issues') rows = rows.filter(r => r.status !== 'correct' && r.status !== 'nomap');
-    if (search) rows = rows.filter(r => [r.eventId,r.bcmSport,r.bcmEventName,r.feedName,r.feedProviderId,r.sourceEventName].some(v=>(v||'').toLowerCase().includes(search)));
+    if (statusFilter !== 'all') rows = rows.filter(r => r.dqStatus === statusFilter);
+    if (provFilter !== 'all') rows = rows.filter(r => r.provider === provFilter);
+    if (search) rows = rows.filter(r => [r.eventId,r.bcmSport,r.bcmEventName,r.feedName,r.feedProviderId,r.provEventName,r.provLeague].some(v=>(v||'').toLowerCase().includes(search)));
 
     const tbody = document.getElementById('results-tbody');
-    tbody.innerHTML = rows.slice(0, 500).map(r => {
-      // Determine CSS class and label
-      let cls, label;
-      if (r.status === 'correct') { cls = 'correct'; label = 'Correct'; }
-      else if (r.status === 'nomap') { cls = 'nomap'; label = 'No Mapping'; }
-      else { cls = 'wrong'; label = r.status; } // status contains the reason text
+    tbody.innerHTML = rows.slice(0, 1000).map(r => {
+      const cls = this.badgeClass(r.dqStatus);
+      // Agents can promote a reviewed "Mapping Review" row to "Valid Mapped".
+      // Rows already promoted show a checked box + an "(agent verified)" note and
+      // can be reverted. Only Mapping Review / promoted rows get the control.
+      const idx = this.results.indexOf(r);
+      let reviewCtrl = '';
+      if (r.dqStatus === 'Mapping Review'){
+        reviewCtrl = `<label style="display:block;margin-top:6px;font-size:11px;color:var(--text-dim);cursor:pointer;">
+          <input type="checkbox" onchange="DFC.overrideValid(${idx}, this.checked)" style="vertical-align:middle;"> Reviewed → Valid Mapped</label>`;
+      } else if (r.overridden){
+        reviewCtrl = `<label style="display:block;margin-top:6px;font-size:11px;color:var(--success);cursor:pointer;">
+          <input type="checkbox" checked onchange="DFC.overrideValid(${idx}, this.checked)" style="vertical-align:middle;"> Agent verified</label>`;
+      }
       return `
       <tr class="status-${cls}">
+        <td><span class="status-badge ${cls}">${this.esc(r.dqStatus)}</span>${reviewCtrl}</td>
         <td>${this.esc(r.eventId)}</td>
         <td>${this.esc(r.bcmDate)}</td>
         <td>${this.esc(r.bcmSport)}</td>
         <td>${this.esc(r.bcmEventName)}</td>
         <td>${this.esc(r.feedName)}</td>
-        <td>${this.esc(r.feedProviderId)}</td>
-        <td>${this.esc(r.sourceDateTime)}</td>
-        <td>${this.esc(r.sourceEventName)}</td>
-        <td>${r.similarity}%</td>
-        <td><span class="status-badge ${cls}">${this.esc(label)}</span></td>
+        <td>${this.esc(r.provider||'—')}</td>
+        <td>${this.esc(r.feedProviderId||'—')}</td>
+        <td>${this.esc(r.provEventName||'—')}</td>
+        <td>${this.esc(r.provLeague||'—')}</td>
+        <td>${this.esc(r.provDate||'—')}</td>
+        <td>${this.esc(r.provTime||'—')}</td>
+        <td>${this._tick(r.idMatch)}</td>
+        <td>${this._tick(r.dateMatch)}</td>
+        <td>${this._tick(r.timeMatch)}</td>
+        <td>${this._tick(r.eventMatch)}</td>
+        <td>${this._tick(r.leagueMatch)}</td>
+        <td>${r.similarity==null?'—':r.similarity+'%'}</td>
+        <td style="white-space:normal;min-width:220px;">${this.esc(r.reason)}</td>
+        <td>${this.esc(r.sourceFile||'—')}</td>
       </tr>`;
-    }).join('');
+    }).join('') || '<tr><td colspan="20" style="text-align:center;padding:24px;color:var(--text-faint);">No rows match the current filters.</td></tr>';
   },
 
   download(){
     const wb = XLSX.utils.book_new();
+    const S = this.csvSafe;
     const data = this.results.map(r => ({
-      'Event ID': r.eventId,
-      'Event Date GMT': r.bcmDate,
-      'Sport': r.bcmSport,
-      'BCM Event Name': r.bcmEventName,
-      'Feed Name': r.feedName,
-      'Feed Provider ID': r.feedProviderId,
-      'Source Date/Time': r.sourceDateTime,
-      'Source Event Name': r.sourceEventName,
-      'Similarity %': r.similarity,
-      'Status': r.status === 'correct' ? 'Correct' : (r.status === 'nomap' ? 'No Mapping' : r.status)
+      'DQ Status': r.dqStatus,
+      'Event ID': S(r.eventId),
+      'BCM Event Date': S(r.bcmDate),
+      'Sport': S(r.bcmSport),
+      'BCM Event Name': S(r.bcmEventName),
+      'Feed Name': S(r.feedName),
+      'Provider': r.provider,
+      'Provider ID': S(r.feedProviderId),
+      'Provider Event Name': S(r.provEventName),
+      'Provider League': S(r.provLeague),
+      'Provider Date': S(r.provDate),
+      'Provider Time': S(r.provTime),
+      'Provider ID Match': r.idMatch===true?'Yes':r.idMatch===false?'No':'',
+      'Date Match': r.dateMatch===true?'Yes':r.dateMatch===false?'No':'',
+      'Time Match': r.timeMatch===true?'Yes':r.timeMatch===false?'No':'',
+      'Event Match': r.eventMatch===true?'Yes':r.eventMatch===false?'No':'',
+      'League Match': r.leagueMatch===true?'Yes':r.leagueMatch===false?'No':'',
+      'Similarity %': r.similarity==null?'':r.similarity,
+      'Agent Verified': r.overridden ? 'Yes' : '',
+      'Original Status': r.overridden ? (r._origStatus||'') : '',
+      'Reason': S(r.reason),
+      'Source File': S(r.sourceFile)
     }));
     const ws = XLSX.utils.json_to_sheet(data);
-    XLSX.utils.book_append_sheet(wb, ws, 'DataFeed Check');
-    XLSX.writeFile(wb, `datafeed_check_${new Date().toISOString().slice(0,10)}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, 'DataFeed DQ');
+    XLSX.writeFile(wb, `datafeed_dq_${new Date().toISOString().slice(0,10)}.xlsx`);
   },
 
   reset(){
@@ -595,6 +741,24 @@ const DFC = {
     document.getElementById('file-bg').value = '';
     document.getElementById('file-bcm').value = '';
     this.results = [];
+  },
+
+  // Read the provider Event/Home/Away/League/Date/Time from a raw source row.
+  // Used by the DQ pipeline to display supporting evidence.
+  brRowFields(row){
+    const home = String(row['Hometeam']||row['hometeam']||'').trim();
+    const away = String(row['Awayteam']||row['awayteam']||'').trim();
+    const name = (home && away) ? `${home} v ${away}` : String(row['Event']||row['event']||'').trim();
+    const league = String(row['Unique Tournament']||row['unique tournament']||row['Tournament']||row['tournament']||row['Category']||row['category']||'').trim();
+    const dt = this.formatBetradarDate(row['Date']||row['date']||row['Day']||'', row['Time']||row['time']||'');
+    return { name, home, away, league, dt };
+  },
+  bgRowFields(row){
+    const name = String(row['Event']||row['event']||'').trim();
+    const league = String(row['Competition']||row['competition']||row['League']||'').trim();
+    const bgStart = row['Start (UTC+2)'] || row['Start (UTC)'] || row['start (utc)'] || row['Start'] || '';
+    const dt = this.formatBGDate(bgStart);
+    return { name, league, dt };
   },
 
   // ---- shared helpers (used by both DataFeed Check and Prepare Mapping) ----
@@ -985,6 +1149,498 @@ function switchTool(tool, btn) {
   if (tool === 'prepare' && typeof PREP !== 'undefined') PREP.renderState();
 }
 
+// ============================= DATAFEED DQ VALIDATOR =============================
+// New DQ pipeline. Reuses DFC helpers (parseFile, esc, csvSafe, normalize, sim,
+// calcSimilarity, date formatters). Does NOT touch Prepare Mapping, navigation,
+// League/Team mapping, or Supabase (none exists here).
+const DQ = {
+  results: [],
+  diag: {},
+  // Provider indexes: numeric Provider ID → { row, fields, sourceFile }
+  bgIndex: null,
+  brIndex: null,
+  op3: [],
+
+  STATUS_BADGE: {
+    'Valid Mapped':'correct',
+    'Mapping Review':'review',
+    'Provider Data Not Available':'review',
+    'Potential Missed Mapping':'wrong',
+    'OP3':'op3',
+    'OP3 Mapping DQ':'dq',
+    'Coverage Review':'nomap',
+    'Out of Scope':'nomap'
+  },
+
+  // ---- config from the UI ----
+  cfg(){
+    const parsePrefixes = s => String(s||'').split(',').map(x=>x.trim()).filter(Boolean);
+    return {
+      bgPrefixes: parsePrefixes((document.getElementById('dq-bg-prefix')||{}).value || '1'),
+      brPrefixes: parsePrefixes((document.getElementById('dq-br-prefix')||{}).value || '7,8'),
+      op3Tol: parseInt((document.getElementById('dq-op3-tol')||{}).value,10) || 15,
+      nameTh: (parseInt((document.getElementById('dq-name-th')||{}).value,10) || 70)
+    };
+  },
+
+  // Normalize any provider ID to its bare numeric form: strip BOM, "sr:match:"/
+  // "sr:" prefixes, trailing ".0" from Excel numeric cells, and whitespace.
+  normalizeProviderId(id){
+    let s = String(id==null?'':id).replace(/^\uFEFF/,'').trim();
+    s = s.replace(/^sr:match:/i,'').replace(/^sr:/i,'');
+    if (/^\d+\.0$/.test(s)) s = s.slice(0,-2);
+    return s.trim();
+  },
+
+  // Determine provider from a Provider ID using configurable prefixes.
+  // Returns 'BG' | 'BR' | 'OTHER'. Sportradar "sr:match:" always → BR.
+  providerOf(rawId){
+    const raw = String(rawId==null?'':rawId).trim();
+    if (!raw) return '';
+    if (/^sr:/i.test(raw)) return 'BR';
+    const num = this.normalizeProviderId(raw);
+    if (!/^\d+$/.test(num)) return 'OTHER';
+    const c = this.cfg();
+    if (c.brPrefixes.some(p=>num.startsWith(p))) return 'BR';
+    if (c.bgPrefixes.some(p=>num.startsWith(p))) return 'BG';
+    return 'OTHER';
+  },
+
+  // Build BG and BR provider-ID indexes keyed by the bare numeric ID. BR is also
+  // indexed under its numeric AND sr:match: forms so BCM's numeric ID resolves.
+  buildProviderIndexes(bgData, brData){
+    this.bgIndex = new Map();
+    this.brIndex = new Map();
+    const bgDupes = [], brDupes = [];
+    for (const row of bgData){
+      const num = this.normalizeProviderId(DFC.readId(row));
+      if (!num) continue;
+      if (this.bgIndex.has(num)) { bgDupes.push(num); continue; }
+      this.bgIndex.set(num, { row, fields: DFC.bgRowFields(row), sourceFile: row.__srcFile||'' });
+    }
+    for (const row of brData){
+      const num = this.normalizeProviderId(DFC.readId(row));
+      if (!num) continue;
+      if (this.brIndex.has(num)) { brDupes.push(num); continue; }
+      this.brIndex.set(num, { row, fields: DFC.brRowFields(row), sourceFile: row.__srcFile||'' });
+    }
+    return { bgDupes, brDupes };
+  },
+
+  // Look up a provider event by BCM Provider ID (both numeric and sr:match: forms).
+  lookupProvider(provider, rawId){
+    const num = this.normalizeProviderId(rawId);
+    if (!num) return null;
+    if (provider === 'BG') return this.bgIndex.get(num) || null;
+    if (provider === 'BR') return this.brIndex.get(num) || null;
+    return null;
+  },
+
+  // ---- date/time helpers built on DFC formatters (all normalised to compare) ----
+  // Extract {y,mo,d,h,mi} from an mm-dd-YYYY hh:mm string produced by the formatters.
+  _mdyParts(str){
+    const m = String(str||'').match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+    if (!m) return null;
+    return { mo:+m[1], d:+m[2], y:+m[3], h:m[4]?+m[4]:0, mi:m[5]?+m[5]:0 };
+  },
+  dateMatch(a,b){
+    const p=this._mdyParts(a), q=this._mdyParts(b);
+    if (!p||!q) return false;
+    return p.y===q.y && p.mo===q.mo && p.d===q.d;
+  },
+  timeDiffMin(a,b){
+    const p=this._mdyParts(a), q=this._mdyParts(b);
+    if (!p||!q) return null;
+    return Math.abs((p.h*60+p.mi)-(q.h*60+q.mi));
+  },
+  timeMatch(a,b,tol){
+    const d=this.timeDiffMin(a,b);
+    return d!=null && d<=tol;
+  },
+
+  // ---- qualifier protection: never cross meaningful qualifiers ----
+  // Returns true if a and b carry CONFLICTING qualifiers (must not match).
+  qualifierConflict(a,b){
+    const A=this._qualifiers(a), B=this._qualifiers(b);
+    if (A.gender && B.gender && A.gender!==B.gender) return true;
+    if (A.age && B.age && A.age!==B.age) return true;
+    if (A.reserve!==B.reserve) return true;
+    if (A.youth!==B.youth) return true;
+    if (A.threeX3!==B.threeX3) return true;
+    if (A.roman!==B.roman) return true;
+    if (A.bteam!==B.bteam) return true;
+    return false;
+  },
+  _qualifiers(s){
+    const t=' '+DFC.normalize(s)+' ';
+    const ageM = t.match(/\bu(1[6-9]|2[0-5])\b/);
+    return {
+      gender: /\bwomen\b|\bwoman\b|\bfemale\b|\bladies\b/.test(t) ? 'w'
+            : /\bmen\b|\bmale\b/.test(t) ? 'm' : '',
+      age: ageM ? ('u'+ageM[1]) : '',
+      youth: /\bjunior\b|\bjuniors\b|\byouth\b/.test(t),
+      reserve: /\breserve\b|\breserves\b/.test(t),
+      threeX3: /\b3x3\b/.test(t),
+      roman: /\biii\b/.test(t) ? 'iii' : /\bii\b/.test(t) ? 'ii' : '',
+      bteam: /\bb\b/.test(t) && !/\bbc\b/.test(t)
+    };
+  },
+
+  // Event-name score using the existing home/away-aware similarity, gated by the
+  // qualifier guard. Similarity is evidence only, never a hard reject for IDs.
+  eventNameScore(a,b){
+    if (!a || !b) return 0;
+    if (this.qualifierConflict(a,b)) return 0;
+    return DFC.calcSimilarity(a,b);   // 0..100, reversed-team aware
+  },
+
+  // ---- LBC OP3 parsing (TSV first, then CSV; headerless fallback) ----
+  parseLbcOp3(text){
+    text = String(text||'').replace(/^\uFEFF/,'');
+    const lines = text.split(/\r?\n/).filter(x=>x.trim());
+    if (!lines.length) return { rows:[], op3:[] };
+    const first = lines[0];
+    const isTab = first.indexOf('\t') !== -1;
+    const parseCSVLine = line => {
+      const out=[]; let cur='', q=false;
+      for (let i=0;i<line.length;i++){
+        const c=line[i], n=line[i+1];
+        if (c==='"'){ if(q&&n==='"'){cur+='"';i++;} else q=!q; }
+        else if (c===',' && !q){ out.push(cur.trim()); cur=''; }
+        else cur+=c;
+      }
+      out.push(cur.trim()); return out;
+    };
+    const parseLine = line => isTab ? line.split('\t').map(x=>String(x).trim()) : parseCSVLine(line);
+    const rows = lines.map(parseLine);
+
+    const headerNorm = x => DFC.normalize(String(x||''));
+    const header = rows[0].map(headerNorm);
+    const realHeader = header.filter(x=>['day','date','time','matches','match','op','status','sport','league','ticker channel'].includes(x)).length >= 2;
+
+    let objRows;
+    if (realHeader){
+      const h = rows[0];
+      objRows = rows.slice(1).map(a=>{ const o={}; h.forEach((k,i)=>o[k]=a[i]??''); return o; });
+    } else {
+      // Headerless LBC layouts. 13 cols include a leading Day column; 12 cols omit it.
+      objRows = rows.map(a=>{
+        const o={};
+        const hasDay = a.length>=13 && !/^\d{1,2}[\/-]\d{1,2}[\/-]\d{4}$/.test(String(a[0]||'').trim());
+        const dateIdx=hasDay?1:0, timeIdx=hasDay?2:1, sportIdx=hasDay?6:5, leagueIdx=hasDay?7:6, matchIdx=hasDay?9:8;
+        o.Date=String(a[dateIdx]||'').trim(); o.Time=String(a[timeIdx]||'').trim();
+        o.Sport=String(a[sportIdx]||'').trim(); o.League=String(a[leagueIdx]||'').trim();
+        o.Matches=String(a[matchIdx]||'').trim(); o.Op=String(a[a.length-1]||'').trim();
+        o['Ticker Channel']=String(a[hasDay?3:2]||'').trim();
+        return o;
+      });
+    }
+    const gv = (r,names)=>{ for (const n of names){ for (const k in r){ if (k.toLowerCase().trim()===n.toLowerCase()) return r[k]; } } return ''; };
+    const op3 = objRows.filter(r => DFC.normalize(gv(r,['Op','OP','Status'])) === 'op3').map(r=>{
+      const dateStr = String(gv(r,['Date'])||'').trim();
+      const timeStr = String(gv(r,['Time'])||'').trim();
+      // LBC uses M/D/YYYY. Normalise to mm-dd-YYYY hh:mm for comparison.
+      const norm = this._normLbcDate(dateStr, timeStr);
+      return { dtNorm: norm, name: String(gv(r,['Matches','Match','Event'])||'').trim(),
+               sport: String(gv(r,['Sport'])||'').trim(), league: String(gv(r,['League'])||'').trim() };
+    }).filter(x=>x.dtNorm && x.name);
+    return { rows: objRows, op3 };
+  },
+  // LBC M/D/YYYY + H:MM → mm-dd-YYYY hh:mm (no timezone shift, no +60).
+  _normLbcDate(dateStr, timeStr){
+    const m = String(dateStr||'').match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (!m) return '';
+    let mo=+m[1], d=+m[2], y=+m[3];
+    // If clearly D/M (first>12), swap to M/D interpretation defensively.
+    if (mo>12 && d<=12){ const t=mo; mo=d; d=t; }
+    let h=0, mi=0;
+    const tm = String(timeStr||'').match(/(\d{1,2}):(\d{2})/);
+    if (tm){ h=+tm[1]; mi=+tm[2]; }
+    return `${DFC.pad(mo)}-${DFC.pad(d)}-${y} ${DFC.pad(h)}:${DFC.pad(mi)}`;
+  },
+
+  // Match a BCM row to an OP3 entry: same date + time within tolerance + event
+  // name match. Sport/league are intentionally ignored (per confirmed rule).
+  matchOp3(bcm){
+    const c = this.cfg();
+    let best = null;
+    for (const o of this.op3){
+      if (!this.dateMatch(bcm.bcmDate, o.dtNorm)) continue;
+      if (!this.timeMatch(bcm.bcmDate, o.dtNorm, c.op3Tol)) continue;
+      const ns = this.eventNameScore(bcm.bcmEventName, o.name);
+      if (ns < c.nameTh) continue;
+      const td = this.timeDiffMin(bcm.bcmDate, o.dtNorm);
+      if (!best || ns > best.ns || (ns===best.ns && td < best.td)) best = { o, ns, td };
+    }
+    return best;
+  },
+
+  // ---- mapped-event validation (has Provider ID) ----
+  validateMappedEvent(bcm, provider){
+    const c = this.cfg();
+    const hit = this.lookupProvider(provider, bcm.feedProviderId);
+    if (hit){
+      // Exact Provider ID present = strongest evidence.
+      const f = hit.fields;
+      const dOk = bcm.bcmDate && f.dt ? this.dateMatch(bcm.bcmDate, f.dt) : null;
+      const tOk = bcm.bcmDate && f.dt ? this.timeMatch(bcm.bcmDate, f.dt, c.op3Tol) : null;
+      const ns = this.eventNameScore(bcm.bcmEventName, f.name);
+      const eOk = f.name ? (ns >= c.nameTh) : null;
+      const lgOk = null; // league comparison is display-only (BCM has no clean league here)
+      const ev = { provider, idMatch:true, dateMatch:dOk, timeMatch:tOk, eventMatch:eOk, leagueMatch:lgOk,
+                   similarity:(f.name?ns:null), provEventName:f.name, provLeague:f.league, provDt:f.dt, sourceFile:hit.sourceFile };
+      // An exact Provider ID does NOT automatically mean Valid Mapped. The engine
+      // validates the referenced provider event against the BCM event. A CONFLICT
+      // downgrades to Mapping Review when ANY of:
+      //   • date differs
+      //   • time differs beyond tolerance
+      //   • the Provider ID appears SWAPPED (this provider event clearly belongs
+      //     to a different BCM row than this one).
+      // A merely weak/fuzzy name score is NOT a conflict (similarity is evidence
+      // only and never overrides — nor manufactures — a contradiction).
+      const swap = this.detectSwap(bcm, provider, f);
+      const conflictReasons = [];
+      if (dOk === false) conflictReasons.push('provider date conflicts with BCM');
+      if (dOk !== false && tOk === false) conflictReasons.push('provider time differs beyond tolerance');
+      if (swap) conflictReasons.push('Provider ID appears swapped — the provider event matches BCM Event ID "'+swap.otherId+'" better ('+Math.round(swap.otherScore)+'% vs '+Math.round(ns)+'%)');
+      const conflict = conflictReasons.length > 0;
+      ev.swapConflict = !!swap;
+      ev.dqStatus = conflict ? 'Mapping Review' : 'Valid Mapped';
+      ev.reason = this.buildDqReason(ev, bcm,
+        conflict ? ('Exact Provider ID found but '+conflictReasons.join('; ')+' — needs review.') : null);
+      return ev;
+    }
+    // ID not found in provider data → search event-level for a same-provider candidate.
+    const cand = this.findProviderCandidate(bcm, provider);
+    if (cand){
+      const ev = { provider, idMatch:false, dateMatch:true, timeMatch:true,
+                   eventMatch:(cand.ns>=c.nameTh), leagueMatch:null, similarity:cand.ns,
+                   provEventName:cand.fields.name, provLeague:cand.fields.league, provDt:cand.fields.dt, sourceFile:cand.sourceFile };
+      ev.dqStatus = 'Mapping Review';
+      ev.reason = this.buildDqReason(ev, bcm, 'Provider ID not found, but a same-provider event with matching date/time was located.');
+      return ev;
+    }
+    const ev = { provider, idMatch:false, dateMatch:null, timeMatch:null, eventMatch:null, leagueMatch:null,
+                 similarity:null, provEventName:'', provLeague:'', provDt:'', sourceFile:'', dqStatus:'Provider Data Not Available' };
+    ev.reason = this.buildDqReason(ev, bcm, 'Provider ID/event could not be confirmed in the uploaded '+provider+' data.');
+    return ev;
+  },
+
+  // Swap detection for an exact Provider ID match.
+  // The provider event `f` (referenced by THIS bcm's Provider ID) is compared to
+  // every OTHER BCM row. If some other BCM row — one that carries a DIFFERENT
+  // Provider ID — matches this provider event clearly better than the current
+  // BCM row does, the Provider ID is almost certainly swapped between events.
+  // Returns { otherId, otherScore } or null.
+  // SWAP_MARGIN keeps this conservative: a small naming difference won't trip it;
+  // it fires only when another event is a materially better owner of the ID.
+  SWAP_MARGIN: 25,
+  detectSwap(bcm, provider, f){
+    if (!f || !f.name) return null;
+    const thisNum = this.normalizeProviderId(bcm.feedProviderId);
+    const nsThis = this.eventNameScore(bcm.bcmEventName, f.name);
+    let best = null;
+    const rows = this._bcmForSwap || [];
+    for (const other of rows){
+      if (other === bcm) continue;
+      // Only a genuine swap: the other row must carry a DIFFERENT provider id.
+      const otherNum = this.normalizeProviderId(other.feedProviderId);
+      if (!otherNum || otherNum === thisNum) continue;
+      // And that other row must be for the same provider + same date as this
+      // provider event (a real swap happens between events on the same slate).
+      if (other._provider && other._provider !== provider) continue;
+      if (f.dt && other.bcmDate && !this.dateMatch(other.bcmDate, f.dt)) continue;
+      const nsOther = this.eventNameScore(other.bcmEventName, f.name);
+      if (nsOther >= this.cfg().nameTh && nsOther >= nsThis + this.SWAP_MARGIN){
+        if (!best || nsOther > best.otherScore) best = { otherId: other.eventId || otherNum, otherScore: nsOther };
+      }
+    }
+    return best;
+  },
+
+  // ---- unmapped-event validation (no Provider ID). OP3 already handled upstream. ----
+  validateUnmappedEvent(bcm){
+    const c = this.cfg();
+    const bg = this.findProviderCandidate(bcm, 'BG');
+    const br = this.findProviderCandidate(bcm, 'BR');
+    const best = (bg && br) ? (bg.ns>=br.ns?bg:br) : (bg||br||null);
+    if (best){
+      const ev = { provider:best.provider, idMatch:null, dateMatch:true, timeMatch:true,
+                   eventMatch:(best.ns>=c.nameTh), leagueMatch:null, similarity:best.ns,
+                   provEventName:best.fields.name, provLeague:best.fields.league, provDt:best.fields.dt,
+                   sourceFile:best.sourceFile, dqStatus:'Potential Missed Mapping' };
+      ev.reason = this.buildDqReason(ev, bcm, 'Unmapped BCM event has a '+best.provider+' candidate with matching date/time.');
+      return ev;
+    }
+    const ev = { provider:'', idMatch:null, dateMatch:null, timeMatch:null, eventMatch:null, leagueMatch:null,
+                 similarity:null, provEventName:'', provLeague:'', provDt:'', sourceFile:'', dqStatus:'Coverage Review' };
+    ev.reason = this.buildDqReason(ev, bcm, 'Unmapped BCM event; no BG/BR provider candidate found with matching date/time.');
+    return ev;
+  },
+
+  // Search a provider dataset for an event-level candidate: same date + exact
+  // time + event-name >= threshold (qualifier-guarded). Evidence, not truth.
+  findProviderCandidate(bcm, provider){
+    const c = this.cfg();
+    const idx = provider==='BG' ? this.bgIndex : provider==='BR' ? this.brIndex : null;
+    if (!idx || !bcm.bcmDate) return null;
+    let best = null;
+    for (const hit of idx.values()){
+      const f = hit.fields;
+      if (!f.dt) continue;
+      if (!this.dateMatch(bcm.bcmDate, f.dt)) continue;
+      if (!this.timeMatch(bcm.bcmDate, f.dt, 0)) continue; // exact time for candidates
+      const ns = this.eventNameScore(bcm.bcmEventName, f.name);
+      if (ns < c.nameTh) continue;
+      if (!best || ns > best.ns) best = { provider, ns, fields:f, sourceFile:hit.sourceFile };
+    }
+    return best;
+  },
+
+  buildDqReason(ev, bcm, extra){
+    const bits = [];
+    if (extra) bits.push(extra);
+    if (ev.idMatch===true) bits.push('Exact Provider ID confirmed in '+ev.provider+' data.');
+    if (ev.dateMatch!=null) bits.push('Date '+(ev.dateMatch?'matches':'differs')+'.');
+    if (ev.timeMatch!=null) bits.push('Time '+(ev.timeMatch?'matches':'differs')+'.');
+    if (ev.similarity!=null) bits.push('Event name '+ev.similarity+'% (evidence only; similarity never rejects a valid ID).');
+    return bits.join(' ');
+  },
+
+  // ---- orchestrator ----
+  async validateDataFeedRows(){
+    const cfg = this.cfg();
+    const bcmFiles = document.getElementById('file-bcm').files;
+    const bgFiles = document.getElementById('file-bg').files;
+    const brFiles = document.getElementById('file-br').files;
+
+    // Parse all inputs (reuse DFC.parseFile). Tag each row with its source file.
+    const readTagged = async (fileList) => {
+      let out = [];
+      for (let i=0;i<fileList.length;i++){
+        const rows = await DFC.parseFile(fileList[i]);
+        rows.forEach(r => r.__srcFile = fileList[i].name);
+        out = out.concat(rows);
+      }
+      return out;
+    };
+    const bcmData = await readTagged(bcmFiles);
+    const bgData = await readTagged(bgFiles);
+    const brData = await readTagged(brFiles);
+
+    if (!bcmData.length) throw new Error('The BCM Dump file has no data rows.');
+
+    const dupes = this.buildProviderIndexes(bgData, brData);
+    const lbc = this.parseLbcOp3((document.getElementById('dq-op3')||{}).value || '');
+    this.op3 = lbc.op3;
+
+    // Normalize each BCM row.
+    const getCol = (row, names) => {
+      const keys = Object.keys(row);
+      for (const n of names){ const f = keys.find(k=>k.toLowerCase().trim()===n.toLowerCase().trim()); if (f) return String(row[f]||'').trim(); }
+      for (const n of names){ const f = keys.find(k=>k.toLowerCase().includes(n.toLowerCase())); if (f) return String(row[f]||'').trim(); }
+      return '';
+    };
+
+    // First pass: normalize every non-blank BCM row and tag its provider. This
+    // full list is needed BEFORE classification so swap-detection can compare a
+    // provider event against every other BCM event.
+    let bcmSkipped = 0;
+    const bcmRows = [];
+    for (const row of bcmData){
+      const bcm = {
+        eventId: getCol(row,['Event ID','EventID','Event_ID']),
+        bcmDate: DFC.formatBCMDate(getCol(row,['Event Date GMT','Event Date'])),
+        bcmSport: getCol(row,['Sport','Sport Name']),
+        bcmEventName: getCol(row,['Event Name','EventName']),
+        feedName: getCol(row,['Feed Name','FeedName']),
+        feedProviderId: getCol(row,['Feed Provider ID','Feed Provider Id','FeedProviderID']),
+        similarityReport: getCol(row,['Similarity %','Similarity'])
+      };
+      // Skip blank / trailing spreadsheet rows. A real BCM event must have at
+      // least an Event ID or an Event Name; a row with neither (and no provider
+      // ID) is an empty spacer row and must NOT become a "Coverage Review".
+      if (!bcm.eventId && !bcm.bcmEventName && !String(bcm.feedProviderId||'').trim()){
+        bcmSkipped++;
+        continue;
+      }
+      bcm._provider = String(bcm.feedProviderId||'').trim() ? this.providerOf(bcm.feedProviderId) : '';
+      bcmRows.push(bcm);
+    }
+    // Expose the normalized rows to detectSwap().
+    this._bcmForSwap = bcmRows;
+
+    // Second pass: classify each row.
+    this.results = bcmRows.map(bcm => {
+      const rec = this.classify(bcm);
+      return {
+        eventId: bcm.eventId, bcmDate: bcm.bcmDate, bcmSport: bcm.bcmSport, bcmEventName: bcm.bcmEventName,
+        feedName: bcm.feedName, feedProviderId: bcm.feedProviderId,
+        provider: rec.provider || '',
+        provEventName: rec.provEventName || '', provLeague: rec.provLeague || '',
+        provDate: rec.provDt ? (this._mdyParts(rec.provDt) ? rec.provDt.split(/\s+/)[0] : rec.provDt) : '',
+        provTime: rec.provDt && rec.provDt.split(/\s+/)[1] ? rec.provDt.split(/\s+/)[1] : '',
+        idMatch: rec.idMatch, dateMatch: rec.dateMatch, timeMatch: rec.timeMatch,
+        eventMatch: rec.eventMatch, leagueMatch: rec.leagueMatch,
+        similarity: rec.similarity!=null ? Math.round(rec.similarity) : null,
+        dqStatus: rec.dqStatus, reason: rec.reason, sourceFile: rec.sourceFile || ''
+      };
+    });
+
+    // Diagnostics.
+    this.diag = {
+      bcmRows: bcmData.length,
+      bcmValid: this.results.length,
+      bcmSkipped: bcmSkipped,
+      bgFiles: bgFiles.length, bgEvents: this.bgIndex.size,
+      brFiles: brFiles.length, brEvents: this.brIndex.size,
+      op3Rows: lbc.rows.length, op3Count: this.op3.length,
+      bgIndex: this.bgIndex.size, brIndex: this.brIndex.size,
+      bgDupes: dupes.bgDupes, brDupes: dupes.brDupes
+    };
+  },
+
+  // Status priority ladder (exact order confirmed by the user):
+  // 1 Out of Scope · 2 OP3 / OP3 Mapping DQ (OP3 authoritative, checked before
+  // provider search) · 3 Mapped+ID found · 4 Mapped+ID not found · 5 Unmapped
+  // +candidate · 6 Unmapped+none.
+  classify(bcm){
+    const hasPid = !!String(bcm.feedProviderId||'').trim();
+    const provider = hasPid ? this.providerOf(bcm.feedProviderId) : '';
+
+    // 1) Mapped but provider out of BG/BR scope.
+    if (hasPid && provider === 'OTHER'){
+      return { provider:'OTHER', dqStatus:'Out of Scope', idMatch:null, dateMatch:null, timeMatch:null,
+               eventMatch:null, leagueMatch:null, similarity:null, provEventName:'', provLeague:'', provDt:'',
+               sourceFile:'', reason:'BCM provider is outside the BG/BR scope of this validator.' };
+    }
+
+    // 2) OP3 is authoritative — check LBC before any provider search.
+    const op3 = this.matchOp3(bcm);
+    if (op3){
+      if (hasPid){
+        // LBC says OP3 but BCM is mapped to a provider → data-quality conflict.
+        return { provider, dqStatus:'OP3 Mapping DQ', idMatch:null, dateMatch:true, timeMatch:true,
+                 eventMatch:true, leagueMatch:null, similarity:Math.round(op3.ns),
+                 provEventName:op3.o.name, provLeague:op3.o.league, provDt:op3.o.dtNorm, sourceFile:'LBC OP3',
+                 reason:'LBC confirms OP3 (date+time+event match) but BCM has a provider mapping. OP3 events must remain unmapped.' };
+      }
+      return { provider:'', dqStatus:'OP3', idMatch:null, dateMatch:true, timeMatch:true,
+               eventMatch:true, leagueMatch:null, similarity:Math.round(op3.ns),
+               provEventName:op3.o.name, provLeague:op3.o.league, provDt:op3.o.dtNorm, sourceFile:'LBC OP3',
+               reason:'LBC confirms OP3 (date+time+event match). Event correctly remains unmapped.' };
+    }
+
+    // 3 & 4) Mapped event (in BG/BR scope).
+    if (hasPid && (provider==='BG' || provider==='BR')){
+      return this.validateMappedEvent(bcm, provider);
+    }
+
+    // 5 & 6) Unmapped event, not OP3.
+    return this.validateUnmappedEvent(bcm);
+  }
+};
+
 // ============================= PREPARE MAPPING =============================
 const PREP = {
   leagueResults: [],
@@ -994,37 +1650,36 @@ const PREP = {
   correctMap: {},
 
   useCurrentResults(){
-    // Pull "Correct" results from DataFeed Check
-    const correct = DFC.results.filter(r => r.status === 'correct');
-    if (correct.length === 0) {
-      alert('No "Correct" results found. Run DataFeed Check first.');
+    // Pull "Valid Mapped" results from the DQ DataFeed Check. This now includes
+    // any Mapping Review rows an agent has promoted to Valid Mapped via the
+    // review checkbox (see DFC.overrideValid). Provider routing uses the DQ
+    // engine's resolved provider ('BR'/'BG'), not a raw prefix guess.
+    const valid = DFC.results.filter(r => r.dqStatus === 'Valid Mapped');
+    if (valid.length === 0) {
+      alert('No "Valid Mapped" results found. Run DataFeed Check first (and promote any reviewed Mapping Review rows).');
       return;
     }
-    // Build a lookup by BCM event name → provider info (an event can map to both BR and BG)
     this.correctMap = {};
-    correct.forEach(r => {
+    valid.forEach(r => {
       const key = (r.bcmEventName || '').toLowerCase().trim();
       if (!this.correctMap[key]) this.correctMap[key] = { br: null, bg: null };
-      // Route by the source the DataFeed Check actually resolved (sourceType),
-      // falling back to the Feed Provider ID prefix (7 = Betradar, 1 = Betgenius).
-      const prefix = String(r.feedProviderId).charAt(0);
-      const isBR = r.sourceType === 'Betradar' || (!r.sourceType && prefix === '7');
-      const isBG = r.sourceType === 'Betgenius' || (!r.sourceType && prefix === '1');
-      if (isBR) {
-        this.correctMap[key].br = { id: r.feedProviderId, sourceEventName: r.sourceEventName };
-      } else if (isBG) {
-        this.correctMap[key].bg = { id: r.feedProviderId, sourceEventName: r.sourceEventName };
+      const provEventName = r.provEventName || '';
+      if (r.provider === 'BR') {
+        this.correctMap[key].br = { id: r.feedProviderId, sourceEventName: provEventName };
+      } else if (r.provider === 'BG') {
+        this.correctMap[key].bg = { id: r.feedProviderId, sourceEventName: provEventName };
       }
     });
-    const lines = [...new Set(correct.map(r => r.bcmEventName))];
+    const lines = [...new Set(valid.map(r => r.bcmEventName))];
     document.getElementById('prep-datafeed').value = lines.join('\n');
 
-    // Track verified-result state so the operator can see what's loaded and avoid stale data.
-    const verifiedIds = correct.filter(r => this.stripId(r.feedProviderId)).length;
+    const verifiedIds = valid.filter(r => this.stripId(r.feedProviderId)).length;
+    const promoted = valid.filter(r => r.overridden).length;
     this.loadedState = {
-      correctRows: correct.length,
+      correctRows: valid.length,
       verifiedIds,
       uniqueEvents: lines.length,
+      promoted,
       loadedAt: new Date().toLocaleString()
     };
     this.renderState();
@@ -1043,7 +1698,9 @@ const PREP = {
     }
     el.style.display = 'block';
     el.style.background = 'var(--success-soft)'; el.style.color = 'var(--success)'; el.style.borderColor = 'var(--success)';
-    el.innerHTML = `✓ DataFeed Check results loaded — <b>${s.correctRows}</b> Correct rows · <b>${s.verifiedIds}</b> verified provider IDs · <b>${s.uniqueEvents}</b> unique events · loaded ${DFC.esc(s.loadedAt)}`;
+    el.innerHTML = `✓ DataFeed Check results loaded — <b>${s.correctRows}</b> Valid Mapped rows`
+      + (s.promoted ? ` (incl. <b>${s.promoted}</b> promoted from Mapping Review)` : '')
+      + ` · <b>${s.verifiedIds}</b> verified provider IDs · <b>${s.uniqueEvents}</b> unique events · loaded ${DFC.esc(s.loadedAt)}`;
   },
 
   async run(){
