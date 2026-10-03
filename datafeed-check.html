@@ -770,9 +770,26 @@ const DFC = {
     return names.some(n => keys.includes(n.toLowerCase().trim()));
   },
 
-  // Read the provider EventId from a row using the known header variations.
+  // Read the provider EventId from a row. Match the header case-insensitively and
+  // ignore spaces / underscores / a leading BOM, so "EventId", "Event ID",
+  // "EVENT_ID", "Event Id " etc. all resolve. A too-strict exact-string match
+  // previously skipped rows whose header differed only by case/spacing, which made
+  // genuinely-present provider events show as "Provider Data Not Available".
   readId(row){
-    return String(row['EventId'] || row['eventid'] || row['EVENTID'] || row['Event Id'] || row['event_id'] || '').trim();
+    if (!row) return '';
+    // Fast path: the common exact headers.
+    const direct = row['EventId'] || row['eventid'] || row['EVENTID'] || row['Event Id'] || row['event_id'];
+    if (direct != null && String(direct).trim() !== '') return String(direct).trim();
+    // Fuzzy path: normalise each key (strip BOM, spaces, underscores, lowercase)
+    // and accept the canonical "eventid".
+    const canon = k => String(k||'').replace(/^\uFEFF/,'').replace(/[\s_]+/g,'').toLowerCase();
+    for (const k of Object.keys(row)){
+      if (canon(k) === 'eventid'){
+        const v = String(row[k]==null?'':row[k]).trim();
+        if (v !== '') return v;
+      }
+    }
+    return '';
   },
 
   // Strip ONLY the agreed Sportradar prefixes ("sr:match:" / "sr:"). Anything else
@@ -1198,9 +1215,15 @@ const DQ = {
   // Normalize any provider ID to its bare numeric form: strip BOM, "sr:match:"/
   // "sr:" prefixes, trailing ".0" from Excel numeric cells, and whitespace.
   normalizeProviderId(id){
-    let s = String(id==null?'':id).replace(/^\uFEFF/,'').trim();
+    let s = String(id==null?'':id).replace(/^\uFEFF/,'');
+    // Strip ALL whitespace incl. non-breaking spaces/zero-width chars that can
+    // ride along on IDs pasted/exported from Excel and silently break lookups.
+    s = s.replace(/[\s\u00A0\u200B-\u200D\uFEFF]/g,'').trim();
     s = s.replace(/^sr:match:/i,'').replace(/^sr:/i,'');
-    if (/^\d+\.0$/.test(s)) s = s.slice(0,-2);
+    // Drop a leading apostrophe Excel uses to force text, and any trailing ".0"
+    // (or ".00" etc.) from a numeric cell read as a float.
+    s = s.replace(/^'/,'');
+    if (/^\d+\.0+$/.test(s)) s = s.replace(/\.0+$/,'');
     return s.trim();
   },
 
@@ -1255,10 +1278,19 @@ const DQ = {
     if (!m) return null;
     return { mo:+m[1], d:+m[2], y:+m[3], h:m[4]?+m[4]:0, mi:m[5]?+m[5]:0 };
   },
+  // Date equality that tolerates the BCM(month-first) vs BR/BG(day-first) order
+  // clash on AMBIGUOUS dates. When a date part like "01-10" is fully ambiguous
+  // (both <=12) the two feeds encode it in opposite orders, so we also accept a
+  // month/day-swapped match. The swap only ever helps when both values are <=12;
+  // an unambiguous date (one part >12) still requires an exact match, so this
+  // can never make two genuinely different dates look equal.
   dateMatch(a,b){
     const p=this._mdyParts(a), q=this._mdyParts(b);
     if (!p||!q) return false;
-    return p.y===q.y && p.mo===q.mo && p.d===q.d;
+    if (p.y!==q.y) return false;
+    const direct = (p.mo===q.mo && p.d===q.d);
+    const swapped = (p.mo===q.d && p.d===q.mo);
+    return direct || swapped;
   },
   timeDiffMin(a,b){
     const p=this._mdyParts(a), q=this._mdyParts(b);
