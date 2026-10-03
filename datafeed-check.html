@@ -1014,7 +1014,10 @@ const DFC = {
     };
   },
 
-  // BCM: input mm-dd-YYYY hh:mm:ss → output mm-dd-YYYY hh:mm, +60 minutes added
+  // BCM: input is MONTH-FIRST (mm-dd-YYYY), with 12-hour (AM/PM) OR 24-hour time
+  // and optional seconds, e.g. "10-1-2026 2:30:00 PM". Output mm-dd-YYYY hh:mm,
+  // +60 minutes added. NOTE: BCM is month-first while Betradar/Betgenius are
+  // day-first — the two must NOT be parsed with the same assumption.
   formatBCMDate(val){
     if (val === '' || val === null || val === undefined) return '';
     let y, mo, d, h, mi;
@@ -1024,9 +1027,18 @@ const DFC = {
       y = p.y; mo = p.mo; d = p.d; h = p.h; mi = p.mi;
     } else {
       const str = String(val).trim();
-      const m = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+      // Capture date, time (hh:mm[:ss]) and an optional AM/PM marker.
+      const m = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp][Mm])?/);
       if (!m) return str;
       mo = parseInt(m[1]); d = parseInt(m[2]); y = parseInt(m[3]); h = parseInt(m[4]); mi = parseInt(m[5]);
+      // Defensive: BCM is month-first, but if the first number is clearly a day
+      // (>12) while the second is a valid month (<=12), it was exported day-first
+      // — swap so an ambiguous row can never yield an impossible month.
+      if (mo > 12 && d <= 12) { const t = mo; mo = d; d = t; }
+      // Convert 12-hour clock to 24-hour when an AM/PM marker is present.
+      const ampm = m[7] ? m[7].toLowerCase() : '';
+      if (ampm === 'pm' && h < 12) h += 12;
+      else if (ampm === 'am' && h === 12) h = 0;
     }
     // Add +60 minutes with rollover
     const r = this.addMinutes(y, mo, d, h, mi, 60);
@@ -1286,11 +1298,49 @@ const DQ = {
     };
   },
 
+  // True when the BCM row is a Tennis event. Tennis has two special rules:
+  //   1) a time-only difference does NOT downgrade an ID-matched row (handled in
+  //      validateMappedEvent), and
+  //   2) participant names must be canonicalised (see tennisCanonical) before
+  //      similarity so "Last, First" / reversed order / "(COUNTRY)" codes match.
+  isTennis(sport){
+    return /\btennis\b/i.test(String(sport||''));
+  },
+
+  // Canonicalise a Tennis event name so that player order, name order
+  // ("Last, First" vs "First Last"), country codes and separators do not matter:
+  //   • strip "(JPN)" style country/qualifier codes in parentheses
+  //   • split the two participants on v / vs / -
+  //   • flip "Last, First" → "First Last"
+  //   • normalise each side and sort the two sides alphabetically
+  // Example: "Kei Nishikori (JPN) - Frances Tiafoe (USA)" and
+  //          "Frances Tiafoe vs Kei Nishikori" both → "frances tiafoe v kei nishikori".
+  tennisCanonical(name){
+    let s = String(name||'').replace(/\([^)]*\)/g, ' ');      // drop (COUNTRY) codes
+    const sides = s.split(/\s+vs\.?\s+|\s+v\s+|\s*-\s*/i)       // split participants
+                   .map(x => x.trim()).filter(Boolean);
+    const fixOrder = p => {
+      // "Last, First" → "First Last"
+      const m = p.split(',');
+      if (m.length === 2) return (m[1].trim() + ' ' + m[0].trim());
+      return p;
+    };
+    const norm = sides.map(p => DFC.normalize(fixOrder(p))).filter(Boolean);
+    norm.sort();                                               // order-independent
+    return norm.join(' v ');
+  },
+
   // Event-name score using the existing home/away-aware similarity, gated by the
   // qualifier guard. Similarity is evidence only, never a hard reject for IDs.
-  eventNameScore(a,b){
+  // For Tennis, both names are canonicalised first (see tennisCanonical) so that
+  // reversed participant order and "Last, First" / country codes still match.
+  eventNameScore(a,b,sport){
     if (!a || !b) return 0;
     if (this.qualifierConflict(a,b)) return 0;
+    if (this.isTennis(sport)){
+      const ca = this.tennisCanonical(a), cb = this.tennisCanonical(b);
+      if (ca && cb) return DFC.calcSimilarity(ca, cb);
+    }
     return DFC.calcSimilarity(a,b);   // 0..100, reversed-team aware
   },
 
@@ -1367,7 +1417,7 @@ const DQ = {
     for (const o of this.op3){
       if (!this.dateMatch(bcm.bcmDate, o.dtNorm)) continue;
       if (!this.timeMatch(bcm.bcmDate, o.dtNorm, c.op3Tol)) continue;
-      const ns = this.eventNameScore(bcm.bcmEventName, o.name);
+      const ns = this.eventNameScore(bcm.bcmEventName, o.name, bcm.bcmSport);
       if (ns < c.nameTh) continue;
       const td = this.timeDiffMin(bcm.bcmDate, o.dtNorm);
       if (!best || ns > best.ns || (ns===best.ns && td < best.td)) best = { o, ns, td };
@@ -1384,7 +1434,7 @@ const DQ = {
       const f = hit.fields;
       const dOk = bcm.bcmDate && f.dt ? this.dateMatch(bcm.bcmDate, f.dt) : null;
       const tOk = bcm.bcmDate && f.dt ? this.timeMatch(bcm.bcmDate, f.dt, c.op3Tol) : null;
-      const ns = this.eventNameScore(bcm.bcmEventName, f.name);
+      const ns = this.eventNameScore(bcm.bcmEventName, f.name, bcm.bcmSport);
       const eOk = f.name ? (ns >= c.nameTh) : null;
       const lgOk = null; // league comparison is display-only (BCM has no clean league here)
       const ev = { provider, idMatch:true, dateMatch:dOk, timeMatch:tOk, eventMatch:eOk, leagueMatch:lgOk,
@@ -1399,15 +1449,23 @@ const DQ = {
       // A merely weak/fuzzy name score is NOT a conflict (similarity is evidence
       // only and never overrides — nor manufactures — a contradiction).
       const swap = this.detectSwap(bcm, provider, f);
+      // Tennis exception: a TIME-only difference is acceptable and must NOT
+      // downgrade the row — it stays Valid Mapped. This applies to time ONLY; a
+      // DATE difference or a swapped Provider ID is still a conflict for Tennis.
+      const tennis = this.isTennis(bcm.bcmSport);
       const conflictReasons = [];
       if (dOk === false) conflictReasons.push('provider date conflicts with BCM');
-      if (dOk !== false && tOk === false) conflictReasons.push('provider time differs beyond tolerance');
+      if (dOk !== false && tOk === false && !tennis) conflictReasons.push('provider time differs beyond tolerance');
       if (swap) conflictReasons.push('Provider ID appears swapped — the provider event matches BCM Event ID "'+swap.otherId+'" better ('+Math.round(swap.otherScore)+'% vs '+Math.round(ns)+'%)');
       const conflict = conflictReasons.length > 0;
       ev.swapConflict = !!swap;
       ev.dqStatus = conflict ? 'Mapping Review' : 'Valid Mapped';
+      // Note on the row when a Tennis time difference was deliberately allowed.
+      const tennisTimeNote = (tennis && dOk !== false && tOk === false && !swap)
+        ? 'Tennis: provider time differs but time-only differences are allowed for Tennis — kept as Valid Mapped.'
+        : null;
       ev.reason = this.buildDqReason(ev, bcm,
-        conflict ? ('Exact Provider ID found but '+conflictReasons.join('; ')+' — needs review.') : null);
+        conflict ? ('Exact Provider ID found but '+conflictReasons.join('; ')+' — needs review.') : tennisTimeNote);
       return ev;
     }
     // ID not found in provider data → search event-level for a same-provider candidate.
@@ -1438,7 +1496,7 @@ const DQ = {
   detectSwap(bcm, provider, f){
     if (!f || !f.name) return null;
     const thisNum = this.normalizeProviderId(bcm.feedProviderId);
-    const nsThis = this.eventNameScore(bcm.bcmEventName, f.name);
+    const nsThis = this.eventNameScore(bcm.bcmEventName, f.name, bcm.bcmSport);
     let best = null;
     const rows = this._bcmForSwap || [];
     for (const other of rows){
@@ -1450,7 +1508,7 @@ const DQ = {
       // provider event (a real swap happens between events on the same slate).
       if (other._provider && other._provider !== provider) continue;
       if (f.dt && other.bcmDate && !this.dateMatch(other.bcmDate, f.dt)) continue;
-      const nsOther = this.eventNameScore(other.bcmEventName, f.name);
+      const nsOther = this.eventNameScore(other.bcmEventName, f.name, other.bcmSport);
       if (nsOther >= this.cfg().nameTh && nsOther >= nsThis + this.SWAP_MARGIN){
         if (!best || nsOther > best.otherScore) best = { otherId: other.eventId || otherNum, otherScore: nsOther };
       }
@@ -1490,7 +1548,7 @@ const DQ = {
       if (!f.dt) continue;
       if (!this.dateMatch(bcm.bcmDate, f.dt)) continue;
       if (!this.timeMatch(bcm.bcmDate, f.dt, 0)) continue; // exact time for candidates
-      const ns = this.eventNameScore(bcm.bcmEventName, f.name);
+      const ns = this.eventNameScore(bcm.bcmEventName, f.name, bcm.bcmSport);
       if (ns < c.nameTh) continue;
       if (!best || ns > best.ns) best = { provider, ns, fields:f, sourceFile:hit.sourceFile };
     }
