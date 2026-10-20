@@ -11,50 +11,56 @@
 <style>
 /* ============================= THEME TOKENS ============================= */
 :root{
-  --bg:#1E1B2E;
-  --surface:#2A2640;
-  --surface-alt:#332F4A;
-  --surface-raised:#3D3856;
-  --border:#4A4563;
-  --text:#F0ECF9;
-  --text-dim:#B8B0D0;
-  --text-faint:#8A80A8;
-  --accent:#A855F7;
-  --accent-hover:#C084FC;
-  --accent-soft:rgba(168,85,247,.18);
-  --warn:#F59E0B;
-  --warn-soft:rgba(245,158,11,.15);
-  --danger:#EF4444;
-  --danger-soft:rgba(239,68,68,.12);
-  --success:#10B981;
-  --success-soft:rgba(16,185,129,.12);
-  --shadow:0 2px 4px rgba(0,0,0,.3);
-  --shadow-lg:0 12px 32px rgba(0,0,0,.5);
+  /* Tech Teal & Navy (Clean & Corporate) — default theme */
+  --bg:#F1F5F9;
+  --surface:#FFFFFF;
+  --surface-alt:#F8FAFC;
+  --surface-raised:#FFFFFF;
+  --border:#CBD5E1;
+  --text:#1E293B;
+  --text-dim:#64748B;
+  --text-faint:#94A3B8;
+  --accent:#0284C7;
+  --accent-hover:#0369A1;
+  --accent-soft:#E0F2FE;
+  --secondary:#0D9488;
+  --secondary-hover:#0F766E;
+  --warn:#D97706;
+  --warn-soft:rgba(217,119,6,.14);
+  --danger:#DC2626;
+  --danger-soft:rgba(220,38,38,.10);
+  --success:#0D9488;
+  --success-soft:#CCFBF1;
+  --shadow:0 1px 3px rgba(15,23,42,.08);
+  --shadow-lg:0 12px 32px rgba(15,23,42,.16);
   --radius:10px;
   --font-display:'Space Grotesk',sans-serif;
   --font-body:'Inter',sans-serif;
   --font-mono:'IBM Plex Mono',monospace;
 }
 html.dark{
-  --bg:#0D0B14;
-  --surface:#161225;
-  --surface-alt:#1E1930;
-  --surface-raised:#26203D;
-  --border:#352F50;
-  --text:#F5F0FF;
-  --text-dim:#C4B8E0;
-  --text-faint:#7A6FA0;
-  --accent:#C084FC;
-  --accent-hover:#D8B4FE;
-  --accent-soft:rgba(192,132,252,.15);
+  /* Dark companion (Navy) for the dark-mode toggle */
+  --bg:#0F172A;
+  --surface:#1E293B;
+  --surface-alt:#273449;
+  --surface-raised:#2F3E57;
+  --border:#3A4A63;
+  --text:#F1F5F9;
+  --text-dim:#CBD5E1;
+  --text-faint:#8695AD;
+  --accent:#38BDF8;
+  --accent-hover:#7DD3FC;
+  --accent-soft:rgba(56,189,248,.16);
+  --secondary:#2DD4BF;
+  --secondary-hover:#5EEAD4;
   --warn:#FBBF24;
-  --warn-soft:rgba(251,191,36,.12);
+  --warn-soft:rgba(251,191,36,.14);
   --danger:#F87171;
-  --danger-soft:rgba(248,113,113,.12);
-  --success:#34D399;
-  --success-soft:rgba(52,211,153,.12);
-  --shadow:0 2px 4px rgba(0,0,0,.5);
-  --shadow-lg:0 12px 32px rgba(0,0,0,.7);
+  --danger-soft:rgba(248,113,113,.14);
+  --success:#2DD4BF;
+  --success-soft:rgba(45,212,191,.16);
+  --shadow:0 2px 4px rgba(0,0,0,.4);
+  --shadow-lg:0 12px 32px rgba(0,0,0,.6);
 }
 *{box-sizing:border-box;}
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);transition:background .15s,color .15s;font-size:16px;}
@@ -110,8 +116,8 @@ a{color:var(--accent);}
 .login-card p{color:var(--text-dim);font-size:15px;margin:0 0 22px;}
 .field{margin-bottom:14px;}
 .field label{display:block;font-size:12px;font-weight:600;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:.03em;}
-.field input,.field select{width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:15px;transition:.15s;}
-.field input:focus,.field select:focus{outline:none;border-color:var(--accent);background:var(--surface);}
+.field input,.field select{width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:15px;transition:.15s;}
+.field input:focus,.field select:focus{outline:none;border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 3px var(--accent-soft);}
 .btn{padding:11px 18px;border-radius:8px;border:1px solid transparent;font-size:15px;font-weight:600;transition:.15s;display:inline-flex;align-items:center;gap:6px;}
 .btn-primary{background:var(--accent);color:#fff;}
 .btn-primary:hover{background:var(--accent-hover);}
@@ -186,7 +192,7 @@ thead th:hover{color:var(--text);}
 thead th .arrow{opacity:.6;margin-left:3px;}
 tbody td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:middle;font-size:15px;}
 tbody tr:last-child td{border-bottom:none;}
-tbody tr:hover{background:var(--surface-alt);}
+tbody tr:hover{background:var(--accent-soft);}
 td.na,span.na-tag{color:var(--text-faint);font-style:italic;font-size:12px;}
 .row-actions{display:flex;gap:6px;}
 .pagination{display:flex;align-items:center;justify-content:space-between;margin-top:14px;font-size:12.5px;color:var(--text-dim);}
@@ -361,6 +367,8 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
             <option value="fully_mapped">Fully mapped</option>
           </select>
           <input type="text" id="lg-search" placeholder="Search leagues…" oninput="LeagueTab.refresh()">
+          <button class="btn btn-secondary btn-sm" id="lg-export-names" onclick="LeagueTab.exportNames()">⬇ Export Names</button>
+          <button class="btn btn-danger btn-sm admin-only-btn" id="lg-del-bcm-only" onclick="LeagueTab.removeBcmOnly()" style="display:none;">🧹 Remove BCM-only leagues</button>
           <span style="margin-left:auto;color:var(--text-dim);font-size:12.5px;" id="lg-count"></span>
         </div>
         <div class="table-wrap">
@@ -1116,6 +1124,58 @@ const LeagueTab = {
       toast('League deleted');
       this.render(); DashboardTab.render();
     } catch(e){ toast('Delete failed: '+e.message, true); }
+  },
+  // Export the League and Team NAMES to a two-sheet workbook. Respects the
+  // current sport scope (App.getLeagues()/getTeams()).
+  exportNames(){
+    const leagues = App.getLeagues();
+    const teams = App.getTeams();
+    if (!leagues.length && !teams.length) { toast('No data to export', true); return; }
+    const wb = XLSX.utils.book_new();
+    const lgSheet = XLSX.utils.json_to_sheet(leagues.map(l=>({
+      Country:l.country, Competition:l.bcm_competition, Betradar:l.betradar, Betgenius:l.betgenius
+    })));
+    XLSX.utils.book_append_sheet(wb, lgSheet, 'League Names');
+    const tmSheet = XLSX.utils.json_to_sheet(teams.map(t=>({
+      Country:t.country, Competition:t.bcm_competition, 'BCM Team':t.bcm_team,
+      'Betradar Team':t.betradar_team, 'BG Team':t.bg_team
+    })));
+    XLSX.utils.book_append_sheet(wb, tmSheet, 'Team Names');
+    XLSX.writeFile(wb, `League & Team Mapper_names_${new Date().toISOString().slice(0,10)}.xlsx`);
+  },
+  // Permanently delete league records that have BCM data but NO Betradar AND NO
+  // Betgenius mapping (both blank or "N/A"). Admin-only; scoped to current sport.
+  // Mirrors TeamTab.removeBlankBcm (batched Supabase DELETE + history log).
+  async removeBcmOnly(){
+    if (state.user.role !== 'admin') { toast('Admin only', true); return; }
+    const isBlank = v => { const s = String(v==null?'':v).trim(); return s==='' || s.toLowerCase()==='n/a'; };
+    const hasBcm = l => !isBlank(l.country) || !isBlank(l.bcm_competition);
+    const targets = App.getLeagues().filter(l => hasBcm(l) && isBlank(l.betradar) && isBlank(l.betgenius));
+    if (targets.length === 0) { toast('No BCM-only leagues found'); return; }
+    if (!confirm(`Permanently delete ${targets.length} league(s) that have BCM data but no Betradar and no Betgenius mapping for "${state.sport}"?\n\nThis removes them from the database for everyone and cannot be undone.`)) return;
+
+    const ids = targets.map(l=>l.id);
+    const btn = document.getElementById('lg-del-bcm-only');
+    if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
+    try {
+      const BATCH = 100;
+      for (let i=0; i<ids.length; i+=BATCH){
+        const chunk = ids.slice(i, i+BATCH);
+        await sb('leagues', { method:'DELETE', query:`?id=in.(${chunk.join(',')})` });
+      }
+      const idSet = new Set(ids);
+      state.leagues = state.leagues.filter(l=>!idSet.has(l.id));
+      await logHistory('Bulk Delete','leagues', `${targets.length} BCM-only league(s) deleted`, {
+        type:'bulk',
+        entries: targets.map(r=>({ Sport:r.sport, Country:r.country, 'BCM Competition':r.bcm_competition, Betradar:r.betradar, Betgenius:r.betgenius }))
+      });
+      toast(`Deleted ${targets.length} league(s)`);
+      this.render(); DashboardTab.render();
+    } catch(e){
+      toast('Delete failed: '+e.message, true);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '🧹 Remove BCM-only leagues'; }
+    }
   }
 };
 

@@ -9,13 +9,17 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
-  --bg:#1E1B2E;--surface:#2A2640;--surface-alt:#332F4A;--border:#4A4563;
-  --text:#F0ECF9;--text-dim:#B8B0D0;--text-faint:#8A80A8;
-  --accent:#A855F7;--accent-hover:#C084FC;--accent-soft:rgba(168,85,247,.18);
-  --success:#10B981;--success-soft:rgba(16,185,129,.15);
-  --warn:#F59E0B;--warn-soft:rgba(245,158,11,.15);
-  --danger:#EF4444;--danger-soft:rgba(239,68,68,.12);
-  --shadow:0 2px 4px rgba(0,0,0,.3);--radius:10px;
+  /* Tech Teal & Navy (Clean & Corporate) */
+  --bg:#F1F5F9;--surface:#FFFFFF;--surface-alt:#F8FAFC;--border:#CBD5E1;
+  --text:#1E293B;--text-dim:#64748B;--text-faint:#94A3B8;
+  --accent:#0284C7;--accent-hover:#0369A1;--accent-soft:#E0F2FE;
+  --secondary:#0D9488;--secondary-hover:#0F766E;--secondary-soft:#CCFBF1;
+  --success:#0D9488;--success-soft:#CCFBF1;
+  --warn:#D97706;--warn-soft:rgba(217,119,6,.14);
+  --danger:#DC2626;--danger-soft:rgba(220,38,38,.10);
+  --active:#E0F2FE;
+  --code-bg:#0F172A;--code-text:#E2E8F0;
+  --shadow:0 1px 3px rgba(15,23,42,.08);--radius:10px;
   --font-display:'Space Grotesk',sans-serif;--font-body:'Inter',sans-serif;--font-mono:'IBM Plex Mono',monospace;
 }
 *{box-sizing:border-box;}
@@ -36,7 +40,7 @@ h1,h2,h3,h4{font-family:var(--font-display);margin:0;}
 .tool-section.active{display:block;}
 
 .container{max-width:1400px;margin:0 auto;padding:24px;}
-.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:20px;}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:20px;box-shadow:var(--shadow);}
 .panel-title{font-size:18px;font-weight:700;margin-bottom:16px;}
 
 .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px;}
@@ -51,14 +55,26 @@ h1,h2,h3,h4{font-family:var(--font-display);margin:0;}
 .field{margin-bottom:18px;}
 .field label{display:block;font-size:13px;font-weight:600;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:.03em;}
 .field small{color:var(--text-faint);font-size:12px;display:block;margin-top:4px;}
-.field input[type=file]{width:100%;padding:12px;border:2px dashed var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:14px;cursor:pointer;}
-.field input[type=file]:hover{border-color:var(--accent);}
+/* File upload drop zones: light surface, dashed border, hover feedback */
+.field input[type=file]{width:100%;padding:18px 12px;border:2px dashed var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text-dim);font-size:14px;cursor:pointer;transition:border-color .15s,background .15s;}
+.field input[type=file]:hover{border-color:var(--accent);background:var(--active);}
+.field input[type=file]:focus{outline:none;border-color:var(--accent);background:var(--active);}
 
-.btn{padding:12px 20px;border-radius:8px;border:none;font-size:15px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;}
+/* Text inputs, number inputs and selects */
+.field input[type=text],.field input[type=number]{border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);transition:border-color .15s,box-shadow .15s;}
+.field input[type=text]:focus,.field input[type=number]:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
+
+/* Raw data / reference text areas (e.g. LBC OP3) — dark high-contrast panel */
+textarea{border:1px solid var(--border);border-radius:8px;background:var(--code-bg)!important;color:var(--code-text)!important;font-family:var(--font-mono);transition:border-color .15s,box-shadow .15s;}
+textarea::placeholder{color:#64748B;}
+textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
+
+.btn{padding:12px 20px;border-radius:8px;border:none;font-size:15px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:background .15s;}
 .btn-primary{background:var(--accent);color:#fff;}
 .btn-primary:hover{background:var(--accent-hover);}
-.btn-secondary{background:var(--surface-alt);color:var(--text);border:1px solid var(--border);}
-.btn-secondary:hover{background:var(--border);}
+/* Secondary/action buttons use the teal secondary accent */
+.btn-secondary{background:var(--secondary);color:#fff;border:1px solid var(--secondary);}
+.btn-secondary:hover{background:var(--secondary-hover);border-color:var(--secondary-hover);}
 .btn:disabled{opacity:.4;cursor:not-allowed;}
 .btn-group{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px;}
 
@@ -66,7 +82,8 @@ h1,h2,h3,h4{font-family:var(--font-display);margin:0;}
 table{width:100%;border-collapse:collapse;font-size:13px;}
 thead th{text-align:left;padding:10px 12px;background:var(--surface-alt);color:var(--text-dim);font-size:11px;text-transform:uppercase;font-weight:700;white-space:nowrap;border-bottom:1px solid var(--border);}
 tbody td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:middle;}
-tbody tr:hover{background:var(--surface-alt);}
+tbody tr:hover{background:var(--active);}
+tbody tr.active-row,tbody tr.selected{background:var(--active);}
 tr.status-correct{border-left:3px solid var(--success);}
 tr.status-review{border-left:3px solid var(--warn);}
 tr.status-wrong{border-left:3px solid var(--danger);}
@@ -76,9 +93,9 @@ tr.status-nomap{border-left:3px solid var(--text-faint);opacity:.7;}
 .status-badge.review{background:var(--warn-soft);color:var(--warn);}
 .status-badge.wrong{background:var(--danger-soft);color:var(--danger);}
 .status-badge.nomap{background:var(--surface-alt);color:var(--text-faint);}
-.status-badge.op3{background:rgba(59,130,246,.18);color:#60A5FA;}
+.status-badge.op3{background:var(--accent-soft);color:var(--accent);}
 .status-badge.dq{background:var(--danger-soft);color:var(--danger);}
-.status-badge.info{background:rgba(99,102,241,.18);color:#A5B4FC;}
+.status-badge.info{background:var(--secondary-soft);color:var(--secondary);}
 .mtick{color:var(--success);font-weight:700;}
 .mcross{color:var(--danger);font-weight:700;}
 .mdash{color:var(--text-faint);}
@@ -145,7 +162,7 @@ tr.status-nomap{border-left:3px solid var(--text-faint);opacity:.7;}
 
       <div class="field">
         <label>LBC OP3 Reference Data (paste TSV or CSV)</label>
-        <textarea id="dq-op3" style="width:100%;min-height:120px;padding:12px;border:2px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:13px;font-family:var(--font-mono);resize:vertical;" placeholder="Day&#9;Date&#9;Time&#9;Ticker Channel&#9;...&#9;Matches&#9;...&#9;Op&#10;Tu&#9;9/19/2026&#9;12:30&#9;Genius Sports&#9;...&#9;HK Mogo v Kyiv Capitals&#9;...&#9;op3"></textarea>
+        <textarea id="dq-op3" style="width:100%;min-height:120px;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--code-bg);color:var(--code-text);font-size:13px;font-family:var(--font-mono);resize:vertical;" placeholder="Day&#9;Date&#9;Time&#9;Ticker Channel&#9;...&#9;Matches&#9;...&#9;Op&#10;Tu&#9;9/19/2026&#9;12:30&#9;Genius Sports&#9;...&#9;HK Mogo v Kyiv Capitals&#9;...&#9;op3"></textarea>
         <small>OP3 is authoritative. A confirmed OP3 event must remain unmapped. Tab-separated (TSV) LBC exports are supported.</small>
       </div>
 
@@ -245,7 +262,7 @@ tr.status-nomap{border-left:3px solid var(--text-faint);opacity:.7;}
       <div class="field">
         <label>1. DataFeed Check Output (Paste from Excel or use current results)</label>
         <small>Paste rows with columns: BCM Event Name, Feed Name. Or click "Use Current Results" if you just ran DataFeed Check.</small>
-        <textarea id="prep-datafeed" style="width:100%;min-height:100px;padding:12px;border:2px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:14px;font-family:var(--font-mono);resize:vertical;" placeholder="BCM Event Name&#10;APR BBC - Patriots BC&#10;Greece - Cyprus&#10;KK SC Derby - KB Peja"></textarea>
+        <textarea id="prep-datafeed" style="width:100%;min-height:100px;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--code-bg);color:var(--code-text);font-size:14px;font-family:var(--font-mono);resize:vertical;" placeholder="BCM Event Name&#10;APR BBC - Patriots BC&#10;Greece - Cyprus&#10;KK SC Derby - KB Peja"></textarea>
         <button class="btn btn-secondary" style="margin-top:8px;" onclick="PREP.useCurrentResults()">↑ Use Current DataFeed Check Results (Valid Mapped only)</button>
         <div id="prep-state" style="display:none;border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-top:10px;font-size:13px;"></div>
       </div>
@@ -253,7 +270,7 @@ tr.status-nomap{border-left:3px solid var(--text-faint);opacity:.7;}
       <div class="field">
         <label>2. Paste BCM Hierarchy (Country + Competition structure)</label>
         <small>Format: Country (0 indent) > Competition (2 spaces) > Events (4 spaces). Events should match what's in step 1.</small>
-        <textarea id="prep-hierarchy" style="width:100%;min-height:180px;padding:12px;border:2px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);font-size:14px;font-family:var(--font-mono);resize:vertical;" placeholder="World
+        <textarea id="prep-hierarchy" style="width:100%;min-height:180px;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--code-bg);color:var(--code-text);font-size:14px;font-family:var(--font-mono);resize:vertical;" placeholder="World
   International Men's Friendlies
     Greece - Cyprus
     Lithuania - Michigan
