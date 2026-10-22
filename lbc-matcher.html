@@ -94,7 +94,7 @@ tr.error-row{background:#fffbeb}tr.error-row:hover td{background:#fef3c7}
     </div>
   </div>
 
-  <div class="panel"><h2>📝 LBC Data</h2><textarea id="lbcTextarea" placeholder="Paste tab-separated LBC data (Day, Date, Time, Ticker Channel, Stream, Region, Sport, League, Info, Matches)..."></textarea><div class="lbc-info" id="lbcInfo"></div></div>
+  <div class="panel"><h2>📝 LBC Data</h2><textarea id="lbcTextarea" placeholder="Paste tab-separated LBC data (Day, Date, Time, Feed, Stream, Region, Sport, League, Court, Event, Treading Group, Treading Type, Mainbet_id)..."></textarea><div class="lbc-info" id="lbcInfo"></div></div>
 
   <div class="panel"><h2>⚙️ Settings</h2><div class="filter-row"><label style="font-size:13px;font-weight:500">Date format:</label><select id="dateFormatSelect"><option value="auto">Auto-detect (default)</option><option value="dmy">DD/MM/YYYY (European)</option><option value="mdy">MM/DD/YYYY (US)</option></select><span style="font-size:11px;color:var(--gray-400)">Only matters for ambiguous dates like 05/08/2026</span></div></div>
 
@@ -257,9 +257,9 @@ function routeFeed(f){
 function checkMalformed(r){
   if(!r.date||!String(r.date).trim())                   return 'Malformed: Date is missing';
   if(!r.time||!String(r.time).trim())                   return 'Malformed: Time is missing';
-  if(!r.tickerChannel||!String(r.tickerChannel).trim()) return 'Malformed: Ticker Channel is missing';
+  if(!r.tickerChannel||!String(r.tickerChannel).trim()) return 'Malformed: Feed is missing';
   if(!r.league||!String(r.league).trim())               return 'Malformed: League is missing';
-  if(!r.matches||!String(r.matches).trim())             return 'Malformed: Matches is missing';
+  if(!r.matches||!String(r.matches).trim())             return 'Malformed: Event is missing';
   if(!normalizeDate(r.date))                            return 'Malformed: Date is invalid';
   if(!normalizeTime(r.time))                            return 'Malformed: Time is invalid';
   return null;
@@ -276,17 +276,20 @@ function buildProviderIndex(records, src){
   for(let idx=0; idx<records.length; idx++){
     const ref=records[idx];
     let date, time, league, event, sport;
+    let rawEvent;
     if(src==='sportradar'){
       date=normalizeDate(ref.date); time=normalizeTime(ref.time);
       league=normalizeLeague(ref.tournament); event=normalizeEvent(ref.event);
       sport=normalizeSport(ref.sport);
+      rawEvent=String(ref.event||'').trim();
     } else {
       const bg=splitBgDateTime(ref.startUtcPlus2);
       if(bg){ date=bg.date; time=bg.time; } else { date=null; time=null; }
       league=normalizeLeague(ref.competition); event=normalizeEvent(ref.event);
       sport=''; // BetGenius reference has no sport column
+      rawEvent=String(ref.event||'').trim();
     }
-    const cand={ eventId:String(ref.eventId||'').trim(), file:ref.__file||'', date, time, league, event, sport };
+    const cand={ eventId:String(ref.eventId||'').trim(), file:ref.__file||'', date, time, league, event, rawEvent, sport };
     if(date){
       if(!byDate.has(date)) byDate.set(date, []);
       byDate.get(date).push(cand);
@@ -336,18 +339,63 @@ function findExactMatches(norm, slotCands){
 // Explains why no exact match was found. Looks at same-date candidates, picks
 // the one that agrees on the most keys, and reports EVERY key that differs
 // (e.g. "Time is not matching; League is different"). Never assigns an ID.
+// Token-overlap similarity (0..1) between two normalized event strings. Used to
+// find the genuinely-closest provider event by NAME, not by time-slot accident.
+function eventNameSim(a,b){
+  const ta=String(a||'').split(/\s+/).filter(Boolean);
+  const tb=String(b||'').split(/\s+/).filter(Boolean);
+  if(!ta.length||!tb.length) return 0;
+  const sb=new Set(tb);
+  let inter=0; const seen=new Set();
+  for(const t of ta){ if(sb.has(t)&&!seen.has(t)){ inter++; seen.add(t); } }
+  const union=new Set([...ta,...tb]).size;
+  return union? inter/union : 0;
+}
 function diagnoseMismatch(norm, index, src){
+  // Flatten EVERY provider candidate (across all dates) so we can find the same
+  // event even when it sits on a different date/time than the LBC row.
+  const all=[];
+  for(const arr of index.byDate.values()){ for(const c of arr) all.push(c); }
+  if(!all.length) return 'No matching event found in selected data source';
+
+  // Find the provider event whose NAME is most similar to the LBC event. Prefer
+  // same-league candidates; a same-name event found this way is treated as the
+  // SAME fixture, and any date/time difference becomes the real reason.
+  let best=null, bestSim=-1;
+  for(const c of all){
+    let sim=eventNameSim(norm.event, c.event);
+    if(c.league===norm.league) sim+=0.05;   // small nudge toward same league
+    if(sim>bestSim){ bestSim=sim; best=c; }
+  }
+
+  // Strong name overlap => this is the same event; report what actually differs.
+  if(best && bestSim>=0.6){
+    const diffs=[];
+    if(best.date!==norm.date) diffs.push('date');
+    if(best.time!==norm.time) diffs.push('time');
+    if(best.league!==norm.league) diffs.push('league');
+    const where=best.rawEvent ? (" — matched event '"+best.rawEvent+"' at "+(best.date||'?')+' '+(best.time||'?')) : '';
+    if(diffs.length) return 'Event data is different ('+diffs.join(', ')+' not matching)'+where;
+    // Same name, same date/time, same league but still failed exact match =>
+    // a minor name/qualifier difference.
+    return (src==='sportradar'?'Team names are different':'Event name is different')+where;
+  }
+
+  // Otherwise fall back to the same-date diagnosis for a best-effort reason.
   const sameDate=index.byDate.get(norm.date)||[];
   if(!sameDate.length) return 'No matching event found in selected data source';
-  let best=null, bestScore=-1;
-  for(const c of sameDate){
-    const score=(c.time===norm.time?1:0)+(c.league===norm.league?1:0)+(c.event===norm.event?1:0);
-    if(score>bestScore){ bestScore=score; best=c; }
-  }
+  const sameLeague=sameDate.filter(c=>c.league===norm.league);
+  const pool=sameLeague.length?sameLeague:sameDate;
+  let b2=null, s2=-1;
+  for(const c of pool){ const sim=eventNameSim(norm.event,c.event)+(c.time===norm.time?0.001:0); if(sim>s2){ s2=sim; b2=c; } }
   const msgs=[];
-  if(best.time!==norm.time)   msgs.push('Time is not matching');
-  if(best.league!==norm.league) msgs.push('League is different');
-  if(best.event!==norm.event)  msgs.push(src==='sportradar'?'Team names are different':'Event name is different');
+  if(b2.time!==norm.time)   msgs.push('Time is not matching');
+  if(b2.league!==norm.league) msgs.push('League is different');
+  if(b2.event!==norm.event){
+    const label=src==='sportradar'?'Team names are different':'Event name is different';
+    const closest=(b2.rawEvent && s2>=0.3) ? (" — closest: '"+b2.rawEvent+"'") : ' — no comparable event name on this date/league';
+    msgs.push(label+closest);
+  }
   if(!msgs.length) return 'No matching event found in selected data source';
   return msgs.join('; ');
 }
@@ -503,13 +551,54 @@ function coerceExcelDateTime(v){
 }
 function parseSR(buf,fileName){try{const wb=XLSX.read(buf,{type:'array',cellDates:false,raw:true});const ws=wb.Sheets[wb.SheetNames[0]];if(!ws)return{ok:false,err:'No data'};const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});if(!rows.length)return{ok:false,err:'No records'};const h=Object.keys(rows[0]).map(x=>x.toLowerCase().trim());const miss=SR_REQ.filter(r=>!h.includes(r));if(miss.length)return{ok:false,err:'Missing: '+miss.join(', ')};const hm={};Object.keys(rows[0]).forEach(x=>{hm[x.toLowerCase().trim()]=x});return{ok:true,records:rows.map(r=>({__file:fileName||'',eventId:String(r[hm['eventid']]||'').replace(/^sr:match:/i,''),date:coerceExcelDate(r[hm['date']]),time:coerceExcelTime(r[hm['time']]),sport:String(r[hm['sport']]||''),tournament:String(r[hm['tournament']]||''),event:String(r[hm['event']]||'')})),count:rows.length}}catch(e){return{ok:false,err:'Invalid file'}}}
 function parseBG(buf,size,fileName){if(size>10*1024*1024)return{ok:false,err:'File exceeds 10MB'};try{const wb=XLSX.read(buf,{type:'array',cellDates:false,raw:true});const ws=wb.Sheets[wb.SheetNames[0]];if(!ws)return{ok:false,err:'No data'};const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});if(!rows.length)return{ok:false,err:'No records'};const hdrs=Object.keys(rows[0]);const hl=hdrs.map(x=>x.toLowerCase().trim());const miss=[];for(const r of BG_REQ){if(r==='start (utc+2)'){if(!hdrs.some(x=>x.toLowerCase().trim()==='start (utc+2)'))miss.push('Start (UTC+2)')}else{if(!hl.includes(r))miss.push(r)}}if(miss.length)return{ok:false,err:'Missing: '+miss.join(', ')};const hm={};hdrs.forEach(x=>{hm[x.toLowerCase().trim()]=x});const sc=hm['start (utc+2)']||'';return{ok:true,records:rows.map(r=>({__file:fileName||'',eventId:String(r[hm['eventid']]||''),event:String(r[hm['event']]||''),startUtcPlus2:coerceExcelDateTime(r[sc]),competition:String(r[hm['competition']]||'')})),count:rows.length}}catch(e){return{ok:false,err:'Invalid file'}}}
-function parseLBC(text){if(!text||!text.trim())return{ok:false,err:'No data pasted'};const lines=text.split(/\r?\n/);const hi=lines.findIndex(l=>l.trim().length>0);if(hi===-1)return{ok:false,err:'No data'};const headers=lines[hi].split('\t').map(h=>h.trim());const hl=headers.map(h=>h.toLowerCase());const req=['date','time','ticker channel','league','matches'];const miss=req.filter(r=>!hl.includes(r));if(miss.length)return{ok:false,err:'Missing columns: '+miss.join(', ')};const cm={};const MAP={'day':'day','date':'date','time':'time','ticker channel':'tickerChannel','stream':'stream','region':'region','sport':'sport','league':'league','info':'info','matches':'matches','bookie':'bookie','bookie group':'bookieGroup','mainbet_id':'mainbetId','mainbook_id':'mainbetId','mainbookid':'mainbetId'};hl.forEach((h,i)=>{if(MAP[h])cm[MAP[h]]=i});const rows=[];for(let i=hi+1;i<lines.length;i++){if(!lines[i].trim())continue;const v=lines[i].split('\t');rows.push({day:(v[cm.day]||'').trim(),date:(v[cm.date]||'').trim(),time:(v[cm.time]||'').trim(),tickerChannel:(v[cm.tickerChannel]||'').trim(),stream:(v[cm.stream]||'').trim(),region:(v[cm.region]||'').trim(),sport:(v[cm.sport]||'').trim(),league:(v[cm.league]||'').trim(),info:(v[cm.info]||'').trim(),matches:(v[cm.matches]||'').trim(),bookie:(v[cm.bookie]||'').trim(),bookieGroup:(v[cm.bookieGroup]||'').trim(),mainbetId:(v[cm.mainbetId]||'').trim()})}if(!rows.length)return{ok:false,err:'No data rows'};return{ok:true,rows,count:rows.length}}
+// Header -> internal field name map (accepts new names AND legacy aliases).
+const LBC_HEADER_MAP={'day':'day','date':'date','time':'time','feed':'tickerChannel','ticker channel':'tickerChannel','stream':'stream','region':'region','sport':'sport','league':'league','court':'info','info':'info','event':'matches','matches':'matches','treading group':'bookie','trading group':'bookie','bookie':'bookie','treading type':'bookieGroup','trading type':'bookieGroup','bookie group':'bookieGroup','mainbet_id':'mainbetId','mainbook_id':'mainbetId','mainbookid':'mainbetId'};
+// Default positional order used when the paste has NO header row.
+const LBC_DEFAULT_ORDER=['day','date','time','tickerChannel','stream','region','sport','league','info','matches','bookie','bookieGroup','mainbetId'];
+// Build an empty row object with every expected field.
+function lbcEmptyRow(){return {day:'',date:'',time:'',tickerChannel:'',stream:'',region:'',sport:'',league:'',info:'',matches:'',bookie:'',bookieGroup:'',mainbetId:''};}
+
+function parseLBC(text){
+  if(!text||!text.trim())return{ok:false,err:'No data pasted'};
+  const lines=text.split(/\r?\n/);
+  const fi=lines.findIndex(l=>l.trim().length>0);
+  if(fi===-1)return{ok:false,err:'No data'};
+  const firstCells=lines[fi].split('\t').map(h=>h.trim());
+  const firstLower=firstCells.map(h=>h.toLowerCase());
+  // Treat the first non-empty line as a HEADER only if at least 2 of its cells
+  // are recognized column names. Otherwise assume headerless data and fall back
+  // to the fixed default column order.
+  const recognized=firstLower.filter(h=>LBC_HEADER_MAP[h]).length;
+  const hasHeader=recognized>=2;
+
+  const cm={};              // internal field -> column index
+  let dataStart;
+  if(hasHeader){
+    firstLower.forEach((h,i)=>{ if(LBC_HEADER_MAP[h]!==undefined && cm[LBC_HEADER_MAP[h]]===undefined) cm[LBC_HEADER_MAP[h]]=i; });
+    dataStart=fi+1;
+  } else {
+    // Headerless: map by position using the default order.
+    LBC_DEFAULT_ORDER.forEach((field,i)=>{ cm[field]=i; });
+    dataStart=fi;
+  }
+
+  const rows=[];
+  for(let i=dataStart;i<lines.length;i++){
+    if(!lines[i].trim())continue;
+    const v=lines[i].split('\t');
+    const r=lbcEmptyRow();
+    for(const field in cm){ const idx=cm[field]; r[field]=(v[idx]||'').trim(); }
+    rows.push(r);
+  }
+  if(!rows.length)return{ok:false,err:'No data rows'};
+  return{ok:true,rows,count:rows.length,headerMode:hasHeader?'header':'default-order'};
+}
 
 // STATE
 const EMPTY_SUMMARY={totalEvents:0,matched:0,notFound:0,malformed:0,ambiguous:0,unrecognized:0,dateMismatches:0,timeMismatches:0,leagueMismatches:0,teamEventMismatches:0};
 const state={srFiles:[],bgFiles:[],lbc:{status:'idle',rows:[],count:0,err:null},results:{rows:[],summary:{...EMPTY_SUMMARY}},filters:{search:'',feed:'',region:'',sport:'',league:'',status:''},sort:{col:null,asc:true}};
 const COLS=['day','date','time','tickerChannel','stream','region','sport','league','info','matches','bookie','bookieGroup','mainbetId','eventId','status','comments'];
-const LABELS=['Day','Date','Time','Ticker Channel','Stream','Region','Sport','League','Info','Matches','Bookie','Bookie Group','Mainbet_id','External Feed ID','Status','Comments'];
+const LABELS=['Day','Date','Time','Feed','Stream','Region','Sport','League','Court','Event','Treading Group','Treading Type','Mainbet_id','External Feed ID','Status','Comments'];
 
 // UI
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
@@ -528,7 +617,7 @@ function prog(p){const b=document.getElementById('progressBar'),f=document.getEl
 document.getElementById('srFile').addEventListener('change',async e=>{for(const file of e.target.files){const buf=await file.arrayBuffer();const r=parseSR(buf,file.name);if(r.ok)state.srFiles.push({name:file.name,count:r.count,records:r.records});else toast('✗ '+file.name+': '+r.err)}renderFL('sr');updateBtn();e.target.value=''});
 document.getElementById('bgFile').addEventListener('change',async e=>{for(const file of e.target.files){const buf=await file.arrayBuffer();const r=parseBG(buf,file.size,file.name);if(r.ok)state.bgFiles.push({name:file.name,count:r.count,records:r.records});else toast('✗ '+file.name+': '+r.err)}renderFL('bg');updateBtn();e.target.value=''});
 document.addEventListener('click',e=>{const rm=e.target.closest('.file-remove');if(!rm)return;const s=rm.dataset.src,i=+rm.dataset.idx;if(s==='sr')state.srFiles.splice(i,1);else state.bgFiles.splice(i,1);renderFL(s);updateBtn()});
-document.getElementById('lbcTextarea').addEventListener('input',e=>{const text=e.target.value,info=document.getElementById('lbcInfo');if(!text.trim()){state.lbc={status:'idle',rows:[],count:0};info.textContent='';info.className='lbc-info'}else{const r=parseLBC(text);if(r.ok){state.lbc={status:'parsed',rows:r.rows,count:r.count};info.className='lbc-info success';info.textContent='✓ '+r.count+' rows'}else{state.lbc={status:'error',rows:[],count:0};info.className='lbc-info error';info.textContent='✗ '+r.err}}updateBtn()});
+document.getElementById('lbcTextarea').addEventListener('input',e=>{const text=e.target.value,info=document.getElementById('lbcInfo');if(!text.trim()){state.lbc={status:'idle',rows:[],count:0};info.textContent='';info.className='lbc-info'}else{const r=parseLBC(text);if(r.ok){state.lbc={status:'parsed',rows:r.rows,count:r.count};info.className='lbc-info success';info.textContent='✓ '+r.count+' rows'+(r.headerMode==='default-order'?' (no header detected — using default column order)':' (header row detected)')}else{state.lbc={status:'error',rows:[],count:0};info.className='lbc-info error';info.textContent='✗ '+r.err}}updateBtn()});
 document.getElementById('compareBtn').addEventListener('click',async()=>{const btn=document.getElementById('compareBtn');btn.disabled=true;btn.innerHTML='⏳ Comparing...';prog(0);const allSr=state.srFiles.flatMap(f=>f.records),allBg=state.bgFiles.flatMap(f=>f.records);const{rows,summary}=await runComparison(state.lbc.rows,allSr,allBg,(d,t)=>prog(Math.round(d/t*100)));state.results={rows,summary};prog(100);renderDash();updateFilters();renderTable();updateExp();btn.innerHTML='▶ Compare';updateBtn()});
 document.getElementById('clearBtn').addEventListener('click',()=>{state.srFiles=[];state.bgFiles=[];state.lbc={status:'idle',rows:[],count:0};state.results={rows:[],summary:{...EMPTY_SUMMARY}};state.filters={search:'',feed:'',region:'',sport:'',league:'',status:''};state.sort={col:null,asc:true};document.getElementById('srFile').value='';document.getElementById('bgFile').value='';document.getElementById('lbcTextarea').value='';document.getElementById('lbcInfo').textContent='';document.getElementById('searchInput').value='';['filterFeed','filterRegion','filterSport','filterLeague','filterStatus'].forEach(id=>{const s=document.getElementById(id);if(id==='filterStatus')s.value='';else s.innerHTML='<option value="">All</option>'});renderFL('sr');renderFL('bg');renderDash();renderTable();updateBtn();updateExp()});
 document.getElementById('searchInput').addEventListener('input',e=>{state.filters.search=e.target.value;renderTable()});
