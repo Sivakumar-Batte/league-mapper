@@ -94,7 +94,7 @@ tr.error-row{background:#fffbeb}tr.error-row:hover td{background:#fef3c7}
     </div>
   </div>
 
-  <div class="panel"><h2>📝 LBC Data</h2><textarea id="lbcTextarea" placeholder="Paste tab-separated LBC data (Day, Date, Time, Feed, Stream, Region, Sport, League, Court, Event, Treading Group, Treading Type, Mainbet_id)..."></textarea><div class="lbc-info" id="lbcInfo"></div></div>
+  <div class="panel"><h2>📝 LBC Data</h2><textarea id="lbcTextarea" placeholder="Paste tab-separated LBC data (Day, Date, Time, Feed, Stream, Region, Sport, League, Court, Event, Trading Group, Trading Type, Mainbet_id)..."></textarea><div class="lbc-info" id="lbcInfo"></div></div>
 
   <div class="panel"><h2>⚙️ Settings</h2><div class="filter-row"><label style="font-size:13px;font-weight:500">Date format:</label><select id="dateFormatSelect"><option value="auto">Auto-detect (default)</option><option value="dmy">DD/MM/YYYY (European)</option><option value="mdy">MM/DD/YYYY (US)</option></select><span style="font-size:11px;color:var(--gray-400)">Only matters for ambiguous dates like 05/08/2026</span></div></div>
 
@@ -598,7 +598,7 @@ function parseLBC(text){
 const EMPTY_SUMMARY={totalEvents:0,matched:0,notFound:0,malformed:0,ambiguous:0,unrecognized:0,dateMismatches:0,timeMismatches:0,leagueMismatches:0,teamEventMismatches:0};
 const state={srFiles:[],bgFiles:[],lbc:{status:'idle',rows:[],count:0,err:null},results:{rows:[],summary:{...EMPTY_SUMMARY}},filters:{search:'',feed:'',region:'',sport:'',league:'',status:''},sort:{col:null,asc:true}};
 const COLS=['day','date','time','tickerChannel','stream','region','sport','league','info','matches','bookie','bookieGroup','mainbetId','eventId','status','comments'];
-const LABELS=['Day','Date','Time','Feed','Stream','Region','Sport','League','Court','Event','Treading Group','Treading Type','Mainbet_id','External Feed ID','Status','Comments'];
+const LABELS=['Day','Date','Time','Feed','Stream','Region','Sport','League','Court','Event','Trading Group','Trading Type','Mainbet_id','Feed_id','Status','Comments'];
 
 // UI
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
