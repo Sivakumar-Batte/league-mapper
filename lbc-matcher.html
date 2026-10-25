@@ -96,7 +96,7 @@ tr.error-row{background:#fffbeb}tr.error-row:hover td{background:#fef3c7}
 
   <div class="panel"><h2>📝 LBC Data</h2><textarea id="lbcTextarea" placeholder="Paste tab-separated LBC data (Day, Date, Time, Feed, Stream, Region, Sport, League, Court, Event, Trading Group, Trading Type, Mainbet_id)..."></textarea><div class="lbc-info" id="lbcInfo"></div></div>
 
-  <div class="panel"><h2>⚙️ Settings</h2><div class="filter-row"><label style="font-size:13px;font-weight:500">Date format:</label><select id="dateFormatSelect"><option value="auto">Auto-detect (default)</option><option value="dmy">DD/MM/YYYY (European)</option><option value="mdy">MM/DD/YYYY (US)</option></select><span style="font-size:11px;color:var(--gray-400)">Only matters for ambiguous dates like 05/08/2026</span></div></div>
+  <div class="panel"><h2>⚙️ Settings</h2><div class="filter-row"><label style="font-size:13px;font-weight:500">Date format:</label><select id="dateFormatSelect"><option value="auto">Auto-detect (default)</option><option value="dmy">DD/MM/YYYY (European)</option><option value="mdy">MM/DD/YYYY (US)</option></select><span style="font-size:11px;color:var(--gray-400)">Only matters for ambiguous dates like 05/08/2026</span></div><div class="filter-row" style="margin-top:10px"><label style="font-size:13px;font-weight:500">BG time zone:</label><select id="bgTzSelect"><option value="utc+2">UTC+2 (summer / DST)</option><option value="utc+1">UTC+1 (winter / standard)</option></select><span style="font-size:11px;color:var(--gray-400)">Reads the matching BG Start column. No hours are added or subtracted — time is used as-is.</span></div></div>
 
   <div class="btn-group">
     <button class="btn btn-primary" id="compareBtn" disabled><span>▶</span> Compare</button>
@@ -230,6 +230,8 @@ function normalizeTime(input){
 // date/time boundary so "05/08/2026 00:00" and "05/08/2026 0:0" both work; any
 // extra internal spaces are tolerated. Midnight "00:00" and date-boundary cases
 // are handled naturally because date and time are parsed independently.
+// Current BG time-zone selection from the Settings panel ('utc+2' | 'utc+1').
+function getBgTz(){ const el=document.getElementById('bgTzSelect'); return el && el.value==='utc+1' ? 'utc+1' : 'utc+2'; }
 function splitBgDateTime(s){
   if(s==null) return null;
   const t=String(s).trim().replace(/\s+/g,' ');
@@ -276,20 +278,24 @@ function buildProviderIndex(records, src){
   for(let idx=0; idx<records.length; idx++){
     const ref=records[idx];
     let date, time, league, event, sport;
-    let rawEvent;
     if(src==='sportradar'){
       date=normalizeDate(ref.date); time=normalizeTime(ref.time);
       league=normalizeLeague(ref.tournament); event=normalizeEvent(ref.event);
       sport=normalizeSport(ref.sport);
-      rawEvent=String(ref.event||'').trim();
     } else {
-      const bg=splitBgDateTime(ref.startUtcPlus2);
+      // Pick the BG start value from the user-selected timezone column. No hours
+      // are added/subtracted — the chosen column's value is used as-is. If the
+      // selected column is empty for this row, fall back to the other column.
+      const tz=(typeof getBgTz==='function')?getBgTz():'utc+2';
+      const primary=(tz==='utc+1')?ref.startP1:ref.startP2;
+      const secondary=(tz==='utc+1')?ref.startP2:ref.startP1;
+      const startVal=(primary && String(primary).trim())?primary:secondary;
+      const bg=splitBgDateTime(startVal);
       if(bg){ date=bg.date; time=bg.time; } else { date=null; time=null; }
       league=normalizeLeague(ref.competition); event=normalizeEvent(ref.event);
       sport=''; // BetGenius reference has no sport column
-      rawEvent=String(ref.event||'').trim();
     }
-    const cand={ eventId:String(ref.eventId||'').trim(), file:ref.__file||'', date, time, league, event, rawEvent, sport };
+    const cand={ eventId:String(ref.eventId||'').trim(), file:ref.__file||'', date, time, league, event, rawEvent:String(ref.event||'').trim(), sport };
     if(date){
       if(!byDate.has(date)) byDate.set(date, []);
       byDate.get(date).push(cand);
@@ -376,12 +382,10 @@ function diagnoseMismatch(norm, index, src){
     if(best.league!==norm.league) diffs.push('league');
     const where=best.rawEvent ? (" — matched event '"+best.rawEvent+"' at "+(best.date||'?')+' '+(best.time||'?')) : '';
     if(diffs.length) return 'Event data is different ('+diffs.join(', ')+' not matching)'+where;
-    // Same name, same date/time, same league but still failed exact match =>
-    // a minor name/qualifier difference.
     return (src==='sportradar'?'Team names are different':'Event name is different')+where;
   }
 
-  // Otherwise fall back to the same-date diagnosis for a best-effort reason.
+  // Otherwise fall back to a same-date best-effort reason.
   const sameDate=index.byDate.get(norm.date)||[];
   if(!sameDate.length) return 'No matching event found in selected data source';
   const sameLeague=sameDate.filter(c=>c.league===norm.league);
@@ -550,7 +554,18 @@ function coerceExcelDateTime(v){
   return String(v==null?'':v);
 }
 function parseSR(buf,fileName){try{const wb=XLSX.read(buf,{type:'array',cellDates:false,raw:true});const ws=wb.Sheets[wb.SheetNames[0]];if(!ws)return{ok:false,err:'No data'};const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});if(!rows.length)return{ok:false,err:'No records'};const h=Object.keys(rows[0]).map(x=>x.toLowerCase().trim());const miss=SR_REQ.filter(r=>!h.includes(r));if(miss.length)return{ok:false,err:'Missing: '+miss.join(', ')};const hm={};Object.keys(rows[0]).forEach(x=>{hm[x.toLowerCase().trim()]=x});return{ok:true,records:rows.map(r=>({__file:fileName||'',eventId:String(r[hm['eventid']]||'').replace(/^sr:match:/i,''),date:coerceExcelDate(r[hm['date']]),time:coerceExcelTime(r[hm['time']]),sport:String(r[hm['sport']]||''),tournament:String(r[hm['tournament']]||''),event:String(r[hm['event']]||'')})),count:rows.length}}catch(e){return{ok:false,err:'Invalid file'}}}
-function parseBG(buf,size,fileName){if(size>10*1024*1024)return{ok:false,err:'File exceeds 10MB'};try{const wb=XLSX.read(buf,{type:'array',cellDates:false,raw:true});const ws=wb.Sheets[wb.SheetNames[0]];if(!ws)return{ok:false,err:'No data'};const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});if(!rows.length)return{ok:false,err:'No records'};const hdrs=Object.keys(rows[0]);const hl=hdrs.map(x=>x.toLowerCase().trim());const miss=[];for(const r of BG_REQ){if(r==='start (utc+2)'){if(!hdrs.some(x=>x.toLowerCase().trim()==='start (utc+2)'))miss.push('Start (UTC+2)')}else{if(!hl.includes(r))miss.push(r)}}if(miss.length)return{ok:false,err:'Missing: '+miss.join(', ')};const hm={};hdrs.forEach(x=>{hm[x.toLowerCase().trim()]=x});const sc=hm['start (utc+2)']||'';return{ok:true,records:rows.map(r=>({__file:fileName||'',eventId:String(r[hm['eventid']]||''),event:String(r[hm['event']]||''),startUtcPlus2:coerceExcelDateTime(r[sc]),competition:String(r[hm['competition']]||'')})),count:rows.length}}catch(e){return{ok:false,err:'Invalid file'}}}
+function parseBG(buf,size,fileName){if(size>10*1024*1024)return{ok:false,err:'File exceeds 10MB'};try{const wb=XLSX.read(buf,{type:'array',cellDates:false,raw:true});const ws=wb.Sheets[wb.SheetNames[0]];if(!ws)return{ok:false,err:'No data'};const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});if(!rows.length)return{ok:false,err:'No records'};const hdrs=Object.keys(rows[0]);const hl=hdrs.map(x=>x.toLowerCase().trim());
+  // Resolve the two possible BG start columns (either may be present).
+  const hm={};hdrs.forEach(x=>{hm[x.toLowerCase().trim()]=x;});
+  const sc2=hm['start (utc+2)']||'';   // Start (UTC+2) column
+  const sc1=hm['start (utc+1)']||'';   // Start (UTC+1) column
+  // Validate: eventid, event, competition required; AND at least one Start col.
+  const miss=[];for(const r of BG_REQ){if(r==='start (utc+2)')continue; if(!hl.includes(r))miss.push(r);} 
+  if(!sc2 && !sc1) miss.push('Start (UTC+2) or Start (UTC+1)');
+  if(miss.length)return{ok:false,err:'Missing: '+miss.join(', ')};
+  return{ok:true,records:rows.map(r=>({__file:fileName||'',eventId:String(r[hm['eventid']]||''),event:String(r[hm['event']]||''),
+    startP2:sc2?coerceExcelDateTime(r[sc2]):'',startP1:sc1?coerceExcelDateTime(r[sc1]):'',
+    competition:String(r[hm['competition']]||'')})),count:rows.length}}catch(e){return{ok:false,err:'Invalid file'}}}
 // Header -> internal field name map (accepts new names AND legacy aliases).
 const LBC_HEADER_MAP={'day':'day','date':'date','time':'time','feed':'tickerChannel','ticker channel':'tickerChannel','stream':'stream','region':'region','sport':'sport','league':'league','court':'info','info':'info','event':'matches','matches':'matches','treading group':'bookie','trading group':'bookie','bookie':'bookie','treading type':'bookieGroup','trading type':'bookieGroup','bookie group':'bookieGroup','mainbet_id':'mainbetId','mainbook_id':'mainbetId','mainbookid':'mainbetId'};
 // Default positional order used when the paste has NO header row.
@@ -630,9 +645,22 @@ document.getElementById('tableWrapper').addEventListener('click',e=>{const th=e.
 // Export appends clean, operations-friendly audit columns (matched provider &
 // source file) derived from the internal _audit object. No debug objects.
 const EXPORT_LABELS=[...LABELS,'Matched Provider','Matched Source File'];
-function exportRow(r){const base=COLS.map(c=>r[c]==null?'':r[c]);const a=r._audit||{};base.push(a.provider||'');base.push(a.file||'');return base}
-document.getElementById('exportCsvBtn').addEventListener('click',()=>{if(!state.results.rows.length)return;const d=[EXPORT_LABELS,...state.results.rows.map(exportRow)];const ws=XLSX.utils.aoa_to_sheet(d);const csv=XLSX.utils.sheet_to_csv(ws);dl(csv,'LBC_Results.csv','text/csv');toast('📄 CSV exported')});
-document.getElementById('exportXlsxBtn').addEventListener('click',()=>{if(!state.results.rows.length)return;const d=[EXPORT_LABELS,...state.results.rows.map(exportRow)];const ws=XLSX.utils.aoa_to_sheet(d);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Results');const buf=XLSX.write(wb,{bookType:'xlsx',type:'array'});dl(new Blob([buf]),'LBC_Results.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');toast('📊 Excel exported')});
+// Emit pure-numeric IDs (Mainbet_id, External Feed ID) as real NUMBERS so Excel
+// stores them as values, not text. Non-numeric values (e.g. "NOT FOUND",
+// "AMBIGUOUS", "ERROR") are left as strings. All other columns stay as text.
+const NUMERIC_COLS={mainbetId:1,eventId:1};
+function numify(col,val){const s=String(val==null?'':val).trim();if(NUMERIC_COLS[col] && /^\d+$/.test(s)) return Number(s);return val==null?'':val;}
+function exportRow(r){const base=COLS.map(c=>numify(c,r[c]));const a=r._audit||{};base.push(a.provider||'');base.push(a.file||'');return base}
+// Build the dynamic output file base name:
+//   "Basketball Upcoming Day Checks <tomorrow> and <day-after> till 4 CET"
+// Dates are tomorrow and the day after (relative to today), formatted DD-MM-YYYY.
+function exportBaseName(){
+  const fmt=d=>String(d.getDate()).padStart(2,'0')+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+d.getFullYear();
+  const t=new Date(); const x=new Date(t); x.setDate(t.getDate()+1); const y=new Date(t); y.setDate(t.getDate()+2);
+  return 'Basketball Upcoming Day Checks '+fmt(x)+' and '+fmt(y)+' till 4 CET';
+}
+document.getElementById('exportCsvBtn').addEventListener('click',()=>{if(!state.results.rows.length)return;const d=[EXPORT_LABELS,...state.results.rows.map(exportRow)];const ws=XLSX.utils.aoa_to_sheet(d);const csv=XLSX.utils.sheet_to_csv(ws);dl(csv,exportBaseName()+'.csv','text/csv');toast('📄 CSV exported')});
+document.getElementById('exportXlsxBtn').addEventListener('click',()=>{if(!state.results.rows.length)return;const d=[EXPORT_LABELS,...state.results.rows.map(exportRow)];const ws=XLSX.utils.aoa_to_sheet(d);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Results');const buf=XLSX.write(wb,{bookType:'xlsx',type:'array'});dl(new Blob([buf]),exportBaseName()+'.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');toast('📊 Excel exported')});
 function dl(c,n,m){const b=c instanceof Blob?c:new Blob([c],{type:m});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=n;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u)}
 renderDash();
 </script>
