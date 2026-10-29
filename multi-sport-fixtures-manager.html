@@ -44,6 +44,11 @@ details.sport-block .table-wrap{margin-bottom:12px}
 .overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
 .dialog{background:#fff;border-radius:12px;padding:20px;max-width:520px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.25)}.dialog p{margin:0 0 14px;white-space:pre-line}.dialog .actions{margin-top:0;justify-content:flex-end}
 .line{display:block}
+.tabbar{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 16px;border-bottom:1px solid var(--border)}
+.tabbar button{background:transparent;color:var(--muted);border-radius:8px 8px 0 0;padding:10px 16px;border-bottom:3px solid transparent;margin-bottom:-1px}
+.tabbar button:hover{color:var(--text);background:var(--soft)}
+.tabbar button[aria-selected=true]{color:var(--accent);border-bottom-color:var(--accent);background:var(--panel)}
+.tab-hidden{display:none!important}
 @media(max-width:900px){.mapping-form{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){body{padding:10px}.panel{padding:13px}.controls,.mapping-form{grid-template-columns:1fr}.table-head{align-items:flex-start;flex-direction:column}table{min-width:520px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
@@ -56,7 +61,13 @@ details.sport-block .table-wrap{margin-bottom:12px}
   <div id="appNotices" class="notices" aria-live="polite"></div>
   <div id="sharedMappingBar" class="notice hidden" role="status" aria-live="polite"><span id="sharedMappingText"></span> <button class="small primary hidden" id="useSharedMappingsBtn" type="button">Use the shared list (replaces this browser's mappings)</button></div>
 
-  <section class="panel mapping-panel">
+  <nav class="tabbar" role="tablist" aria-label="Sections">
+    <button type="button" role="tab" id="tabBtn-mappings" data-tab="mappings" aria-selected="false">Mappings</button>
+    <button type="button" role="tab" id="tabBtn-fixtures" data-tab="fixtures" aria-selected="true">Fixtures</button>
+    <button type="button" role="tab" id="tabBtn-compare" data-tab="compare" aria-selected="false">Compare</button>
+  </nav>
+
+  <section class="panel mapping-panel" data-tab="mappings">
     <details>
       <summary class="mapping-summary"><span><b>1. Priority League Mappings</b> <span class="count" id="mappingCount">0 mappings</span></span><span class="count">Click to manage mappings ▾</span></summary>
       <div class="mapping-content">
@@ -86,7 +97,7 @@ details.sport-block .table-wrap{margin-bottom:12px}
     </details>
   </section>
 
-  <section class="panel">
+  <section class="panel" data-tab="fixtures">
     <h2>2. Paste and Filter Fixtures</h2>
     <div class="controls" style="margin-top:14px">
       <div><label for="sport">Sport</label><select id="sport"></select><div class="hint" id="sportHint"></div></div>
@@ -102,7 +113,7 @@ details.sport-block .table-wrap{margin-bottom:12px}
     <div id="message" class="message" role="status" aria-live="polite"></div>
     <div id="playoffAlerts" class="hidden" aria-live="polite"></div>
   </section>
-  <section class="panel" id="collectionPanel">
+  <section class="panel" id="collectionPanel" data-tab="compare">
     <div class="table-head"><h2>3. 7-Day Fixture Collection</h2><span class="count" id="collectionProgress">0/7 dates collected</span></div>
     <p class="hint">Process one sport and one Flashscore date at a time, then save it here. A collection is identified by <b>sport + date</b>: adding the same sport and date again replaces only that entry, and other sports on the same date are untouched. The 7-day limit counts distinct calendar dates (all sports on one date count as one day). Saved in this browser's Local Storage.</p>
     <div class="statusline">
@@ -123,7 +134,7 @@ details.sport-block .table-wrap{margin-bottom:12px}
     <div class="table-wrap" style="margin-top:10px"><table><thead><tr><th>Sport</th><th>Date</th><th>Parsed</th><th>Matched</th><th>Excluded</th><th>Last Saved</th><th>Action</th></tr></thead><tbody id="collectionBody"><tr><td colspan="7">No days collected yet.</td></tr></tbody></table></div>
   </section>
 
-  <section class="panel" id="workedComparePanel">
+  <section class="panel" id="workedComparePanel" data-tab="compare">
     <div class="table-head"><h2>4. Compare Against Worked Matches</h2><span class="count">Paste Excel rows: Sport, Date, Time, Country, League, Home, Away, Event ID</span></div>
     <p class="hint">Copy the 8 columns from Sport Name through Event ID in Excel and paste them below. Collected priority fixtures are compared with the worked history by sport, date, country, league, home/away teams and time. An Event ID never overrides conflicting details, similar team names are sent to review rather than accepted silently, and the same teams found on the adjacent date (midnight / time-zone shifts) are also sent to review.</p>
     <label for="workedInput">Worked matches history (paste from Excel)</label>
@@ -161,7 +172,7 @@ details.sport-block .table-wrap{margin-bottom:12px}
     <div class="table-wrap"><table><thead><tr><th>Event ID</th><th>Differing details</th><th>Conflicting history rows</th></tr></thead><tbody id="conflictsBody"><tr><td colspan="3">No comparison run yet.</td></tr></tbody></table></div>
   </section>
 
-  <section class="panel">
+  <section class="panel" data-tab="fixtures">
     <div class="table-head"><h2>5. Matching Fixtures</h2><span class="count" id="resultCount">0 fixtures</span></div>
     <div class="statusline">
       <div class="stat"><span class="count">Parsed fixtures</span><strong id="parsedCount">0</strong></div>
@@ -180,13 +191,13 @@ details.sport-block .table-wrap{margin-bottom:12px}
     <div id="exportMessage" class="message" role="status" aria-live="polite"></div>
   </section>
 
-  <section class="panel">
+  <section class="panel" data-tab="fixtures">
     <div class="table-head"><h2>6. Excluded Fixtures</h2><span class="count" id="excludedTableCount">0 excluded</span></div>
     <p class="hint">Use this list to spot leagues that need a mapping. Exclusion reasons are shown for troubleshooting.</p>
     <div class="table-wrap"><table><thead><tr><th>Time</th><th>Country</th><th>Detected League</th><th>Home</th><th>Away</th><th>Reason</th></tr></thead><tbody id="excludedBody"><tr><td colspan="6">No excluded fixtures.</td></tr></tbody></table></div>
   </section>
 
-  <section class="panel">
+  <section class="panel" data-tab="fixtures">
     <div class="subhead"><h2>7. Local Import History</h2><button class="danger small" id="clearHistoryBtn" type="button">Clear History</button></div>
     <p class="hint">Recent processing summaries are saved in this browser only.</p>
     <div class="table-wrap"><table><thead><tr><th>Processed At</th><th>Sport</th><th>Input Fixtures</th><th>Matched</th><th>Excluded</th></tr></thead><tbody id="historyBody"><tr><td colspan="5">No import history yet.</td></tr></tbody></table></div>
@@ -1458,6 +1469,21 @@ window.__MSFM={classifyFixtures,parseWorkedPaste,teamRelation,teamKey,makeMatche
   buildMappingSQL,playoffAlerts,historyCols,syncSharedMappings,sharedReady:()=>sharedState.promise,
   state:()=>({mappings,collectionDays,convertedRows,excludedRows,comparisonResults})};
 init();
+
+/* Page tabs: Mappings | Fixtures | Compare. Display only - every section stays in
+   the page, so all controls, saved data and tests behave exactly as before. */
+(function setupTabs(){
+  const btns = Array.from(document.querySelectorAll('.tabbar [data-tab]'));
+  const panels = Array.from(document.querySelectorAll('section.panel[data-tab]'));
+  function show(name){
+    btns.forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+    panels.forEach(p => p.classList.toggle('tab-hidden', p.dataset.tab !== name));
+    if (name === 'mappings'){ const d = document.querySelector('section.mapping-panel > details'); if (d) d.open = true; }
+  }
+  btns.forEach(b => b.addEventListener('click', () => show(b.dataset.tab)));
+  window.msfmShowTab = show;
+  show('fixtures');
+})();
 </script>
 </body>
 </html>
