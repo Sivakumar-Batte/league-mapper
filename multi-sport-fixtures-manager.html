@@ -1,0 +1,1463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Sport Fixtures Priority League Manager</title>
+<style>
+:root{--bg:#f4f7fb;--panel:#fff;--text:#172033;--muted:#64748b;--border:#dbe3ef;--accent:#2457d6;--accent2:#1946b4;--soft:#eef4ff;--danger:#b42318;--green:#087443;--amber:#9a5b00;--amber-bg:#fff4dc}
+*{box-sizing:border-box}body{margin:0;padding:22px;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.container{max-width:1400px;margin:auto}h1{margin:0 0 6px;font-size:clamp(1.6rem,3vw,2.2rem)}h2{margin:0;font-size:1.2rem}h3{margin:18px 0 8px;font-size:1.02rem}.intro{color:var(--muted);margin:0 0 16px}.panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:18px;box-shadow:0 4px 18px rgba(23,32,51,.04)}
+.controls{display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:14px;margin-bottom:14px}
+.mapping-form{display:grid;grid-template-columns:.9fr 1fr 1.4fr 1.4fr auto auto;gap:10px;align-items:end}
+.mapping-tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:14px 0}.mapping-tools input[type=text]{max-width:300px}.mapping-tools select{max-width:200px}
+label{display:block;font-weight:650;margin-bottom:5px}input,textarea,button,select{font:inherit}
+input[type=text],input[type=date],input[type=file],textarea,select{width:100%;border:1px solid var(--border);border-radius:8px;padding:10px 11px;color:var(--text);background:#fff}
+input[type=checkbox]{width:17px;height:17px}textarea{min-height:210px;resize:vertical;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:12px}
+button{border:0;border-radius:8px;padding:9px 13px;cursor:pointer;font-weight:650}button:disabled{opacity:.5;cursor:not-allowed}
+.primary{background:var(--accent);color:#fff}.primary:hover{background:var(--accent2)}.secondary{background:var(--soft);color:#1e40af}.neutral{background:#edf0f5;color:#273449}.danger{background:#fff0ef;color:var(--danger)}.small{padding:5px 8px;font-size:12px}
+.message{margin-top:10px;color:var(--muted);min-height:21px}.message.error{color:var(--danger)}.message.success{color:var(--green)}.message.warn{color:var(--amber)}
+.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:10px;max-height:460px}
+table{border-collapse:collapse;width:100%;min-width:640px;background:#fff}
+th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+td.wrap{white-space:normal;min-width:260px;max-width:520px}
+th{background:#f0f4fa;font-size:12px;letter-spacing:.03em;position:sticky;top:0;z-index:1}
+tbody tr:hover{background:#f8faff}tbody tr:last-child td{border-bottom:0}
+.table-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+.count{color:var(--muted);font-size:13px}.hint{color:var(--muted);font-size:13px;margin:7px 0}
+.badge{display:inline-block;border-radius:999px;padding:1px 8px;background:#e9f8ef;color:#087443;font-size:12px;margin-right:4px}
+.badge.off{background:#f1f3f6;color:#667085}.badge.warn{background:var(--amber-bg);color:var(--amber)}.badge.bad{background:#fff0ef;color:var(--danger)}
+.hidden{display:none}
+.subhead{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.statusline{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px}
+.stat{padding:8px 12px;border:1px solid var(--border);border-radius:9px;background:#fafcff;min-width:120px}.stat strong{font-size:1.1rem;display:block}
+.mapping-panel{padding:14px 20px}.mapping-summary{display:flex;justify-content:space-between;gap:12px;align-items:center;cursor:pointer;list-style:none}.mapping-summary::-webkit-details-marker{display:none}.mapping-summary b{font-size:1.2rem}.mapping-content{padding-top:14px}
+.section-note{background:#f8faff;border:1px solid var(--border);border-radius:9px;padding:10px 12px;color:#475569;font-size:13px;margin:12px 0}
+details.sport-block{border:1px solid var(--border);border-radius:10px;margin:10px 0;padding:0 12px}
+details.sport-block>summary{cursor:pointer;padding:10px 0;font-weight:650;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+details.sport-block[open]>summary{border-bottom:1px solid var(--border);margin-bottom:10px}
+details.sport-block .table-wrap{margin-bottom:12px}
+.notice.ok{border-color:#a7e3c0;background:#e9f8ef;color:#087443}#sharedMappingBar{margin-bottom:14px}#playoffAlerts{margin-top:10px}
+.notices{margin:0 0 14px}.notice{border:1px solid #f0d58a;background:var(--amber-bg);color:#6b4400;border-radius:9px;padding:8px 12px;font-size:13px;margin-bottom:6px}.notice.error{border-color:#f1b5b0;background:#fff0ef;color:var(--danger)}
+.filterbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:14px 0 4px}.filterbar input{max-width:360px}
+.overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+.dialog{background:#fff;border-radius:12px;padding:20px;max-width:520px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.25)}.dialog p{margin:0 0 14px;white-space:pre-line}.dialog .actions{margin-top:0;justify-content:flex-end}
+.line{display:block}
+@media(max-width:900px){.mapping-form{grid-template-columns:1fr 1fr}}
+@media(max-width:760px){body{padding:10px}.panel{padding:13px}.controls,.mapping-form{grid-template-columns:1fr}.table-head{align-items:flex-start;flex-direction:column}table{min-width:520px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<main class="container">
+  <h1>Multi-Sport Fixtures Priority League Manager</h1>
+  <p class="intro">Manage Basketball, Ice hockey, Floorball, Waterpolo, Bandy, and Field hockey priority leagues, paste Flashscore fixtures, filter matches, keep a seven-date collection, and compare it against worked matches. Everything is stored in this browser.</p>
+  <div id="appNotices" class="notices" aria-live="polite"></div>
+  <div id="sharedMappingBar" class="notice hidden" role="status" aria-live="polite"><span id="sharedMappingText"></span> <button class="small primary hidden" id="useSharedMappingsBtn" type="button">Use the shared list (replaces this browser's mappings)</button></div>
+
+  <section class="panel mapping-panel">
+    <details>
+      <summary class="mapping-summary"><span><b>1. Priority League Mappings</b> <span class="count" id="mappingCount">0 mappings</span></span><span class="count">Click to manage mappings ▾</span></summary>
+      <div class="mapping-content">
+    <div class="section-note">Each sport has its own independent mapping table. Import a CSV, tab-separated file, or Markdown table with columns <b>Country</b>, <b>Priority League</b>, <b>Flashscore League Name</b> and (optionally) <b>Sport</b> and <b>Active</b>. If the file has no Sport column, every row is assigned to the sport chosen in the form below. Excel (.xlsx) files should first be saved as CSV UTF-8. Blank Flashscore names are kept in the list but never match fixtures. Inactive mappings are never used for matching. A country-specific mapping only matches fixtures from that country; a broad-region mapping (Europe, Asia, Africa, America, Oceania, World) only matches fixtures labelled with the same region family.<br><b>Shared list:</b> on start-up the app loads the team's mapping list from the Supabase table <code>msfm_priority_mappings</code> (read-only). Edits made here are saved in this browser only; to share a change, update it in Supabase (use <b>Export Mappings as Supabase SQL</b>).</div>
+    <form id="mappingForm" class="mapping-form">
+      <div><label for="mapSport">Sport</label><select id="mapSport"></select></div>
+      <div><label for="mapCountry">Country / region</label><input id="mapCountry" type="text" required placeholder="e.g. Argentina"></div>
+      <div><label for="mapPriority">Priority League</label><input id="mapPriority" type="text" required placeholder="e.g. Liga Nacional"></div>
+      <div><label for="mapFlashscore">Flashscore League Name</label><input id="mapFlashscore" type="text" placeholder="e.g. Liga A"></div>
+      <button class="primary" id="saveMappingBtn" type="submit">Add Mapping</button>
+      <button class="neutral hidden" id="cancelEditBtn" type="button">Cancel edit</button>
+    </form>
+    <div class="mapping-tools">
+      <input id="mappingSearch" type="text" placeholder="Search country or league..." aria-label="Search mappings">
+      <select id="mappingFilter" aria-label="Filter mappings"><option value="all">All mappings</option><option value="active">Active only</option><option value="inactive">Inactive only</option><option value="blank">Blank Flashscore name</option><option value="flagged">Duplicates / shared names</option></select>
+      <input id="mappingFile" type="file" accept=".csv,.tsv,.txt,.md,text/csv,text/plain" aria-label="Mapping file">
+      <button class="secondary" id="importMappingsBtn" type="button">Import Mapping File</button>
+      <button class="secondary" id="exportMappingsBtn" type="button">Export Mappings CSV</button>
+      <button class="secondary" id="reloadSharedMappingsBtn" type="button">Reload Shared Mappings</button>
+      <button class="secondary" id="exportMappingsSqlBtn" type="button">Export Mappings as Supabase SQL</button>
+      <button class="neutral" id="resetSportMappingsBtn" type="button">Reset selected sport to default list</button>
+      <button class="danger" id="resetMappingsBtn" type="button">Reset ALL sports…</button>
+    </div>
+    <div id="mappingMessage" class="message" role="status" aria-live="polite"></div>
+    <div id="mappingTables"></div>
+      </div>
+    </details>
+  </section>
+
+  <section class="panel">
+    <h2>2. Paste and Filter Fixtures</h2>
+    <div class="controls" style="margin-top:14px">
+      <div><label for="sport">Sport</label><select id="sport"></select><div class="hint" id="sportHint"></div></div>
+      <div><label for="fixtureDate">Fixture date</label><input id="fixtureDate" type="date"></div>
+    </div>
+    <label for="rawInput">Raw Flashscore fixtures</label>
+    <textarea id="rawInput" spellcheck="false" placeholder="Paste fixtures here, including league headings, country/region headings, match times and team names..."></textarea>
+    <div class="actions">
+      <button class="primary" id="filterBtn" type="button">Parse &amp; Filter</button>
+      <button class="secondary" id="sampleBtn" type="button">Load Example Data</button>
+      <button class="neutral" id="clearBtn" type="button">Clear Input</button>
+    </div>
+    <div id="message" class="message" role="status" aria-live="polite"></div>
+    <div id="playoffAlerts" class="hidden" aria-live="polite"></div>
+  </section>
+  <section class="panel" id="collectionPanel">
+    <div class="table-head"><h2>3. 7-Day Fixture Collection</h2><span class="count" id="collectionProgress">0/7 dates collected</span></div>
+    <p class="hint">Process one sport and one Flashscore date at a time, then save it here. A collection is identified by <b>sport + date</b>: adding the same sport and date again replaces only that entry, and other sports on the same date are untouched. The 7-day limit counts distinct calendar dates (all sports on one date count as one day). Saved in this browser's Local Storage.</p>
+    <div class="statusline">
+      <div class="stat"><span class="count">Dates collected</span><strong id="daysCollectedCount">0 / 7</strong></div>
+      <div class="stat"><span class="count">Sport-date entries</span><strong id="collectionEntryCount">0</strong></div>
+      <div class="stat"><span class="count">All fixtures collected</span><strong id="collectionAllCount">0</strong></div>
+      <div class="stat"><span class="count">Priority matches</span><strong id="collectionMatchedCount">0</strong></div>
+      <div class="stat"><span class="count">Excluded</span><strong id="collectionExcludedCount">0</strong></div>
+    </div>
+    <div class="actions">
+      <button class="primary" id="addDayBtn" type="button">Parse &amp; Add / Replace This Sport + Date</button>
+      <button class="secondary" id="exportCollectionBtn" type="button">Export All — Matching CSV</button>
+      <button class="secondary" id="exportAllCollectionBtn" type="button">Export All — All Fixtures CSV</button>
+      <button class="secondary" id="exportExcludedCollectionBtn" type="button">Export All — Excluded CSV</button>
+      <button class="danger" id="clearCollectionBtn" type="button">Clear 7-Day Collection</button>
+    </div>
+    <div id="collectionMessage" class="message" role="status" aria-live="polite"></div>
+    <div class="table-wrap" style="margin-top:10px"><table><thead><tr><th>Sport</th><th>Date</th><th>Parsed</th><th>Matched</th><th>Excluded</th><th>Last Saved</th><th>Action</th></tr></thead><tbody id="collectionBody"><tr><td colspan="7">No days collected yet.</td></tr></tbody></table></div>
+  </section>
+
+  <section class="panel" id="workedComparePanel">
+    <div class="table-head"><h2>4. Compare Against Worked Matches</h2><span class="count">Paste Excel rows: Sport, Date, Time, Country, League, Home, Away, Event ID</span></div>
+    <p class="hint">Copy the 8 columns from Sport Name through Event ID in Excel and paste them below. Collected priority fixtures are compared with the worked history by sport, date, country, league, home/away teams and time. An Event ID never overrides conflicting details, similar team names are sent to review rather than accepted silently, and the same teams found on the adjacent date (midnight / time-zone shifts) are also sent to review.</p>
+    <label for="workedInput">Worked matches history (paste from Excel)</label>
+    <textarea id="workedInput" style="min-height:150px" spellcheck="false" placeholder="Sport name&#9;Date&#9;Time&#9;Country&#9;League&#9;Home&#9;Away&#9;Event ID"></textarea>
+    <div class="actions">
+      <button class="primary" id="compareWorkedBtn" type="button">Compare Collection with Worked Matches</button>
+      <button class="secondary" id="exportNewBtn" type="button">Export New Matches CSV</button>
+      <button class="secondary" id="exportNewHistoryBtn" type="button">Export New Matches — Worked-History Format</button>
+      <button class="secondary" id="exportWorkedBtn" type="button">Export Already Worked CSV</button>
+      <button class="secondary" id="exportReviewBtn" type="button">Export Possible Duplicates CSV</button>
+      <button class="secondary" id="exportTimeChangedBtn" type="button">Export Time Changed CSV</button>
+      <button class="secondary" id="exportConflictsBtn" type="button">Export History Conflicts CSV</button>
+      <button class="neutral" id="clearWorkedBtn" type="button">Clear Worked Matches</button>
+    </div>
+    <div id="compareMessage" class="message" role="status" aria-live="polite"></div>
+    <div class="statusline">
+      <div class="stat"><span class="count">Collected priority fixtures</span><strong id="collectedFixtureCount">0</strong></div>
+      <div class="stat"><span class="count">New matches</span><strong id="newMatchCount">0</strong></div>
+      <div class="stat"><span class="count">Already worked</span><strong id="alreadyWorkedCount">0</strong></div>
+      <div class="stat"><span class="count">Possible duplicates</span><strong id="possibleDuplicateCount">0</strong></div>
+      <div class="stat"><span class="count">Time changed</span><strong id="timeChangedCount">0</strong></div>
+      <div class="stat"><span class="count">History Event ID conflicts</span><strong id="conflictCount">0</strong></div>
+    </div>
+    <div class="filterbar"><label for="resultFilter" style="margin:0">Filter result tables</label><input id="resultFilter" type="text" placeholder="Team, league, country, sport, Event ID…"></div>
+    <h3>New Matches</h3>
+    <div class="table-wrap"><table><thead><tr><th>Sport</th><th>Date</th><th>Time</th><th>Country</th><th>League</th><th>Home</th><th>Away</th><th>Event ID</th></tr></thead><tbody id="newMatchesBody"><tr><td colspan="8">Compare your collection to see new matches.</td></tr></tbody></table></div>
+    <h3>Already Worked</h3>
+    <div class="table-wrap"><table><thead><tr><th>Fixture</th><th>Worked-history match</th><th>Match type</th></tr></thead><tbody id="alreadyWorkedBody"><tr><td colspan="3">No comparison run yet.</td></tr></tbody></table></div>
+    <h3>Time Changed — Review</h3>
+    <div class="table-wrap"><table><thead><tr><th>Current fixture</th><th>Worked-history match</th><th>Time difference</th></tr></thead><tbody id="timeChangedBody"><tr><td colspan="3">No comparison run yet.</td></tr></tbody></table></div>
+    <h3>Possible Duplicates — Review</h3>
+    <div class="table-wrap"><table><thead><tr><th>Fixture</th><th>Similar worked match</th><th>Reason</th></tr></thead><tbody id="possibleDuplicatesBody"><tr><td colspan="3">No comparison run yet.</td></tr></tbody></table></div>
+    <h3>Worked-History Conflicts — duplicate Event IDs with inconsistent details</h3>
+    <p class="hint">These history rows share an Event ID but disagree on at least one detail. Nothing is discarded; fixtures that touch these rows are sent to Possible Duplicates.</p>
+    <div class="table-wrap"><table><thead><tr><th>Event ID</th><th>Differing details</th><th>Conflicting history rows</th></tr></thead><tbody id="conflictsBody"><tr><td colspan="3">No comparison run yet.</td></tr></tbody></table></div>
+  </section>
+
+  <section class="panel">
+    <div class="table-head"><h2>5. Matching Fixtures</h2><span class="count" id="resultCount">0 fixtures</span></div>
+    <div class="statusline">
+      <div class="stat"><span class="count">Parsed fixtures</span><strong id="parsedCount">0</strong></div>
+      <div class="stat"><span class="count">Matched</span><strong id="matchedCount">0</strong></div>
+      <div class="stat"><span class="count">Excluded</span><strong id="excludedCount">0</strong></div>
+    </div>
+    <div class="table-wrap" style="margin-top:12px">
+      <table id="resultsTable"><thead><tr><th>Sport</th><th>Date</th><th>Time</th><th>Country</th><th>Flashscore League Name</th><th>Home</th><th>Away</th></tr></thead>
+      <tbody id="resultsBody"><tr><td colspan="7" style="color:#64748b;text-align:center">No fixtures processed yet.</td></tr></tbody></table>
+    </div>
+    <div class="actions">
+      <button class="primary" id="copyBtn" type="button">Copy Matching Table (TSV)</button>
+      <button class="secondary" id="csvBtn" type="button">Download Matching Fixtures CSV</button>
+      <button class="secondary" id="excludedCsvBtn" type="button">Download Excluded Fixtures CSV</button>
+    </div>
+    <div id="exportMessage" class="message" role="status" aria-live="polite"></div>
+  </section>
+
+  <section class="panel">
+    <div class="table-head"><h2>6. Excluded Fixtures</h2><span class="count" id="excludedTableCount">0 excluded</span></div>
+    <p class="hint">Use this list to spot leagues that need a mapping. Exclusion reasons are shown for troubleshooting.</p>
+    <div class="table-wrap"><table><thead><tr><th>Time</th><th>Country</th><th>Detected League</th><th>Home</th><th>Away</th><th>Reason</th></tr></thead><tbody id="excludedBody"><tr><td colspan="6">No excluded fixtures.</td></tr></tbody></table></div>
+  </section>
+
+  <section class="panel">
+    <div class="subhead"><h2>7. Local Import History</h2><button class="danger small" id="clearHistoryBtn" type="button">Clear History</button></div>
+    <p class="hint">Recent processing summaries are saved in this browser only.</p>
+    <div class="table-wrap"><table><thead><tr><th>Processed At</th><th>Sport</th><th>Input Fixtures</th><th>Matched</th><th>Excluded</th></tr></thead><tbody id="historyBody"><tr><td colspan="5">No import history yet.</td></tr></tbody></table></div>
+  </section>
+</main>
+<script>
+"use strict";
+/* ===== Multi-Sport Fixtures Priority League Manager (v2.1) =====
+   Storage keys and the stored data format are unchanged from v2, so existing data keeps loading
+   without migration. v1 data is still migrated by migrateStoredData() exactly as before. */
+const STORAGE = {
+  mappings: "basketball_priority_league_mappings_v2",
+  fixtures: "basketball_matched_fixtures_v1",
+  history: "basketball_import_history_v1",
+  collection: "basketball_7day_fixture_collection_v1",
+  lastParse: "msfm_last_parse_v2",
+  schema: "msfm_schema_version",
+  seeded: "msfm_seeded_sports_v1",
+  sharedSync: "msfm_shared_mapping_sync_v1"     // new in v2.2: fingerprint of the last shared list applied
+};
+const SCHEMA_VERSION = 2;
+const SPORTS = ["Basketball","Ice hockey","Floorball","Waterpolo","Bandy","Field hockey"];
+const MAX_DATES = 7;
+const MAX_RENDER_ROWS = 2000;
+const columns = ["Sport","Date","Time","Country","Flashscore League Name","Home","Away"];
+const matchedExportColumns = [...columns,"Priority League"];
+const excludedColumns = ["Sport","Date","Time","Country","Detected League","Home","Away","Reason"];
+let mappings = [];
+let convertedRows = [];
+let excludedRows = [];
+let collectionDays = [];
+let editingId = null;
+let lastParseMeta = null;
+const startupNotices = [];
+
+/* Storage backend. Normally the browser's localStorage. The automated test harness opens this file with
+   "#msfm-test" and supplies an in-memory store, so tests can never touch a user's real data. */
+const STORE = (()=>{
+  try{ if(/msfm-test/.test(location.hash)&&window.parent!==window&&window.parent.__MSFM_TEST_STORE)return window.parent.__MSFM_TEST_STORE; }catch(e){}
+  try{ return window.localStorage; }catch(e){ return null; }
+})();
+
+/* Shared mapping list in Supabase. The browser only READS it (GET) with the suite's publishable key; it never
+   writes. The list is maintained in Supabase by an administrator (see msfm_mappings_setup.sql). */
+const SHARED = {
+  url: "https://ywfvifcityihcfvyeisd.supabase.co",
+  key: "sb_publishable_Oym01Q8PYn7Xp8kuWLmRNQ_H3RI4B5l",
+  table: "msfm_priority_mappings",
+  pageSize: 1000
+};
+/* In test mode the harness may supply a fake fetch; with none supplied, the shared list is disabled so tests
+   never touch the network. */
+const REMOTE_FETCH = (()=>{
+  try{ if(/msfm-test/.test(location.hash)&&window.parent!==window)return window.parent.__MSFM_TEST_FETCH||null; }catch(e){ return null; }
+  return typeof window.fetch==="function"?window.fetch.bind(window):null;
+})();
+
+const exampleMappings = [["Africa","FIBA AfroBasket - Men","AfroBasket"],["Africa","FIBA AfroBasket - Women","AfroBasket Women"],["America","Centrobasket Championship - Men","Centrobasket"],["America","CentroBasket Championship - Women","Centrobasket Women"],["America","FIBA AmeriCup - Men","AmeriCup"],["America","FIBA AmeriCup - Women","AmeriCup Women"],["America","Champions League Americas","Champions League Americas"],["America","Pan American Games - Men","Pan American Games"],["America","Pan American Games - Women","Pan American Games Women"],["America","World Cup - Qualification",""],["Argentina","Liga Nacional","Liga A"],["Asia","FIBA Asia Cup - Men",""],["Asia","FIBA Asia Cup - Women - Division A",""],["Asia","FIBA Asia Cup - Women - Division B",""],["Asia","World Cup - Qualification",""],["Australia","NBL","NBL"],["Australia","WNBL","WNBL Women"],["Australia","NBL1 - Men","NBL1"],["Australia","NBL1 - Women","NBL1 Women"],["Austria","Cup","Austria Cup"],["Austria","OBL","Superliga"],["Austria","Supercup","ABL - Super Cup"],["Belgium","Belgium Cup - Men","Belgian Cup"],["Belgium","BLB","Pro Basketball League"],["Belgium","Supercup","Super Cup"],["Brazil","NBB","NBB"],["Brazil","Liga de Basquete Femenino","LBF Women"],["Bulgaria","Bulgarian Cup - Men","Bulgarian Cup"],["Bulgaria","National Basketball League - Men","NBL"],["Chile","Liga Nacional","LNB"],["Chile","LNB Cup","LNB 2"],["China","Chinese Basketball Association","CBA"],["China","Women's Chinese Basketball Association","WCBA Women"],["Colombia","Liga Profesional","LBP"],["Croatia","HT Premijer Liga","Premijer liga"],["Croatia","Croatia Cup - Men","Croatian Cup"],["Cyprus","1st Division - Men","Division A"],["Czech Republic","Kooperativa NBL","NBL"],["Czech Republic","Czech Cup - Men","Czech Cup"],["Czech Republic","ZBL - Women","ZBL Women"],["Czech Republic","Czech Cup - Women","Czech Cup Women"],["Denmark","Basketligaen","Basketligaen"],["Denmark","Dameligaen","Kvindebasketligaen Women"],["Dominican Republic","LNB","LNB"],["Europe","Alpe Adria Cup",""],["Europe","Balkan League",""],["Europe","BNXT","BNXT League"],["Europe","Estonian-Latvian Basketball League","Latvian-Estonian League"],["Europe","Eurocup - Men","Eurocup"],["Europe","Eurocup - Women","EuroCup Women"],["Europe","Euroleague Men + Specials (Last 8 only)","Euroleague"],["Europe","Euroleague Women","Euroleague Women"],["Europe","EuroBasket - Men","EuroBasket"],["Europe","EuroBasket - Women","EuroBasket Women"],["Europe","EuroBasket - Qualification - Men","EuroBasket - Qualification"],["Europe","EuroBasket - Qualification - Women","EuroBasket Women - Qualification - Second stage"],["Europe","FIBA Champions League","Champions League"],["Europe","FIBA Europe Cup","FIBA Europe Cup"],["Europe","Liga ABA","AdmiralBet ABA League"],["Europe","Liga ABA 2","ABA League 2"],["Europe","North European Basketball League","ENBL"],["Europe","U20 European Championship - Division A/B Men","EuroBasket U20"],["Europe","U20 European Championship - Division A/B Women",""],["Europe","VTB League",""],["Europe","United Cup",""],["Europe","United League Super Cup",""],["Europe","World Cup Qualification",""],["Europe","World Cup Pre-qualification",""],["Finland","1st Divison A - Men","I Divisioona A"],["Finland","Korisliiga","Korisliiga"],["Finland","Korisliiga - Women","Korisliiga Women"],["France","Coupe de France","French Cup"],["France","Leaders Cup","Leaders Cup"],["France","Ligue Feminine de Basketball","LFB Women"],["France","Championnat Pro A","LNB"],["France","Championnat Pro B","Elite 2"],["Germany","BBL Champions Cup",""],["Germany","BBL Pokal","German Cup"],["Germany","Bundesliga","BBL"],["Germany","DBBL","DBBL Women"],["Germany","PRO A","Pro A"],["Greece","A1 - Women","WBL1 Women"],["Greece","A1 - Men","Basket League"],["Greece","Elite - Men","Greek Cup"],["Greece","Greek Cup","Greek Cup"],["Hungary","NB I. A","NB I. A"],["Iceland","Premier League","Premier League"],["Iceland","Premier League - Women","Premier League Women"],["Indonesia","IBL","IBL"],["Israel","Cup - Men","State Cup"],["Israel","Premier League","Super League"],["Italy","Final Eight",""],["Italy","Lega A","Lega A"],["Italy","Serie A2 East","Serie A2"],["Italy","Serie A2 West","Serie A2"],["Italy","Serie A2 - Playoffs","Serie A2 (Play Offs: Quarter-finals)"],["Italy","Serie A2 - Playout","Serie A2 (Play Out)"],["Italy","Lega A1 Women","Serie A1 Women"],["Italy","SuperCoppa","Super Cup"],["Italy","Serie A2 - Women Group A","Serie A2 Women - Gr. A"],["Italy","Serie A2 - Women Group B","Serie A2 Women - Gr. B"],["Japan","B.League Premier","B.League Premier"],["Japan","WJBL","W League Women"],["Japan","B.League One","B.League One"],["South Korea","Korean Basketball League","KBL"],["South Korea","Women's Korean Basketball League","WKBL Women"],["Lithuania","LKL League","LKL"],["Lithuania","Lithuania Cup","King Mindaugas Cup"],["Lithuania","LMKL League",""],["Lithuania","NKL","NKL"],["Mexico","Liga Nacional de Baloncesto Professional","LNBP"],["Netherlands","Dutch Basketball League - Men","DBL"],["Mexico","LMBPF - Women","LMBPF Women"],["New Zealand","NBL","NBL"],["New Zealand","Womens' Basketball Championship","Tauihi Women"],["Norway","BLNO","BLNO"],["Australia & Oceania","Fiba Ocenia Championship Men","Oceania Championship"],["Australia & Oceania","Fiba Ocenia Championship Women","Oceania Championship Women"],["Philippines","PBA","PBA Philippine Cup"],["Poland","Polka Liga Koszykowki","Basket Liga"],["Poland","Puchar Polski**","Polish Cup"],["Poland","Polish Cup - Women","Polish Cup Women"],["Poland","1. Liga","1. Liga"],["Poland","Basket Liga - Women","Basket Liga Women"],["Portugal","Liga Portuguesa","LPB"],["Portugal","Proliga","Proliga"],["Portugal","Campeonato Nacional Liga Feminina","LFB Women"],["Romania","Liga Nationala - Men","Liga Nationala"],["Serbia","1. KLS","First League"],["Serbia","Serbia Cup","Korac Cup"],["Serbia","Superliga Men","Superleague"],["Slovakia","Extraliga Men","Extraliga"],["Slovakia","SBL - Men","Extraliga"],["Slovakia","League Cup men","Slovakia Cup"],["Slovenia","Liga NovaKBM","Liga OTP banka"],["Slovenia","Supercup Men","Supercup"],["South America","Liga Sudamericana","South American League"],["South America","South American Championship - Men",""],["South America","South American Championship - Women","South American Championship Women"],["Spain","Copa de S.M. La Reina","Copa de la Reina Women"],["Spain","Copa del Rey","Copa del Rey"],["Spain","Primera FEB","Primera FEB"],["Spain","Liga ACB","ACB"],["Spain","Liga Femenina","Liga Femenina Women"],["Spain","Supercopa ACB","Supercopa ACB"],["Spain","Supercopa Femenina","Supercopa Women"],["Spain","Segunda FEB","Segunda FEB"],["Sweden","Basketligan","Basketligan"],["Sweden","Superettan","Superettan"],["Sweden","Basketligan Damen","Basketligan Women"],["Switzerland","LNA","SB League"],["Turkey","President's Cup","Turkish Cup"],["Turkey","TBSL","Super Lig"],["Turkey","Turkey Cup","Turkish Cup"],["Turkey","Turkey Cup - Women","Turkish Cup Women"],["Turkey","KBSL - Women","KBSL Women"],["Turkey","TBL","TBL"],["United Kingdom","SLB Men","SLB"],["United Kingdom","SLB Cup","SLB Cup"],["United Kingdom","SLB - Women","SLB Women"],["United Kingdom","SLB - Cup Women","SLB Cup Women"],["United Kingdom","SLB - Trophy - Men","SLB Trophy"],["United Kingdom","SLB - Trophy - Women","SLB Trophy Women"],["Venezuela","Superliga","Superliga"],["World","Intercontinental Cup","Intercontinental Cup"],["World","International Men`s Friendlies","Friendly International"],["World","FIBA World Cup - Men","World Cup"],["World","FIBA World Cup - Women","World Cup Women"],["World","FIBA World Championship U19 - Men","World Championship U19"],["World","FIBA World Championship U19 - Women","World Championship U19 Women"],["Brazil","Campeonato Paulista 1A Division","Paulista"],["El Salvador","Liga Mayor","Primera Division"],["Puerto Rico","Baloncesto Superior Nacional","BSN"]].map(([country,priority,flashscore],i)=>({id:`seed-${i+1}`,country,priorityLeague:priority,flashscoreLeague:flashscore,active:true}));
+
+const iceHockeyMappings = [["Asia","Asian Hockey League",""],["Austria","Eishockey Liga","ICE Hockey League"],["Austria","Eishockey Liga - Playoff",""],["Europe","Alps Hockey League","Alps Hockey League"],["Austria","Alps Hockey League - Playoffs",""],["Australia","Australian Ice Hockey League","AIHL"],["Belarus","Extraliga","Extraleague"],["Belarus","Extraleague Divison B",""],["Belarus","Extraliga Playoff",""],["Czech Republic","1.Liga","Maxa liga"],["Czech Republic","1.Liga Playoff",""],["Czech Republic","1.Liga Playouts",""],["Czech Republic","Extraliga","Extraliga"],["Czech Republic","Extraliga - Playoff",""],["Canada","Ontario Hockey League","OHL"],["Denmark","Metal Ligaen","Metal Ligaen"],["Denmark","Playoffs",""],["Europe","Champions Hockey League","Champions League"],["Europe","Euro Hockey Tour",""],["Europe","European Icehockey Challenge",""],["Europe","Karjala Cup",""],["Finland","Mestis","Mestis"],["Finland","Mestis Playoff",""],["Finland","Mestis Playout",""],["Finland","Mestis Promotion/Relegation",""],["Finland","SM-Liiga","Liiga"],["Finland","SM-Liiga Playoffs",""],["France","Ligue Magnus","Ligue Magnus"],["France","Ligue Magnus - Playoff",""],["France","Ligue Magnus - Playout",""],["Germany","DEL","DEL"],["Germany","DEL Playoff",""],["Germany","DEL 2","DEL2"],["Germany","DEL 2 - Playoff",""],["Germany","DEL 2 - Playdown",""],["Europe","Germany Cup","Germany Cup"],["Hungary","Erste Liga","Erste Liga"],["Hungary","Erste Liga Playoffs",""],["Italy","Italian Hockey league","IHL"],["Latvia","Virslīga","Optibet Hokeja Liga"],["Norway","EliteHockeyLigaen","EHL"],["Norway","Norgesmesterskapet","Division 1"],["Poland","PHL","Polish Hockey League"],["Poland","PHL - Playoffs",""],["Poland","PHL - Playouts",""],["Russia","Continental Hockey League","KHL"],["Russia","Continental Hockey League Playoff",""],["Russia","Junior Hockey League (MHL)","MHL"],["Russia","Junior Hockey League (MHL) Playoff",""],["Russia","Vysshaya Hokkeynaya Liga (VHL)","VHL"],["Russia","Vysshaya Hokkeynaya Liga (VHL) Playoff",""],["Slovakia","Extraliga","Tipsport liga"],["Slovakia","Extraliga - Playoff",""],["Slovakia","Extraliga - Play Out",""],["Sweden","Hockeyallsvenskan","HockeyAllsvenskan"],["Sweden","Hockeyallsvenskan - Promotion/Relegation Round",""],["Sweden","Kvalserien",""],["Sweden","Playoff for Kvalserien",""],["Sweden","SHL","SHL"],["Sweden","SHL - Play-Off",""],["Switzerland","Nationalliga A","National League"],["Switzerland","Nationalliga A Playoff",""],["Switzerland","Nationalliga A Playout",""],["Switzerland","Swiss League","Swiss League"],["Switzerland","Swiss League Playoff",""],["United Kingdom","Elite League","Elite League"],["United Kingdom","Elite League - Playoffs",""],["World","International Friendlies","Friendly International"],["World","International Friendlies - Women","Friendly International Women"],["Europe","Spengler Cup","Spengler Cup (Davos)"],["World","World Cup of Hockey","World Cup"],["World","World Championships - Men","World Championship"],["World","World Championships - Women","WCH Women"],["World","World Championships Women Division 1",""],["World","World Championships 1A/1B",""],["World","World Championships 2A/2B",""],["World","U20 World Championships","WCH U20"],["World","U20 World Championships 1A/1B",""],["World","U18 World Championships","WCH U18"],["World","U18 World Championships Division 1A/1B",""]].map(([country,priorityLeague,flashscoreLeague],i)=>({id:`hockey-seed-${i+1}`,country,priorityLeague,flashscoreLeague,active:true,sport:"Ice hockey"}));
+
+const minorSportMappings = {
+  "Floorball": [["Czech Rep","Extraliga - Men","Livesport Superliga"],["Denmark","UFL - Men",""],["Europe","EuroFloorball Cup - Men","EuroFloorball Cup"],["Europe","EuroFloorball Tour - Men",""],["Finland","Salibandyliiga",""],["Norway","Eliteserien - Men","Eliteserien"],["Sweden","Superligan - Men","Svenska Superligan"],["Switzerland","Nationalliga A - Men","Prime League"],["World","World Championships Men","World Championship"]],
+  "Waterpolo": [["Europe","Champions League Men","Champions League"],["Europe","European Championships - Men","European Championship"],["Europe","European Championships - Women","European Championship Women"],["Europe","Regional League - Men","Regional League"],["Europe","Adriatic League A1 - Men - Playoffs","Adriatic League"],["Hungary","OB I","OB I"],["Hungary","Cup – Men",""],["Hungary","Cup – Women",""],["Italy","Coppa Italia",""],["Italy","Serie A1","A1"],["Italy","Serie A1 - Playoffs",""],["Russia","Superleague - Men",""],["Russia","Championship - Women",""],["World","FINA World Championship - Men","World Cup"],["World","FINA World Championship - Women","World Cup Women"],["World","World League - Men",""],["World","World League - Women",""]],
+  "Bandy": [["Finland","Bandyliiga","Bandyliiga"],["Norway","Eliteserien","Eliteserien"],["Russia","Super League","Super League"],["Sweden","Elitserien","Elitserien"],["Sweden","Elitserien Playoffs",""],["World","World Championships","World Championship"]],
+  "Field hockey": [["Belgium","Audi Hockey League",""],["Europe","Euro Hockey League - Men","Euro Hockey League"],["Europe","EuroHockey Nations Championship","EuroHockey Championship"],["World","Champions Trophy - Men","Champions Trophy"],["World","World Cup - Men","World Cup"],["World","World Cup - Women","World Cup Women"],["World","World League","World League"]]
+};
+const minorSportSeedMappings = Object.entries(minorSportMappings).flatMap(([sport,rows])=>rows.map(([country,priorityLeague,flashscoreLeague],i)=>({id:`${sport.toLowerCase().replace(/[^a-z]+/g,'-')}-seed-${i+1}`,country,priorityLeague,flashscoreLeague,active:true,sport})));
+
+const $ = id => document.getElementById(id);
+let uidCounter = 0;
+function uid(){return "map-"+Date.now().toString(36)+"-"+(uidCounter++).toString(36)+"-"+Math.random().toString(36).slice(2,7);}
+function normalize(value){return String(value??"").normalize("NFKC").trim().replace(/\s+/g," ").toLocaleLowerCase();}
+function sportKey(v){return String(v??"").normalize("NFKD").toLowerCase().replace(/[^a-z0-9]+/g,"");}
+function canonSport(v){const k=sportKey(v);return SPORTS.find(s=>sportKey(s)===k)||"";}
+function sportIndex(v){const i=SPORTS.indexOf(canonSport(v));return i<0?99:i;}
+
+const SEEDS_BY_SPORT = (()=>{
+  const out={};
+  out["Basketball"]=exampleMappings.map(m=>({...m,sport:"Basketball"}));
+  out["Ice hockey"]=iceHockeyMappings.map(m=>({...m}));
+  for(const s of SPORTS){ if(!out[s]) out[s]=minorSportSeedMappings.filter(m=>m.sport===s).map(m=>({...m})); }
+  return out;
+})();
+function seedRowsFor(sport){return (SEEDS_BY_SPORT[sport]||[]).map(s=>({id:uid(),country:s.country,priorityLeague:s.priorityLeague,flashscoreLeague:s.flashscoreLeague,active:true,sport}));}
+
+/* ---------- storage helpers (never throw into the UI, never overwrite unreadable data silently) ---------- */
+const noticeState = {storage:""};
+function renderNotices(){
+  const box=$("appNotices");if(!box)return;box.replaceChildren();
+  const add=(t,cls)=>{const d=document.createElement("div");d.className="notice"+(cls?" "+cls:"");d.textContent=t;box.appendChild(d);};
+  if(noticeState.storage)add(noticeState.storage,"error");
+  for(const n of startupNotices)add(n);
+}
+function safeSet(key,value){
+  try{if(!STORE)throw new Error("NoStorage");STORE.setItem(key,value);return true;}
+  catch(e){noticeState.storage="Browser storage is unavailable or full ("+(e&&e.name||"error")+"). Recent changes may NOT persist after a refresh. Export your mappings and collection as CSV now.";renderNotices();return false;}
+}
+function readRaw(key){try{return STORE?STORE.getItem(key):null;}catch{return null;}}
+function removeKey(key){try{if(STORE)STORE.removeItem(key);}catch{}}
+function readJSON(key,fallback){
+  const raw=readRaw(key);
+  if(raw==null||raw==="")return fallback;
+  try{return JSON.parse(raw);}
+  catch{
+    try{STORE.setItem(key+"__unreadable_"+Date.now(),raw);}catch{}
+    startupNotices.push(`Stored data for "${key}" could not be read. A copy of the unreadable value was kept in Local Storage under "${key}__unreadable_…" and the app started with an empty value.`);
+    return fallback;
+  }
+}
+/* Keep a copy of a stored value whose shape is not what the app expects, before anything replaces it. */
+function backupUnrecognised(key){
+  const raw=readRaw(key);if(raw==null||raw==="")return;
+  const bk=key+"__unrecognised_"+Date.now();
+  safeSet(bk,raw);
+  startupNotices.push(`Stored data for "${key}" was not in the expected list format. A copy was kept in Local Storage under "${bk}"; nothing was deleted.`);
+}
+function saveMappings(){return safeSet(STORAGE.mappings,JSON.stringify(mappings));}
+function saveCollection(){return safeSet(STORAGE.collection,JSON.stringify(collectionDays));}
+function setMessage(id,text,type=""){const el=$(id);if(!el)return;el.textContent=text;el.className="message"+(type?" "+type:"");}
+
+/* ---------- CSV ---------- */
+function escapeCSV(value){
+  let s=String(value??"");
+  // Neutralise spreadsheet formula injection, but leave plain numbers/times/dates alone.
+  if(/^[=+\-@\t\r]/.test(s)&&!/^[-+]?[\d.,:\/\- ]+$/.test(s))s="'"+s;
+  return '"'+s.replace(/"/g,'""')+'"';
+}
+function buildCSV(headers,rows){return [headers.map(escapeCSV).join(","),...rows.map(row=>headers.map(h=>escapeCSV(row[h])).join(","))].join("\r\n");}
+function downloadCSV(filename,headers,rows){
+  const blob=new Blob(["\uFEFF",buildCSV(headers,rows)],{type:"text/csv;charset=utf-8;"});
+  const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function downloadText(filename,text,mime){
+  const blob=new Blob([text],{type:mime||"text/plain;charset=utf-8;"});
+  const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+/* Delimited text parser: quotes only open at the start of a field (so 5'10" style text is safe). */
+function parseDelimited(text,delimiter){
+  const rows=[];let row=[],field="",quoted=false,atStart=true;
+  const t=String(text??"");
+  for(let i=0;i<t.length;i++){
+    const ch=t[i],next=t[i+1];
+    if(quoted){
+      if(ch==='"'&&next==='"'){field+='"';i++;}
+      else if(ch==='"'){quoted=false;}
+      else field+=ch;
+    } else if(ch==='"'&&atStart){quoted=true;atStart=false;}
+    else if(ch===delimiter){row.push(field);field="";atStart=true;}
+    else if(ch==="\n"){row.push(field);rows.push(row);row=[];field="";atStart=true;}
+    else if(ch==="\r"){/* ignore */}
+    else{field+=ch;atStart=false;}
+  }
+  if(field.length||row.length){row.push(field);rows.push(row);}
+  return rows.filter(r=>r.some(v=>String(v).trim()!==""));
+}
+function parseCSV(text){
+  // Accept Markdown tables, CSV, TSV and semicolon-delimited exports.
+  const normalizedText=String(text??"").replace(/^\uFEFF/,"").trim();
+  if(!normalizedText)return [];
+  const nonEmptyLines=normalizedText.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+  if(nonEmptyLines.length&&nonEmptyLines[0].startsWith("|")){
+    return nonEmptyLines
+      .filter(line=>!/^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(line))
+      .map(line=>line.replace(/^\|/,"").replace(/\|$/," ").trim().split("|").map(cell=>cell.trim()))
+      .filter(row=>row.some(cell=>cell!==""));
+  }
+  const first=nonEmptyLines[0]||"";
+  const counts={",":(first.match(/,/g)||[]).length,"\t":(first.match(/\t/g)||[]).length,";":(first.match(/;/g)||[]).length};
+  const sorted=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  const delimiter=sorted[0][1]>0?sorted[0][0]:",";
+  return parseDelimited(normalizedText,delimiter);
+}
+function headerIndex(headers,aliases){
+  return headers.findIndex(h=>aliases.includes(normalize(h).replace(/[_-]/g," ").replace(/\s+/g," ")));
+}
+
+/* ---------- league / country normalisation ---------- */
+function leagueKey(v){
+  return String(v??"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/[\u2010-\u2015]/g,"-").replace(/[\u2018\u2019`\u00b4]/g,"'").trim().replace(/\s+/g," ").toLowerCase();
+}
+const COUNTRY_ALIASES = {
+  "czech rep":"czech republic","czech rep.":"czech republic","czechia":"czech republic",
+  "usa":"united states","u.s.a.":"united states","united states of america":"united states",
+  "uk":"united kingdom","u.k.":"united kingdom","great britain":"united kingdom","england":"united kingdom","scotland":"united kingdom","wales":"united kingdom","northern ireland":"united kingdom",
+  "turkiye":"turkey","korea republic":"south korea",
+  "bosnia":"bosnia and herzegovina","bosnia and herz.":"bosnia and herzegovina",
+  "macedonia":"north macedonia",
+  "australia and oceania":"oceania"
+};
+function countryKey(v){
+  const k=leagueKey(v).replace(/&/g," and ").replace(/\s+/g," ").trim();
+  return COUNTRY_ALIASES[k]||k;
+}
+/* Broad regions are grouped into families. A broad-region fixture may fall back to a broad-region mapping
+   ONLY inside the same family (e.g. "South America" fixture -> "America" mapping). A Europe fixture can never
+   use an Asia mapping, and World/International only falls back to World/International. */
+const REGION_FAMILY = {"world":"world","international":"world","europe":"europe","asia":"asia","africa":"africa","oceania":"oceania",
+  "america":"america","americas":"america","north america":"america","south america":"america","central america":"america","latin america":"america"};
+const BROAD_REGIONS = new Set(Object.keys(REGION_FAMILY));
+function isBroadRegion(key){return BROAD_REGIONS.has(key);}
+function regionFamily(key){return REGION_FAMILY[key]||"";}
+
+/* ---------- dates ---------- */
+function parseISODate(s){
+  const m=String(s??"").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return"";
+  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));
+  return d.getUTCFullYear()===+m[1]&&d.getUTCMonth()===+m[2]-1&&d.getUTCDate()===+m[3]?s:"";
+}
+function formatDate(value){if(!value)return"";const [y,m,d]=value.split("-");return `${d}/${m}/${y}`;}
+function isoFromParts(y,mo,d){
+  const dt=new Date(Date.UTC(y,mo-1,d));
+  if(dt.getUTCFullYear()!==y||dt.getUTCMonth()!==mo-1||dt.getUTCDate()!==d)return"";
+  return `${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+}
+/* Accepts DD-MM-YYYY / DD/MM/YYYY / DD.MM.YYYY (day first, the team's format), YYYY-MM-DD, an unambiguous
+   US MM/DD/YYYY (only when the day part is > 12) and an Excel serial date number (e.g. 46322). */
+/* Also accepts a two-digit year (27/10/26 -> 2026), English month names (27-Oct-26, 27 October 2026,
+   Oct 27, 2026) and a leading weekday (Tue 27/10/2026), which Excel commonly produces. */
+const MONTHS={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+function monthNo(w){return MONTHS[String(w).toLowerCase().slice(0,3)]||0;}
+function fullYear(y){return String(y).length===2?2000+Number(y):Number(y);}
+function dateKey(v){
+  const s=String(v??"").trim().replace(/^(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?,?\s+/i,"");
+  let m=s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4}|\d{2})(?!\d)/);
+  if(m){let d=+m[1],mo=+m[2];const y=fullYear(m[3]);if(mo>12&&d<=12){const t=d;d=mo;mo=t;}return isoFromParts(y,mo,d);}
+  m=s.match(/^(\d{1,2})[-/. ]+([A-Za-z]{3,9})\.?[-/. ,]+(\d{4}|\d{2})(?!\d)/);
+  if(m&&monthNo(m[2]))return isoFromParts(fullYear(m[3]),monthNo(m[2]),+m[1]);
+  m=s.match(/^([A-Za-z]{3,9})\.?[-/. ]+(\d{1,2}),?[-/. ]+(\d{4})(?!\d)/);
+  if(m&&monthNo(m[1]))return isoFromParts(+m[3],monthNo(m[1]),+m[2]);
+  m=s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?!\d)/);
+  if(m)return isoFromParts(+m[1],+m[2],+m[3]);
+  m=s.match(/^(\d{5})(?:\.\d+)?$/);
+  if(m){const n=+m[1];if(n>20000&&n<80000){const dt=new Date(Date.UTC(1899,11,30)+n*864e5);return dt.toISOString().slice(0,10);}}
+  return"";
+}
+function addDaysISO(iso,n){const t=Date.parse(String(iso)+"T00:00:00Z");if(isNaN(t))return"";return new Date(t+n*864e5).toISOString().slice(0,10);}
+
+/* ---------- schema migration (backward compatible, never clears data) ---------- */
+function migrateStoredData(){
+  const result={mappingsMigrated:false,collectionMigrated:false,backedUp:false};
+  const version=Number(readRaw(STORAGE.schema)||0);
+  // 1) Keep a copy of the pre-migration data once.
+  if(version<SCHEMA_VERSION){
+    for(const key of [STORAGE.mappings,STORAGE.collection]){
+      const raw=readRaw(key);const bk="msfm_backup_pre_v2_"+key;
+      if(raw&&!readRaw(bk)){safeSet(bk,raw);result.backedUp=true;}
+    }
+  }
+  // 2) Mappings
+  let stored=readJSON(STORAGE.mappings,null);
+  if(stored!=null&&!Array.isArray(stored))backupUnrecognised(STORAGE.mappings);
+  const fresh=!Array.isArray(stored);
+  let list=fresh?[]:stored.filter(m=>m&&typeof m==="object");
+  const ids=new Set();
+  list=list.map(m=>{
+    let id=typeof m.id==="string"&&m.id&&!ids.has(m.id)?m.id:uid();ids.add(id);
+    const sport=canonSport(m.sport)||(m.sport?String(m.sport).trim():"Basketball");
+    return {id,sport,country:String(m.country??""),priorityLeague:String(m.priorityLeague??""),flashscoreLeague:String(m.flashscoreLeague??""),active:m.active!==false};
+  });
+  let seededSports=readJSON(STORAGE.seeded,null);
+  const hadSeededRecord=Array.isArray(seededSports);
+  seededSports=hadSeededRecord?[...seededSports]:[];
+  for(const sport of SPORTS){
+    if(seededSports.includes(sport))continue;
+    const has=list.some(m=>canonSport(m.sport)===sport);
+    if(fresh||!has){list.push(...seedRowsFor(sport));}   // seed a sport only once, and only if it has no mappings at all
+    seededSports.push(sport);
+  }
+  mappings=list;
+  safeSet(STORAGE.seeded,JSON.stringify(seededSports));
+  saveMappings();
+  result.mappingsMigrated=version<SCHEMA_VERSION;
+  // 3) Collection
+  let coll=readJSON(STORAGE.collection,[]);
+  if(!Array.isArray(coll)){if(coll!=null)backupUnrecognised(STORAGE.collection);coll=[];}
+  const byKey=new Map();let dropped=0;
+  for(const d0 of coll){
+    if(!d0||typeof d0!=="object")continue;
+    const sport=canonSport(d0.sport)||(d0.sport?String(d0.sport).trim():"Basketball");
+    let dateISO=parseISODate(d0.dateISO)||dateKey(d0.dateISO)||dateKey(d0.date);
+    const date=dateISO?formatDate(dateISO):String(d0.date??"");
+    const matched=(Array.isArray(d0.matched)?d0.matched:[]).map(r=>({...r,Sport:canonSport(r.Sport)||sport,Date:r.Date||date}));
+    const excluded=(Array.isArray(d0.excluded)?d0.excluded:[]).map(r=>({...r,Sport:canonSport(r.Sport)||sport,Date:r.Date||date,Time:r.Time||""}));
+    const day={dateISO,date,sport,parsed:Number.isFinite(Number(d0.parsed))?Number(d0.parsed):matched.length+excluded.length,matched,excluded,savedAt:String(d0.savedAt??"")};
+    const key=sportKey(sport)+"|"+dateISO;
+    if(byKey.has(key)&&dateISO)dropped++;
+    byKey.set(dateISO?key:key+"|"+byKey.size,day);
+  }
+  collectionDays=[...byKey.values()];
+  if(dropped)startupNotices.push(`${dropped} legacy collection record(s) shared the same sport and date; the last saved one was kept. A pre-migration copy is stored under "msfm_backup_pre_v2_${STORAGE.collection}".`);
+  saveCollection();
+  result.collectionMigrated=version<SCHEMA_VERSION;
+  safeSet(STORAGE.schema,String(SCHEMA_VERSION));
+  if(version<SCHEMA_VERSION&&version>0||(version===0&&!fresh))startupNotices.push("Existing data was upgraded to the new storage format. Nothing was deleted; a copy of the previous mappings and collection was saved in Local Storage (keys starting with msfm_backup_pre_v2_).");
+  return result;
+}
+
+/* ---------- small UI helpers ---------- */
+function askChoice(message,choices){
+  return new Promise(resolve=>{
+    const ov=document.createElement("div");ov.className="overlay";ov.setAttribute("role","dialog");ov.setAttribute("aria-modal","true");
+    const box=document.createElement("div");box.className="dialog";
+    const p=document.createElement("p");p.textContent=message;box.appendChild(p);
+    const row=document.createElement("div");row.className="actions";
+    const done=v=>{document.removeEventListener("keydown",onKey);ov.remove();resolve(v);};
+    const onKey=e=>{if(e.key==="Escape")done(null);};
+    choices.forEach((c,i)=>{const b=document.createElement("button");b.type="button";b.textContent=c.label;b.className=c.cls||"neutral";b.dataset.choice=String(c.value);b.addEventListener("click",()=>done(c.value));row.appendChild(b);if(i===0)setTimeout(()=>b.focus(),0);});
+    box.appendChild(row);ov.appendChild(box);document.body.appendChild(ov);document.addEventListener("keydown",onKey);
+  });
+}
+function emptyRow(body,cols,text){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=cols;td.textContent=text;tr.appendChild(td);body.appendChild(tr);}
+function fillSportSelect(sel,withValue){sel.replaceChildren();for(const s of SPORTS){const o=document.createElement("option");o.value=s;o.textContent=s;sel.appendChild(o);}if(withValue)sel.value=withValue;}
+
+/* ---------- mapping tables (one independent table per sport) ---------- */
+const sectionRefs={};
+function buildMappingSections(){
+  const host=$("mappingTables");host.replaceChildren();
+  const make=(label,id,open)=>{
+    const det=document.createElement("details");det.className="sport-block";if(open)det.open=true;
+    const sum=document.createElement("summary");const t=document.createElement("span");t.textContent=label;const c=document.createElement("span");c.className="count";sum.append(t,c);det.appendChild(sum);
+    const wrap=document.createElement("div");wrap.className="table-wrap";const table=document.createElement("table");
+    table.innerHTML="<thead><tr><th>Sport</th><th>Country / region</th><th>Priority League</th><th>Flashscore League Name</th><th>Active</th><th>Flags</th><th>Actions</th></tr></thead>";
+    const body=document.createElement("tbody");body.id=id;table.appendChild(body);wrap.appendChild(table);det.appendChild(wrap);host.appendChild(det);
+    return {det,body,count:c};
+  };
+  SPORTS.forEach((s,i)=>{sectionRefs[s]=make(s+" Priority Leagues","mappings-"+sportKey(s),i===0);});
+  sectionRefs.__other=make("Unassigned mappings (sport not recognised — edit to assign a sport)","mappings-other",false);
+  sectionRefs.__other.det.classList.add("hidden");
+}
+function mappingFlags(m,stats){
+  const flags=[];const sp=canonSport(m.sport);
+  const kExact=sp+"|"+countryKey(m.country)+"|"+leagueKey(m.priorityLeague);
+  if((stats.exact.get(kExact)||0)>1)flags.push(["Duplicate","bad","Another mapping in this sport has the same country and priority league."]);
+  if(leagueKey(m.flashscoreLeague)==="")flags.push(["No auto-match","off","Blank Flashscore name: never matches fixtures."]);
+  else{
+    const kShare=sp+"|"+countryKey(m.country)+"|"+leagueKey(m.flashscoreLeague);
+    if((stats.share.get(kShare)||0)>1)flags.push(["Shared name","warn","Another mapping in this sport and country uses the same Flashscore league name (fixtures still match; informational)."]);
+  }
+  if(!sp)flags.push(["Unknown sport","bad","This mapping's sport is not one of the six supported sports."]);
+  return flags;
+}
+function mappingStats(){
+  const exact=new Map(),share=new Map();
+  for(const m of mappings){
+    const sp=canonSport(m.sport);
+    const a=sp+"|"+countryKey(m.country)+"|"+leagueKey(m.priorityLeague);exact.set(a,(exact.get(a)||0)+1);
+    if(leagueKey(m.flashscoreLeague)){const b=sp+"|"+countryKey(m.country)+"|"+leagueKey(m.flashscoreLeague);share.set(b,(share.get(b)||0)+1);}
+  }
+  return {exact,share};
+}
+function renderMappings(){
+  const query=normalize($("mappingSearch").value),filter=$("mappingFilter").value;
+  const stats=mappingStats();
+  const passes=m=>{
+    if(query&&![m.sport,m.country,m.priorityLeague,m.flashscoreLeague].some(v=>normalize(v).includes(query)))return false;
+    const flags=mappingFlags(m,stats).map(f=>f[0]);
+    if(filter==="active")return m.active!==false;
+    if(filter==="inactive")return m.active===false;
+    if(filter==="blank")return leagueKey(m.flashscoreLeague)==="";
+    if(filter==="flagged")return flags.includes("Duplicate")||flags.includes("Shared name");
+    return true;
+  };
+  const filtering=Boolean(query||filter!=="all");
+  const groups=[...SPORTS.map(s=>({key:s,rows:mappings.filter(m=>canonSport(m.sport)===s)})),{key:"__other",rows:mappings.filter(m=>!canonSport(m.sport))}];
+  for(const g of groups){
+    const ref=sectionRefs[g.key];const shown=g.rows.filter(passes);
+    ref.body.replaceChildren();
+    if(g.key==="__other")ref.det.classList.toggle("hidden",g.rows.length===0);
+    if(!shown.length)emptyRow(ref.body,7,g.rows.length?"No mappings match your search or filter.":"No mappings for this sport.");
+    for(const m of shown){
+      const tr=document.createElement("tr");tr.dataset.mappingId=m.id;
+      for(const val of [m.sport||"(none)",m.country,m.priorityLeague,m.flashscoreLeague||"(blank — no auto-match)"]){const td=document.createElement("td");td.textContent=val;tr.appendChild(td);}
+      const activeTd=document.createElement("td"),check=document.createElement("input");check.type="checkbox";check.checked=m.active!==false;check.setAttribute("aria-label","Mapping active");
+      check.addEventListener("change",()=>{m.active=check.checked;saveMappings();renderMappings();updateSportHint();setMessage("mappingMessage",`${m.sport} mapping "${m.priorityLeague}" (${m.country}) set to ${m.active?"active":"inactive"}.`,"success");});
+      activeTd.appendChild(check);tr.appendChild(activeTd);
+      const flagTd=document.createElement("td");
+      for(const [label,cls,title] of mappingFlags(m,stats)){const b=document.createElement("span");b.className="badge "+cls;b.textContent=label;b.title=title;flagTd.appendChild(b);}
+      tr.appendChild(flagTd);
+      const actions=document.createElement("td"),edit=document.createElement("button"),del=document.createElement("button");
+      edit.type="button";edit.className="secondary small";edit.textContent="Edit";edit.addEventListener("click",()=>startEdit(m.id));
+      del.type="button";del.className="danger small";del.style.marginLeft="5px";del.textContent="Delete";
+      del.addEventListener("click",()=>{if(confirm(`Delete ${m.sport||"unassigned"} mapping "${m.priorityLeague}" (${m.country})? Only this mapping is removed.`)){mappings=mappings.filter(x=>x.id!==m.id);saveMappings();renderMappings();updateSportHint();setMessage("mappingMessage","Mapping deleted.","success");}});
+      actions.append(edit,del);tr.appendChild(actions);ref.body.appendChild(tr);
+    }
+    ref.count.textContent=g.key==="__other"?`${g.rows.length}`:`${shown.length}${filtering?" of "+g.rows.length:""} mapping${g.rows.length===1?"":"s"} · ${g.rows.filter(m=>m.active!==false&&leagueKey(m.flashscoreLeague)).length} usable for matching`;
+    if(filtering&&shown.length)ref.det.open=true;
+  }
+  $("mappingCount").textContent=`${mappings.length} total mappings`;
+}
+function updateSportHint(){
+  const sp=$("sport").value;const rows=mappings.filter(m=>canonSport(m.sport)===sp);
+  const usable=rows.filter(m=>m.active!==false&&leagueKey(m.flashscoreLeague)).length;
+  $("sportHint").textContent=`${sp}: ${usable} active mapping${usable===1?"":"s"} with a Flashscore name will be used (${rows.length-usable} inactive or blank are ignored).`;
+}
+function resetMappingForm(){editingId=null;$("mappingForm").reset();$("saveMappingBtn").textContent="Add Mapping";$("cancelEditBtn").classList.add("hidden");}
+function startEdit(id){
+  const m=mappings.find(x=>x.id===id);if(!m)return;editingId=id;
+  $("mapSport").value=canonSport(m.sport)||"Basketball";$("mapCountry").value=m.country;$("mapPriority").value=m.priorityLeague;$("mapFlashscore").value=m.flashscoreLeague;
+  $("saveMappingBtn").textContent="Save Changes";$("cancelEditBtn").classList.remove("hidden");$("mapCountry").focus();
+  setMessage("mappingMessage","Editing one mapping. Save changes or cancel.");
+}
+function activeFlag(v){const s=normalize(v);if(["false","0","no","n","inactive","off"].includes(s))return false;return true;}
+function importMappingCSV(text,defaultSport){
+  const records=parseCSV(text);if(records.length<2)throw new Error("File has no mapping rows.");
+  const headers=records[0].map(h=>String(h).replace(/^\uFEFF/,"").trim());
+  const countryI=headerIndex(headers,["country","region","country region","country / region"]);
+  const priorityI=headerIndex(headers,["priority league","priorityleague"]);
+  const flashI=headerIndex(headers,["flashscore league name","flashscore league","flashscoreleague name","flashscore"]);
+  const sportI=headerIndex(headers,["sport","sport name"]);
+  const activeI=headerIndex(headers,["active","status","enabled"]);
+  if(countryI<0||priorityI<0||flashI<0)throw new Error("Required columns: Country, Priority League, Flashscore League Name.");
+  const imported=[],skipped=[];
+  for(const r of records.slice(1)){
+    const country=String(r[countryI]??"").trim(),priorityLeague=String(r[priorityI]??"").trim(),flashscoreLeague=String(r[flashI]??"").trim();
+    if(!country||!priorityLeague)continue;
+    let sport=defaultSport;
+    if(sportI>=0){const raw=String(r[sportI]??"").trim();sport=raw?canonSport(raw):defaultSport;if(!sport){skipped.push(`${raw} / ${country} / ${priorityLeague}`);continue;}}
+    imported.push({id:uid(),sport,country,priorityLeague,flashscoreLeague,active:activeI>=0?activeFlag(r[activeI]):true});
+  }
+  if(!imported.length)throw new Error("No valid mappings found. Country and Priority League are required"+(skipped.length?`, and the Sport value must be one of: ${SPORTS.join(", ")}.`:"."));
+  return {imported,skipped,hasSport:sportI>=0};
+}
+function mergeKey(m){return canonSport(m.sport)+"|"+countryKey(m.country)+"|"+leagueKey(m.priorityLeague);}
+function applyImport(incoming,mode){
+  let added=0,updated=0,replacedSports=[];
+  if(mode==="replace"){
+    const sports=new Set(incoming.map(m=>m.sport));replacedSports=[...sports];
+    mappings=[...mappings.filter(m=>!sports.has(canonSport(m.sport))),...incoming];added=incoming.length;
+  } else {
+    const index=new Map(mappings.map(m=>[mergeKey(m),m]));
+    for(const inc of incoming){
+      const ex=index.get(mergeKey(inc));
+      if(ex){ex.flashscoreLeague=inc.flashscoreLeague;ex.active=inc.active;updated++;}
+      else{mappings.push(inc);index.set(mergeKey(inc),inc);added++;}
+    }
+  }
+  return {added,updated,replacedSports};
+}
+function bindMappingEvents(){
+  $("mappingForm").addEventListener("submit",e=>{
+    e.preventDefault();
+    const sport=$("mapSport").value,country=$("mapCountry").value.trim(),priorityLeague=$("mapPriority").value.trim(),flashscoreLeague=$("mapFlashscore").value.trim();
+    if(!country||!priorityLeague){setMessage("mappingMessage","Country and Priority League are required.","error");return;}
+    const dup=mappings.find(m=>m.id!==editingId&&canonSport(m.sport)===sport&&countryKey(m.country)===countryKey(country)&&leagueKey(m.priorityLeague)===leagueKey(priorityLeague));
+    if(dup){setMessage("mappingMessage",`A ${sport} mapping for ${country} / ${priorityLeague} already exists. Edit that one instead of adding a duplicate.`,"error");return;}
+    const wasEditing=Boolean(editingId);
+    if(editingId){const m=mappings.find(x=>x.id===editingId);if(m){m.sport=sport;m.country=country;m.priorityLeague=priorityLeague;m.flashscoreLeague=flashscoreLeague;}}
+    else mappings.push({id:uid(),sport,country,priorityLeague,flashscoreLeague,active:true});
+    saveMappings();renderMappings();updateSportHint();resetMappingForm();$("mapSport").value=sport;
+    setMessage("mappingMessage",`${sport} mapping ${wasEditing?"updated":"added"}.${flashscoreLeague?"":" Blank Flashscore name: it will not match fixtures until you fill it in."}`,"success");
+  });
+  $("cancelEditBtn").addEventListener("click",()=>{resetMappingForm();setMessage("mappingMessage","Edit cancelled.");});
+  $("mappingSearch").addEventListener("input",renderMappings);
+  $("mappingFilter").addEventListener("change",renderMappings);
+  $("importMappingsBtn").addEventListener("click",async()=>{
+    const file=$("mappingFile").files[0];if(!file){setMessage("mappingMessage","Choose a CSV, TSV, TXT, or Markdown mapping file first.","error");return;}
+    try{
+      const defaultSport=$("mapSport").value;
+      const {imported,skipped,hasSport}=importMappingCSV(await file.text(),defaultSport);
+      const sports=[...new Set(imported.map(m=>m.sport))];
+      const choice=await askChoice(`Import ${imported.length} mapping(s) for: ${sports.join(", ")}.\n\nReplace: removes the existing mappings of ONLY these sports and uses the file's rows. Other sports are untouched.\nMerge: updates matching sport + country + priority league entries and adds new ones.`,[{label:"Merge",value:"merge",cls:"primary"},{label:"Replace these sports",value:"replace",cls:"danger"},{label:"Cancel",value:null,cls:"neutral"}]);
+      if(!choice){setMessage("mappingMessage","Import cancelled. Nothing was changed.");return;}
+      const r=applyImport(imported,choice);
+      saveMappings();renderMappings();updateSportHint();$("mappingFile").value="";
+      const noSport=hasSport?"":` No Sport column found, so all rows were assigned to ${defaultSport}.`;
+      setMessage("mappingMessage",`${imported.length} mapping(s) read from ${file.name}: ${r.added} added, ${r.updated} updated${r.replacedSports.length?`; existing mappings replaced for ${r.replacedSports.join(", ")} only`:""}.${noSport}${skipped.length?` Skipped ${skipped.length} row(s) with an unrecognised sport.`:""}`,skipped.length?"warn":"success");
+    }catch(err){setMessage("mappingMessage",err.message||"Could not import the file.","error");}
+  });
+  $("reloadSharedMappingsBtn").addEventListener("click",()=>{syncSharedMappings();});
+  $("useSharedMappingsBtn").addEventListener("click",()=>{
+    const p=sharedState.pending;if(!p)return;
+    if(!confirm(`Replace the ${mappings.length} mappings saved in this browser with the ${p.list.length} shared mappings from Supabase?\n\nA backup of the current browser mappings is kept in Local Storage.`))return;
+    applySharedList(p.list);sharedState.pending=null;
+    setSharedBar(`Using the shared mapping list (${mappings.length} mappings). Your previous browser mappings were backed up under "${sharedState.backupKey}".`,"ok");
+  });
+  $("exportMappingsSqlBtn").addEventListener("click",()=>{
+    if(!mappings.length){setMessage("mappingMessage","There are no mappings to export.","error");return;}
+    downloadText("msfm_priority_mappings_update.sql",buildMappingSQL(mappings),"application/sql;charset=utf-8;");
+    setMessage("mappingMessage",`Exported ${mappings.length} mappings as Supabase SQL. Run it in the Supabase SQL Editor to make this list the shared list.`,"success");
+  });
+  $("exportMappingsBtn").addEventListener("click",()=>downloadCSV("priority_league_mappings.csv",["Sport","Country","Priority League","Flashscore League Name","Active"],mappings.map(m=>({"Sport":m.sport,"Country":m.country,"Priority League":m.priorityLeague,"Flashscore League Name":m.flashscoreLeague,"Active":m.active!==false?"TRUE":"FALSE"}))));
+  $("resetSportMappingsBtn").addEventListener("click",()=>{
+    const sport=$("mapSport").value;const n=mappings.filter(m=>canonSport(m.sport)===sport).length;
+    if(confirm(`Replace the ${n} current ${sport} mapping(s) with the default ${sport} list?\n\nOnly ${sport} is affected; all other sports keep their mappings. Export a backup first if needed.`)){
+      mappings=[...mappings.filter(m=>canonSport(m.sport)!==sport),...seedRowsFor(sport)];
+      saveMappings();renderMappings();updateSportHint();resetMappingForm();$("mapSport").value=sport;setMessage("mappingMessage",`${sport} mappings reset to the default list. Other sports were not changed.`,"success");
+    }
+  });
+  $("resetMappingsBtn").addEventListener("click",()=>{
+    if(!confirm("Reset ALL six sports to the default league lists?\n\nThis replaces every mapping you have edited, added or deactivated. Use 'Reset selected sport' to reset only one sport. Export a backup first if needed."))return;
+    if(!confirm("Please confirm once more: replace ALL mappings for ALL sports with the defaults?"))return;
+    const keepUnassigned=mappings.filter(m=>!canonSport(m.sport));
+    mappings=[...SPORTS.flatMap(seedRowsFor),...keepUnassigned];
+    saveMappings();renderMappings();updateSportHint();resetMappingForm();setMessage("mappingMessage","Full league list restored for all sports.","success");
+  });
+}
+
+/* ---------- shared mapping list (Supabase, read-only) ----------
+   Rules:
+   - The shared list is authoritative, but it never silently overwrites mappings edited in this browser.
+     It is applied automatically only when this browser still holds the defaults or the last shared list.
+   - An empty table, an unreadable table or a network error never removes local mappings.
+   - Before local edits are replaced (only after the user confirms), they are backed up in Local Storage. */
+let sharedState={pending:null,backupKey:"",promise:null};
+function mappingSignature(list){return list.map(m=>[canonSport(m.sport)||String(m.sport??""),m.country,m.priorityLeague,m.flashscoreLeague,m.active!==false?1:0].join("\u0001")).join("\u0002");}
+function hashStr(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return (h>>>0).toString(36)+":"+s.length;}
+function sharedMeta(){const m=readJSON(STORAGE.sharedSync,null);return m&&typeof m==="object"?m:null;}
+function recordSharedSync(){safeSet(STORAGE.sharedSync,JSON.stringify({hash:hashStr(mappingSignature(mappings)),at:new Date().toISOString(),count:mappings.length}));}
+function localHasUnsharedEdits(){
+  const cur=hashStr(mappingSignature(mappings)),meta=sharedMeta();
+  if(meta&&meta.hash)return cur!==meta.hash;
+  return cur!==hashStr(mappingSignature(SPORTS.flatMap(seedRowsFor)));   // never synced: only untouched defaults may be replaced silently
+}
+function setSharedBar(text,kind,offerReplace){
+  const bar=$("sharedMappingBar");if(!bar)return;
+  bar.classList.toggle("hidden",!text);
+  bar.className="notice"+(kind==="ok"?" ok":kind==="error"?" error":"")+(text?"":" hidden");
+  $("sharedMappingText").textContent=text||"";
+  $("useSharedMappingsBtn").classList.toggle("hidden",!offerReplace);
+}
+function describeRemoteError(status,body){
+  const b=String(body||"");
+  if(status===404||/PGRST205|42P01|does not exist|Could not find the table/i.test(b))return `the shared table "${SHARED.table}" does not exist yet (run msfm_mappings_setup.sql in Supabase).`;
+  if(status===401||status===403||/42501|permission denied/i.test(b))return "Supabase refused read access to the shared table for this browser key (see the read-access options in msfm_mappings_setup.sql).";
+  return `Supabase returned HTTP ${status}.`;
+}
+async function fetchSharedMappings(){
+  if(!REMOTE_FETCH)return {ok:false,disabled:true,reason:"Shared mappings are not available in this browser."};
+  const rows=[];
+  try{
+    for(let offset=0;;offset+=SHARED.pageSize){
+      const url=`${SHARED.url}/rest/v1/${SHARED.table}?select=sport,country,priority_league,flashscore_league,active,sort_order&order=sport.asc,sort_order.asc&limit=${SHARED.pageSize}&offset=${offset}`;
+      const res=await REMOTE_FETCH(url,{method:"GET",headers:{apikey:SHARED.key,Authorization:"Bearer "+SHARED.key,Accept:"application/json"}});
+      if(!res.ok){let body="";try{body=await res.text();}catch{}return {ok:false,status:res.status,reason:describeRemoteError(res.status,body)};}
+      const data=await res.json();
+      if(!Array.isArray(data))return {ok:false,reason:"Supabase sent an unexpected response."};
+      rows.push(...data);
+      if(data.length<SHARED.pageSize)break;
+    }
+  }catch(e){return {ok:false,reason:"could not reach Supabase ("+(e&&e.message||"network error")+")."};}
+  return {ok:true,rows};
+}
+function sharedRowsToMappings(rows){
+  const list=[],skipped=[];
+  for(const r of rows){
+    const sport=canonSport(r&&r.sport),country=String(r&&r.country||"").trim(),priorityLeague=String(r&&r.priority_league||"").trim();
+    if(!sport||!country||!priorityLeague){skipped.push(r);continue;}
+    list.push({id:uid(),sport,country,priorityLeague,flashscoreLeague:String(r.flashscore_league??"").trim(),active:r.active!==false});
+  }
+  list.sort((a,b)=>sportIndex(a.sport)-sportIndex(b.sport));   // stable: keeps each sport's sort_order
+  return {list,skipped};
+}
+function applySharedList(list){
+  sharedState.backupKey="";
+  if(localHasUnsharedEdits()){const bk="msfm_backup_local_mappings_"+Date.now();if(safeSet(bk,JSON.stringify(mappings)))sharedState.backupKey=bk;}
+  mappings=list;saveMappings();recordSharedSync();
+  if(editingId&&!mappings.some(m=>m.id===editingId))resetMappingForm();
+  renderMappings();updateSportHint();
+}
+async function syncSharedMappings(){
+  setSharedBar("Loading the shared mapping list from Supabase…","");
+  const res=await fetchSharedMappings();
+  if(!res.ok){
+    sharedState.pending=null;
+    if(res.disabled){setSharedBar("");return res;}
+    setSharedBar(`Shared mappings could not be loaded: ${res.reason} Using the ${mappings.length} mappings saved in this browser.`,"error");
+    return res;
+  }
+  const {list,skipped}=sharedRowsToMappings(res.rows);
+  const skipNote=skipped.length?` ${skipped.length} shared row(s) were skipped (unknown sport, or missing country / priority league).`:"";
+  if(!list.length){setSharedBar(`The shared mapping table is empty or not readable with this key. The ${mappings.length} mappings saved in this browser were kept.`+skipNote,"");return {...res,applied:false,skipped};}
+  if(hashStr(mappingSignature(list))===hashStr(mappingSignature(mappings))){
+    recordSharedSync();sharedState.pending=null;
+    setSharedBar(`Using the shared mapping list (${list.length} mappings) — up to date.`+skipNote,"ok");
+    return {...res,applied:true,unchanged:true,skipped};
+  }
+  if(localHasUnsharedEdits()){
+    sharedState.pending={list,skipped};
+    setSharedBar(`The shared list (${list.length} mappings) differs from mappings edited in this browser (${mappings.length}). Your local edits were kept.`+skipNote,"",true);
+    return {...res,applied:false,conflict:true,skipped};
+  }
+  applySharedList(list);sharedState.pending=null;
+  setSharedBar(`Loaded the shared mapping list from Supabase: ${list.length} mappings.`+skipNote,"ok");
+  return {...res,applied:true,skipped};
+}
+function sqlStr(v){return "'"+String(v??"").replace(/'/g,"''")+"'";}
+/* SQL that makes `list` the shared list: per sport, delete the shared rows and insert these, in one
+   transaction (if any statement fails, nothing changes). Run by an administrator in the SQL Editor. */
+function buildMappingSQL(list){
+  const valid=list.filter(m=>canonSport(m.sport));
+  const sports=SPORTS.filter(s=>valid.some(m=>canonSport(m.sport)===s));
+  const order={};
+  const values=sports.flatMap(s=>valid.filter(m=>canonSport(m.sport)===s)).map(m=>{const s=canonSport(m.sport);order[s]=(order[s]||0)+1;
+    return `  (${sqlStr(s)}, ${sqlStr(m.country)}, ${sqlStr(m.priorityLeague)}, ${sqlStr(m.flashscoreLeague)}, ${m.active!==false?"true":"false"}, ${order[s]})`;});
+  const head=[`-- Multi-Sport Fixtures Manager: shared priority league mappings`,
+    `-- Generated ${new Date().toISOString()} — ${values.length} mappings for: ${sports.join(", ")}`,
+    `-- Replaces the shared mappings of ONLY these sports. Requires msfm_mappings_setup.sql to have been run.`,
+    `-- Runs as one transaction: if any row is rejected (e.g. a duplicate sport + country + priority league), nothing changes.`];
+  if(!values.length)return head.join("\n")+"\n-- (no mappings to write)\n";
+  return [...head,"begin;",
+    `delete from public.${SHARED.table} where sport in (${sports.map(sqlStr).join(", ")});`,
+    `insert into public.${SHARED.table} (sport, country, priority_league, flashscore_league, active, sort_order) values`,
+    values.join(",\n")+";","commit;",""].join("\n");
+}
+
+const sampleText=`EuroleagueEUROPE: Standings
+EuroleagueEUROPE:
+EUROPE:
+Standings
+17:00DubaiParis--
+17:00
+Dubai
+Paris
+20:00BayernBarcelona--
+20:00
+Bayern
+Barcelona
+EurocupEUROPE: Standings
+EurocupEUROPE:
+17:00Bahcesehir Kol.PAOK--
+Bahcesehir Kol.
+PAOK
+LNBFRANCE: Standings
+LNBFRANCE:
+FRANCE:
+20:00Saint QuentinStrasbourg--
+20:00
+Saint Quentin
+Strasbourg
+Liga AARGENTINA: Standings
+Liga AARGENTINA:
+ARGENTINA:
+00:30LanusRegatas--
+00:30
+Lanus
+Regatas`;
+
+/* ---------- Flashscore parsing ---------- */
+/* Country / region headings that Flashscore commonly uses. Used only to split headings where the league name is
+   glued to the country (e.g. "QBLQATAR:"); mapping countries are added automatically. */
+const KNOWN_HEADING_COUNTRIES = ["EUROPE","AFRICA","AMERICA","SOUTH AMERICA","NORTH AMERICA","CENTRAL AMERICA","ASIA","OCEANIA","AUSTRALIA & OCEANIA","WORLD","INTERNATIONAL",
+  "ALBANIA","ANDORRA","ARGENTINA","ARMENIA","AUSTRALIA","AUSTRIA","AZERBAIJAN","BAHRAIN","BELARUS","BELGIUM","BOSNIA","BOSNIA AND HERZEGOVINA","BRAZIL","BULGARIA","CANADA","CHILE","CHINA",
+  "COLOMBIA","CROATIA","CYPRUS","CZECH REPUBLIC","DENMARK","DOMINICAN REPUBLIC","ECUADOR","EGYPT","ENGLAND","ESTONIA","FINLAND","FRANCE","GEORGIA","GERMANY","GREAT BRITAIN","GREECE",
+  "HONG KONG","HUNGARY","ICELAND","INDONESIA","IRAN","IRELAND","ISRAEL","ITALY","JAPAN","JORDAN","KAZAKHSTAN","KOSOVO","KUWAIT","LATVIA","LEBANON","LITHUANIA","LUXEMBOURG",
+  "MALAYSIA","MALTA","MEXICO","MONTENEGRO","MOROCCO","NETHERLANDS","NEW ZEALAND","NORTH MACEDONIA","NORWAY","PARAGUAY","PERU","PHILIPPINES","POLAND","PORTUGAL","PUERTO RICO","QATAR",
+  "ROMANIA","RUSSIA","SAUDI ARABIA","SCOTLAND","SERBIA","SLOVAKIA","SLOVENIA","SOUTH AFRICA","SOUTH KOREA","SPAIN","SWEDEN","SWITZERLAND","TAIWAN","THAILAND","TUNISIA","TURKEY",
+  "UK","UKRAINE","UNITED KINGDOM","UNITED STATES","URUGUAY","USA","VENEZUELA","VIETNAM","WALES"];
+function titleCaseCountry(value){return value.toLowerCase().replace(/\b[a-z\u00e0-\u024f]/g,c=>c.toUpperCase());}
+function cleanLines(text){
+  const sourceLines=text.split(/\r?\n/).map(x=>x.trim()).filter(Boolean),lines=[];
+  const knownCountries=[...new Set([...mappings.map(m=>m.country),...KNOWN_HEADING_COUNTRIES])]
+    .map(x=>String(x).trim().toUpperCase()).filter(Boolean).sort((a,b)=>b.length-a.length);
+  const escapeRe=s=>s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+  // Flashscore puts "Standings" after league tables and "Draw" after cup / play-off brackets.
+  const countryRes=knownCountries.map(c=>[c,new RegExp("^(.+?)("+escapeRe(c)+"):(?:\\s*(?:Standings|Draw))?$")]);
+  // Generic fallback for countries that are not in any list: lowercase/digit/closing-bracket, then an UPPERCASE country run.
+  const genericRe=/^(.*?[a-z0-9)\]])([A-Z][A-Z\u00c0-\u00dd .&'-]*[A-Z]):(?:\s*(?:Standings|Draw))?$/;
+  const knownSet=new Set(knownCountries);
+  for(let si=0;si<sourceLines.length;si++){
+    const sourceLine=sourceLines[si];
+    if(/^(?:standings|draw)$/i.test(sourceLine)||/^-+$/.test(sourceLine))continue;
+    let split=false;
+    const whole=sourceLine.replace(/:.*$/,"").trim().toUpperCase();
+    for(const [country,re] of countryRes){
+      const match=sourceLine.match(re);
+      if(!match)continue;
+      // League glued directly to the country heading: "EuroleagueEUROPE:" (mixed case) or "LNBFRANCE:" (all caps).
+      // An all-caps league is accepted only when it is directly adjacent to the country (no space) and the whole
+      // heading is not itself a known country, so "NORTH AMERICA:" is never cut into "NORTH" + "AMERICA".
+      const glued=/[a-z]/.test(match[1])||(match[1].length>=2&&!/\s$/.test(match[1])&&!knownSet.has(whole));
+      if(glued){lines.push(match[1].trim());lines.push(match[2].toUpperCase()+":");split=true;break;}
+    }
+    if(!split){
+      const g=sourceLine.match(genericRe);
+      if(g&&!/^\d{1,2}:\d{2}/.test(sourceLine)){lines.push(g[1].trim());lines.push(g[2].trim()+":");split=true;}
+    }
+    if(split)continue;
+    // Compact fixture snippet "17:00HomeAway--": normally followed by clean time/home/away lines (so it is dropped),
+    // but if the clean time line is missing and the next two lines are exactly Home+Away, keep the fixture.
+    const compact=sourceLine.match(/^(\d{1,2}:\d{2})(.+)--$/);
+    if(compact){
+      const next=sourceLines[si+1]||"",n2=sourceLines[si+2]||"";
+      if(next!==compact[1]&&(next+n2).replace(/\s+/g,"")===compact[2].replace(/\s+/g,"")&&!/^\d{1,2}:\d{2}$/.test(next))lines.push(compact[1]);
+      continue;
+    }
+    lines.push(sourceLine);
+  }
+  return lines;
+}
+function isCountryHeading(line){return /^[A-Z\u00c0-\u00dd][A-Z\u00c0-\u00dd\s&.'()-]*:\s*$/.test(line);}
+/* A fixture time line: "17:00", or with Flashscore's date prefix "27.10. 17:00" / "27.10.2026 17:00". */
+function timeLine(l){
+  const m=String(l??"").match(/^(?:(\d{1,2})\.(\d{1,2})\.(\d{4})?\s*)?(\d{1,2}:\d{2})$/);
+  return m?{time:m[4],d:m[1]?+m[1]:0,mo:m[2]?+m[2]:0,y:m[3]?+m[3]:0}:null;
+}
+function parseFixtures(raw,sport,date){
+  const lines=cleanLines(raw),rows=[];let league="",country="",leagueLine=-1;
+  const isTime=l=>!!timeLine(l);
+  const selISO=dateKey(date),selY=selISO?+selISO.slice(0,4):0;
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i];
+    if(isCountryHeading(line)){
+      country=titleCaseCountry(line.replace(/:\s*$/,"").trim());
+      // A new country block that is not introduced by its own league line must not inherit the previous
+      // block's league (that would attribute fixtures to the wrong competition). Repeated headings are fine.
+      const prev=lines[i-1];
+      if(leagueLine!==i-1&&!(prev&&isCountryHeading(prev)))league="";
+      continue;
+    }
+    if(i+1<lines.length&&isCountryHeading(lines[i+1])&&!isTime(line)){league=line;leagueLine=i;continue;}
+    const tl=timeLine(line);
+    if(tl){
+      const home=lines[i+1],away=lines[i+2];
+      if(!home||!away||isTime(home)||isTime(away)||isCountryHeading(home)||isCountryHeading(away))continue;
+      const row={Sport:sport,Date:date,Time:tl.time,Country:country,DetectedLeague:league,Home:home,Away:away};
+      // A date prefix that is not the selected date means the fixture belongs to another day's collection.
+      if(tl.d&&selISO){
+        const iso=isoFromParts(tl.y||selY,tl.mo,tl.d);
+        if(iso!==selISO)row.DateNote=`Flashscore lists this fixture on ${String(tl.d).padStart(2,"0")}.${String(tl.mo).padStart(2,"0")}.${tl.y||""}, not on the selected date ${date}, so it was not collected under ${date}.`;
+      }
+      rows.push(row);i+=2;
+    }
+  }
+  // Fixtures whose league could not be detected are kept (they are reported as excluded with a reason)
+  // instead of being dropped silently.
+  return rows.filter(r=>r.Home&&r.Away);
+}
+
+/* ---------- priority league matching ---------- */
+function makeMatcher(sport){
+  const sp=canonSport(sport);
+  const sportMappings=mappings.filter(m=>canonSport(m.sport)===sp);
+  const usable=sportMappings.filter(m=>m.active!==false&&leagueKey(m.flashscoreLeague)!=="");
+  const byLeague=new Map();
+  for(const m of usable){const k=leagueKey(m.flashscoreLeague);if(!byLeague.has(k))byLeague.set(k,[]);byLeague.get(k).push(m);}
+  return function matchFixture(fixture){
+    const league=leagueKey(fixture.DetectedLeague),country=countryKey(fixture.Country);
+    if(!league)return {match:null,reason:"Could not detect a league heading."};
+    const candidates=byLeague.get(league)||[];
+    if(!candidates.length){
+      const inactive=sportMappings.some(m=>m.active===false&&leagueKey(m.flashscoreLeague)===league);
+      const blankForCountry=sportMappings.some(m=>countryKey(m.country)===country&&leagueKey(m.flashscoreLeague)==="");
+      return {match:null,reason:inactive?"Mapping exists but is disabled.":blankForCountry?"Mapping has a blank Flashscore League Name; no automatic match was attempted.":"No active mapping for this Flashscore league name."};
+    }
+    // 1) Exact (alias-aware) country + league name. Several mappings sharing one Flashscore name in the same
+    //    country are all priority leagues, so the fixture is a priority match (flagged in the mapping table).
+    const exact=candidates.filter(m=>countryKey(m.country)===country);
+    if(exact.length)return {match:exact[0],all:exact,reason:""};
+    // 2) Controlled broad-region fallback: only when Flashscore labels the fixture with a broad region AND the
+    //    mapping is a broad-region mapping of the SAME region family (South America -> America, International ->
+    //    World). A country-specific mapping is NEVER used here, and Europe can never fall back to Asia/World.
+    if(isBroadRegion(country)){
+      const fam=regionFamily(country);
+      const broad=candidates.filter(m=>{const mk=countryKey(m.country);return isBroadRegion(mk)&&regionFamily(mk)===fam;});
+      const regions=new Set(broad.map(m=>countryKey(m.country)));
+      if(broad.length&&regions.size===1)return {match:broad[0],all:broad,reason:""};
+      if(broad.length>1)return {match:null,reason:"Several broad-region mappings share this league name; add a mapping for this exact region."};
+      return {match:null,reason:`League name matches a mapping for another region/country (${[...new Set(candidates.map(m=>m.country))].join(", ")}), not ${fixture.Country}.`};
+    }
+    return {match:null,reason:`League name matches a mapping for another country/region (${[...new Set(candidates.map(m=>m.country))].join(", ")}), not ${fixture.Country||"(no country)"}.`};
+  };
+}
+function matchFixture(fixture){return makeMatcher(fixture.Sport)(fixture);}
+
+/* ---------- results rendering ---------- */
+function renderResults(){
+  const body=$("resultsBody");body.replaceChildren();
+  if(!convertedRows.length)emptyRow(body,7,"No matching fixtures. Review the excluded list and mapping table.");
+  for(const row of convertedRows.slice(0,MAX_RENDER_ROWS)){const tr=document.createElement("tr");for(const col of columns){const td=document.createElement("td");td.textContent=row[col]??"";tr.appendChild(td);}body.appendChild(tr);}
+  if(convertedRows.length>MAX_RENDER_ROWS)emptyRow(body,7,`Showing the first ${MAX_RENDER_ROWS} of ${convertedRows.length} rows. Use the CSV download for the full list.`);
+  const exBody=$("excludedBody");exBody.replaceChildren();
+  if(!excludedRows.length)emptyRow(exBody,6,"No excluded fixtures.");
+  for(const row of excludedRows.slice(0,MAX_RENDER_ROWS)){const tr=document.createElement("tr");for(const val of [row.Time,row.Country,row.DetectedLeague||"(not detected)",row.Home,row.Away,row.Reason]){const td=document.createElement("td");td.textContent=val??"";tr.appendChild(td);}exBody.appendChild(tr);}
+  if(excludedRows.length>MAX_RENDER_ROWS)emptyRow(exBody,6,`Showing the first ${MAX_RENDER_ROWS} of ${excludedRows.length} rows. Use the CSV download for the full list.`);
+  $("resultCount").textContent=`${convertedRows.length} fixture${convertedRows.length===1?"":"s"}`;
+  $("parsedCount").textContent=String(convertedRows.length+excludedRows.length);
+  $("matchedCount").textContent=String(convertedRows.length);$("excludedCount").textContent=String(excludedRows.length);
+  $("excludedTableCount").textContent=`${excludedRows.length} excluded`;
+}
+function persistLastParse(){
+  lastParseMeta={sport:$("sport").value,dateISO:$("fixtureDate").value};
+  safeSet(STORAGE.lastParse,JSON.stringify({...lastParseMeta,matched:convertedRows,excluded:excludedRows}));
+  safeSet(STORAGE.fixtures,JSON.stringify(convertedRows));   // legacy key kept for compatibility
+}
+/* Returns {parsed,sport,dateISO,date} or null when validation failed. */
+function processFixtures(messageId="message"){
+  const sport=canonSport($("sport").value),dateISO=$("fixtureDate").value,date=formatDate(parseISODate(dateISO)),raw=$("rawInput").value;
+  if(!sport||!date||!raw.trim()){setMessage(messageId,"Please choose a Sport, a valid Fixture date, and paste the raw fixture text.","error");return null;}
+  const parsed=parseFixtures(raw,sport,date),matcher=makeMatcher(sport);
+  convertedRows=[];excludedRows=[];
+  for(const f of parsed){
+    const result=matcher(f);
+    if(f.DateNote){excludedRows.push({Sport:sport,Date:date,Time:f.Time,Country:f.Country,DetectedLeague:f.DetectedLeague,Home:f.Home,Away:f.Away,Reason:f.DateNote+(result.match?" It is a priority-league fixture: collect it under its own date.":"")});continue;}
+    if(result.match)convertedRows.push({Sport:sport,Date:date,Time:f.Time,Country:f.Country,"Flashscore League Name":result.match.flashscoreLeague,Home:f.Home,Away:f.Away,"Priority League":[...new Set((result.all||[result.match]).map(m=>m.priorityLeague))].join(" / ")});
+    else excludedRows.push({Sport:sport,Date:date,Time:f.Time,Country:f.Country,DetectedLeague:f.DetectedLeague,Home:f.Home,Away:f.Away,Reason:result.reason});
+  }
+  const alerts=playoffAlerts(sport,excludedRows);
+  for(const r of excludedRows)if(alerts.some(a=>a.key===countryKey(r.Country)+"|"+leagueKey(r.DetectedLeague)))r.Reason+=" Possible playoff stage of a priority league — see Playoff alerts.";
+  renderResults();renderPlayoffAlerts(alerts);
+  const oneLine=!parsed.length&&!/[\r\n]/.test(raw.trim())&&/\d{1,2}:\d{2}/.test(raw);
+  const otherDay=excludedRows.filter(r=>/not on the selected date/.test(r.Reason)).length;
+  setMessage("message",`${sport} ${date}: parsed ${parsed.length} fixtures: ${convertedRows.length} matched, ${excludedRows.length} excluded.`
+    +(otherDay?` ${otherDay} fixture(s) are dated another day and were excluded.`:"")
+    +(alerts.length?` ${alerts.length} playoff alert(s): see below.`:"")
+    +(oneLine?" The pasted text has no line breaks, so league headings, times and teams cannot be told apart. Copy directly from the Flashscore page (one item per line) and paste again.":""),
+    parsed.length?(alerts.length?"warn":convertedRows.length?"success":"warn"):"error");
+  setMessage("exportMessage","");
+  persistLastParse();
+  const history=readJSON(STORAGE.history,[]);
+  const list=Array.isArray(history)?history:[];
+  list.unshift({at:new Date().toLocaleString(),sport,input:parsed.length,matched:convertedRows.length,excluded:excludedRows.length});
+  safeSet(STORAGE.history,JSON.stringify(list.slice(0,30)));
+  renderHistory();
+  return {parsed:parsed.length,sport,dateISO,date};
+}
+/* ---------- playoff-stage alerts (notify only; mappings are never changed automatically) ----------
+   Raised when an EXCLUDED fixture's Flashscore league looks like a playoff / play-out / relegation stage AND
+   either (a) the same sport + country has a priority mapping for that stage that is blank or inactive, or
+   (b) the league name minus the stage suffix is an active priority league in that country. */
+const PLAYOFF_RE=/\bplay[\s-]?offs?\b|\bplay[\s-]?outs?\b|\bplay[\s-]?downs?\b|\bpromotion\b|\brelegation\b|\bkvalserien\b/i;
+function playoffAlerts(sport,excluded){
+  const sp=canonSport(sport),sm=mappings.filter(m=>canonSport(m.sport)===sp),groups=new Map();
+  for(const r of excluded){
+    const league=String(r.DetectedLeague||"");if(!league||!PLAYOFF_RE.test(league))continue;
+    const ck=countryKey(r.Country),key=ck+"|"+leagueKey(league);
+    if(groups.has(key)){groups.get(key).count++;continue;}
+    const base=leagueKey(league.slice(0,league.search(PLAYOFF_RE)).replace(/[\s\-\u2013:(,]+$/,""));
+    const inCountry=sm.filter(m=>countryKey(m.country)===ck);
+    const regular=base?inCountry.filter(m=>m.active!==false&&leagueKey(m.flashscoreLeague)===base):[];
+    let waiting=inCountry.filter(m=>PLAYOFF_RE.test(m.priorityLeague)&&(leagueKey(m.flashscoreLeague)===""||m.active===false));
+    const stems=[base,...regular.map(m=>leagueKey(m.priorityLeague))].filter(Boolean);
+    const related=waiting.filter(m=>stems.some(s=>leagueKey(m.priorityLeague).includes(s)));
+    if(related.length)waiting=related;else if(!regular.length&&base)waiting=[];
+    if(!waiting.length&&!regular.length)continue;
+    groups.set(key,{key,sport:sp,country:r.Country,league,count:1,waiting:waiting.map(m=>m.priorityLeague),regular:[...new Set(regular.map(m=>m.priorityLeague))]});
+  }
+  return [...groups.values()];
+}
+function playoffAlertText(a){
+  const q=s=>`"${s}"`;
+  return `${a.sport} — the playoff stage appears to have started: Flashscore shows ${q(a.league)} (${a.country}, ${a.count} fixture${a.count===1?"":"s"}). `
+    +(a.regular.length?`Its regular season is the priority league ${a.regular.map(q).join(", ")}. `:"")
+    +(a.waiting.length?`Mapping(s) waiting for a Flashscore name: ${a.waiting.map(q).join(", ")}. `:"")
+    +`These fixtures were excluded. To include them, enter ${q(a.league)} as the Flashscore League Name of the right mapping.`;
+}
+function renderPlayoffAlerts(alerts){
+  const box=$("playoffAlerts");if(!box)return;box.replaceChildren();
+  box.classList.toggle("hidden",!alerts.length);
+  if(!alerts.length)return;
+  const h=document.createElement("h3");h.textContent=`Playoff alerts (${alerts.length})`;box.appendChild(h);
+  for(const a of alerts){const d=document.createElement("div");d.className="notice";d.textContent=playoffAlertText(a);box.appendChild(d);}
+}
+function renderHistory(){
+  const history=readJSON(STORAGE.history,[]),body=$("historyBody");body.replaceChildren();
+  if(!Array.isArray(history)||!history.length){emptyRow(body,5,"No import history yet.");return;}
+  for(const item of history){const tr=document.createElement("tr");for(const v of [item.at,item.sport||"",item.input,item.matched,item.excluded]){const td=document.createElement("td");td.textContent=v??"";tr.appendChild(td);}body.appendChild(tr);}
+}
+
+/* ---------- 7-day collection (identity = sport + calendar date) ---------- */
+let comparisonStale=false;
+function sortedDays(){return [...collectionDays].sort((a,b)=>String(a.dateISO).localeCompare(String(b.dateISO))||sportIndex(a.sport)-sportIndex(b.sport));}
+function distinctDates(days=collectionDays){return new Set(days.map(d=>d.dateISO).filter(Boolean));}
+function renderCollection(){
+  const body=$("collectionBody");body.replaceChildren();
+  const sorted=sortedDays();
+  if(!sorted.length)emptyRow(body,7,"No days collected yet.");
+  for(const day of sorted){
+    const tr=document.createElement("tr");
+    for(const value of [day.sport,day.date||"(invalid date)",day.parsed,day.matched.length,day.excluded.length,day.savedAt]){const td=document.createElement("td");td.textContent=value;tr.appendChild(td);}
+    const td=document.createElement("td"),btn=document.createElement("button");btn.type="button";btn.className="danger small";btn.textContent="Remove";
+    btn.addEventListener("click",()=>{
+      if(confirm(`Remove ${day.sport} ${day.date} from the collection?\n\nOnly this sport + date entry is removed; other sports on this date stay.`)){
+        collectionDays=collectionDays.filter(d=>!(d.dateISO===day.dateISO&&canonSport(d.sport)===canonSport(day.sport)&&d.dateISO!=="")&&d!==day);
+        saveCollection();comparisonStale=true;renderCollection();setMessage("collectionMessage",`${day.sport} ${day.date} removed from collection.`,"success");
+      }
+    });
+    td.appendChild(btn);tr.appendChild(td);body.appendChild(tr);
+  }
+  const matched=sorted.reduce((n,d)=>n+d.matched.length,0),excluded=sorted.reduce((n,d)=>n+d.excluded.length,0),dates=distinctDates(sorted).size;
+  $("collectionProgress").textContent=`${dates}/${MAX_DATES} dates collected`;$("daysCollectedCount").textContent=`${dates} / ${MAX_DATES}`;
+  $("collectionEntryCount").textContent=String(sorted.length);
+  $("collectionAllCount").textContent=String(matched+excluded);$("collectionMatchedCount").textContent=String(matched);$("collectionExcludedCount").textContent=String(excluded);
+}
+function addCurrentDayToCollection(){
+  const sport=canonSport($("sport").value),dateISO=$("fixtureDate").value;
+  if(!sport||!parseISODate(dateISO)||!$("rawInput").value.trim()){setMessage("collectionMessage","Choose a Sport and a valid Fixture date, and paste the Flashscore data before adding it to the collection.","error");return;}
+  const date=formatDate(dateISO);
+  const old=collectionDays.find(d=>d.dateISO===dateISO&&canonSport(d.sport)===sport);
+  const dates=distinctDates();dates.add(dateISO);
+  if(!old&&dates.size>MAX_DATES){setMessage("collectionMessage",`The collection can hold only ${MAX_DATES} distinct dates. ${date} would be date number ${dates.size}. Remove all entries for an older date first.`,"error");return;}
+  if(old&&!confirm(`${sport} ${date} is already collected.\n\nReplace ONLY the ${sport} ${date} entry with the newly parsed results? Other sports on ${date} are not touched.`)){setMessage("collectionMessage","Replace cancelled. Nothing was changed.");return;}
+  const res=processFixtures("message");
+  if(!res)return;
+  if(res.parsed===0){setMessage("collectionMessage","No parsed fixtures were found. Check the date and pasted Flashscore data before adding."+(old?` The existing ${sport} ${date} entry was kept unchanged.`:""),"error");return;}
+  const day={dateISO,date,sport,parsed:res.parsed,matched:convertedRows.map(r=>({...r})),excluded:excludedRows.map(r=>({...r})),savedAt:new Date().toLocaleString()};
+  collectionDays=collectionDays.filter(d=>!(d.dateISO===dateISO&&canonSport(d.sport)===sport));collectionDays.push(day);
+  saveCollection();comparisonStale=true;renderCollection();
+  setMessage("collectionMessage",`${old?"Replaced":"Saved"} ${sport} ${date}: ${day.parsed} parsed, ${day.matched.length} matched, ${day.excluded.length} excluded. ${distinctDates().size}/${MAX_DATES} dates collected. Other sports on this date were preserved.`,"success");
+}
+function exportCollection(kind){
+  if(!collectionDays.length){setMessage("collectionMessage","Your collection is empty. Parse a day and click Add / Replace first.","error");return;}
+  const days=sortedDays();let rows=[],filename="",headers=matchedExportColumns;
+  if(kind==="matched"){rows=days.flatMap(d=>d.matched.map(r=>({...r,Sport:r.Sport||d.sport,Date:r.Date||d.date})));filename="priority_7day_matching_fixtures.csv";}
+  else if(kind==="excluded"){rows=days.flatMap(d=>d.excluded.map(r=>({Sport:r.Sport||d.sport,Date:r.Date||d.date,Time:r.Time||"",Country:r.Country,"Detected League":r.DetectedLeague,Home:r.Home,Away:r.Away,Reason:r.Reason})));filename="priority_7day_excluded_fixtures.csv";headers=excludedColumns;}
+  else{rows=days.flatMap(d=>[...d.matched.map(r=>({...r,Sport:r.Sport||d.sport,Date:r.Date||d.date,"Match Status":"Matched","Exclusion Reason":""})),...d.excluded.map(r=>({Sport:r.Sport||d.sport,Date:r.Date||d.date,Time:r.Time||"",Country:r.Country,"Flashscore League Name":r.DetectedLeague,Home:r.Home,Away:r.Away,"Priority League":"","Match Status":"Excluded","Exclusion Reason":r.Reason}))]);filename="priority_7day_all_fixtures.csv";headers=[...matchedExportColumns,"Match Status","Exclusion Reason"];}
+  if(!rows.length){setMessage("collectionMessage",`No ${kind==="all"?"":kind+" "}fixtures in the collection to export.`,"error");return;}
+  downloadCSV(filename,headers,rows);
+  setMessage("collectionMessage",`Exported ${rows.length} fixtures from ${days.length} sport-date entr${days.length===1?"y":"ies"} to ${filename}.`,"success");
+}
+
+/* =====================================================================
+   WORKED-MATCH COMPARISON ENGINE
+   Deterministic classification order (documented):
+    1. Validate/normalise sport, date, time, country, league, teams, Event ID.
+    2. Index worked history by Event ID and by sport+date; detect Event IDs that appear on several
+       history rows with inconsistent details (kept, never discarded).
+    3. For each collected fixture build candidates from:
+         a. every history row with the same Event ID (any sport, any date);
+         b. every history row of the same sport on the same date whose teams align
+            (home<->home, away<->away; a swapped pair is also a candidate and goes to review);
+         c. a same-sport, same-date, same-time, same-league row where ONE team is identical and the
+            other differs (renamed team) -> review;
+         d. a same-sport row on the ADJACENT date with both teams identical (midnight / time-zone
+            shift) -> review.
+    4. Classify each candidate:
+         Already Worked = same sport, date, country, league, exact home AND away, same time, no
+                          conflicting Event ID, and the row is not part of an inconsistent ID group.
+         Time Changed   = as above but both times present and different.
+         Possible Dup.  = anything else that still points at the same fixture, with readable reasons.
+    5. A history row can be the definitive match (Already Worked / Time Changed) for only one collected
+       fixture. Exact matches claim rows first, then time changes; a later fixture that would reuse a
+       claimed row is sent to Possible Duplicates with an explanation.
+    6. Fixtures with no candidate at all are New.
+   ===================================================================== */
+const GENERIC_TEAM_TOKENS=new Set(["fc","bc","hc","bk","kk","sk","sc","ac","cd","cf","bbc","fbc","team","club","the","basket","basketball","hockey","ice","ik","if","hk","kd","bsk","bkc"]);
+/* Tokens that identify a DIFFERENT team of the same club (reserve, youth, women). "Minsk" and "Minsk 2"
+   are two different teams, so a difference in these tokens means "unrelated", never "similar". */
+/* Equivalent spellings of the same qualifier are compared in one canonical form, so "Bendigo W" and
+   "Bendigo Women" (or "Minsk II" and "Minsk 2") are treated as similar instead of unrelated. */
+const QUALIFIER_CANON={w:"w",women:"w",womens:"w",ladies:"w",ii:"2",iii:"3",iv:"4",reserve:"res",reserves:"res",res:"res",junior:"jr",juniors:"jr",jr:"jr",youth:"youth",academy:"academy"};
+function canonToken(x){return QUALIFIER_CANON[x]||x;}
+function isQualifier(x,i){return x==="w"||x==="res"||x==="jr"||x==="youth"||x==="academy"||/^u\d{1,2}$/.test(x)||(i>0&&/^\d{1,2}$/.test(x));}
+function foldText(v){
+  return String(v??"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/\u00e6/gi,"ae").replace(/\u0153/gi,"oe").replace(/\u00f8/gi,"o").replace(/\u00df/g,"ss").replace(/\u0111/gi,"d").replace(/\u0142/gi,"l").replace(/\u00fe/gi,"th").replace(/\u0131/g,"i")
+    .toLowerCase();
+}
+function teamKey(v){return foldText(v).replace(/&/g," and ").replace(/[^a-z0-9]+/g," ").trim().replace(/\s+/g," ");}
+function qualifierKey(key){
+  // A standalone 1-2 digit token after the first word marks a second team: "Minsk 2", "Horizont Minsk 2 W".
+  // A leading number ("1. FC Koln") is part of the club name and is ignored here.
+  const t=key.split(" ").filter(Boolean).map(canonToken);
+  return t.filter((x,i)=>isQualifier(x,i)).sort().join(",");
+}
+function levSim(a,b){
+  const m=a.length,n=b.length;if(!m||!n)return 0;
+  let prev=Array.from({length:n+1},(_,i)=>i);
+  for(let i=1;i<=m;i++){const cur=[i];for(let j=1;j<=n;j++)cur[j]=Math.min(cur[j-1]+1,prev[j]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));prev=cur;}
+  return 1-prev[n]/Math.max(m,n);
+}
+function tokenEq(x,y){return x===y||(Math.min(x.length,y.length)>=6&&levSim(x,y)>=0.85);}
+function coreTokens(key){const t=key.split(" ").filter(Boolean).map(canonToken);const core=t.filter(x=>!GENERIC_TEAM_TOKENS.has(x));return core.length?core:t;}
+/* "exact"   = identical after case/accent/punctuation/spacing normalisation (Visby/Roma = Visby-Roma).
+   "similar" = same club core (generic tags such as FC/BC removed), one name contained in the other, or a
+               one-word spelling variant (Olympiakos/Olympiacos). Never silently accepted: goes to review.
+   "none"    = unrelated, including the same club's reserve / youth / women team. */
+function teamRelation(a,b){
+  const ka=teamKey(a),kb=teamKey(b);
+  if(!ka||!kb)return "none";
+  if(ka===kb||ka.replace(/ /g,"")===kb.replace(/ /g,""))return "exact";
+  if(qualifierKey(ka)!==qualifierKey(kb))return "none";
+  const ca=coreTokens(ka),cb=coreTokens(kb);
+  if(ca.join(" ")===cb.join(" "))return "similar";
+  const [short,long]=ca.length<=cb.length?[ca,cb]:[cb,ca];
+  if(short.join("").length>=4&&short.every(t=>long.some(u=>tokenEq(t,u))))return "similar";
+  return "none";
+}
+function timeKey(v){
+  const s=String(v??"").trim();if(!s)return"";
+  let m=s.match(/^(\d{1,2})[:.h](\d{2})(?::\d{2})?\s*([ap]m)?$/i);
+  if(m){let h=+m[1];const mi=+m[2];const ap=(m[3]||"").toLowerCase();if(ap==="pm"&&h<12)h+=12;if(ap==="am"&&h===12)h=0;if(h>23||mi>59)return"";return String(h).padStart(2,"0")+":"+String(mi).padStart(2,"0");}
+  m=s.match(/^0?\.\d+$/);   // Excel day fraction
+  if(m){const mins=Math.round(parseFloat(s)*1440)%1440;return String(Math.floor(mins/60)).padStart(2,"0")+":"+String(mins%60).padStart(2,"0");}
+  return"";
+}
+function eventIdKey(v){
+  let s=String(v??"").trim().replace(/^'+/,"").replace(/\s+/g,"");
+  // Excel shows long numeric IDs in scientific notation (2.0034995E+07). Convert only when the result is an
+  // exact whole number, so a genuinely truncated ID is never silently equated with a different one.
+  if(/^\d+(?:\.\d+)?e\+?\d+$/i.test(s)){const n=Number(s);if(Number.isSafeInteger(n))s=String(n);}
+  return s.replace(/\.0+$/,"").toLowerCase();
+}
+function minutesOf(t){const [h,m]=t.split(":").map(Number);return h*60+m;}
+function describeShift(from,to){const d=minutesOf(to)-minutesOf(from);const a=Math.abs(d);const txt=(a>=60?Math.floor(a/60)+"h"+(a%60?String(a%60).padStart(2,"0"):""):a+"min");return txt+(d>0?" later":" earlier");}
+
+function parseWorkedPaste(text){
+  const t=String(text??"").replace(/^\uFEFF/,"");
+  const rows=[],skipped=[];
+  if(!t.trim())return {rows,skipped};
+  const firstLine=t.split(/\r?\n/).find(l=>l.trim())||"";
+  // Excel pastes are tab-delimited: commas inside team names must NOT split columns.
+  const delim=t.includes("\t")?"\t":(firstLine.split(";").length>=7?";":",");
+  const recs=parseDelimited(t,delim);
+  let n=0;
+  recs.forEach((c,i)=>{
+    const first=normalize(c[0]);
+    if(i===0&&/^sport( name)?$/.test(first))return;           // header row
+    n++;
+    if(c.length<7){skipped.push({row:n,reason:`only ${c.length} column(s); 7–8 expected`,text:c.join(" | ")});return;}
+    const cell=k=>String(c[k]??"").trim();
+    rows.push({Sport:cell(0),Date:cell(1),Time:cell(2),Country:cell(3),League:cell(4),Home:cell(5),Away:cell(6),"Event ID":cell(7),rowNo:n});
+  });
+  return {rows,skipped};
+}
+
+function prepWorked(r,i){
+  return {raw:r,rowNo:r.rowNo||i+1,sportKey:sportKey(r.Sport),date:dateKey(r.Date),time:timeKey(r.Time),country:countryKey(r.Country),league:leagueKey(r.League),eid:eventIdKey(r["Event ID"])};
+}
+function prepFixture(f,i){
+  // A fixture can carry several priority-league names joined with " / " (shared Flashscore name).
+  const leagues2=String(f["Priority League"]??"").split(" / ").map(leagueKey).filter(Boolean);
+  return {raw:f,idx:i,sportKey:sportKey(f.Sport),date:dateKey(f.Date),time:timeKey(f.Time),country:countryKey(f.Country),league:leagueKey(f["Flashscore League Name"]||f.League),leagues2,
+    home:f.Home,away:f.Away,eid:eventIdKey(f["Event ID"]||f.EventID)};
+}
+function buildIdGroups(worked){
+  const byId=new Map();
+  for(const w of worked){if(!w.eid)continue;if(!byId.has(w.eid))byId.set(w.eid,[]);byId.get(w.eid).push(w);}
+  const groups=new Map();
+  for(const [id,rows] of byId){
+    if(rows.length<2)continue;
+    const fields=[];
+    const differs=(label,fn)=>{if(new Set(rows.map(fn)).size>1)fields.push(label);};
+    differs("sport",w=>w.sportKey);differs("date",w=>w.date||w.raw.Date);differs("time",w=>w.time||w.raw.Time);
+    differs("country",w=>w.country);differs("league",w=>w.league);
+    differs("home team",w=>teamKey(w.raw.Home).replace(/ /g,""));differs("away team",w=>teamKey(w.raw.Away).replace(/ /g,""));
+    groups.set(id,{id,rows,fields,inconsistent:fields.length>0});
+  }
+  return groups;
+}
+function fmtWorked(w){const r=w.raw;return `#${w.rowNo} ${r.Sport} | ${r.Date} ${r.Time} | ${r.Country} | ${r.League} | ${r.Home} vs ${r.Away}${r["Event ID"]?" | ID "+r["Event ID"]:""}`;}
+function fmtFixture(f){return `${f.Sport} | ${f.Date} ${f.Time} | ${f.Country} | ${f["Flashscore League Name"]||f.League||""} | ${f.Home} vs ${f.Away}${f["Event ID"]?" | ID "+f["Event ID"]:""}`;}
+
+function evaluateCandidate(fx,w,groups){
+  const idSame=!!(fx.eid&&w.eid&&fx.eid===w.eid),idDiff=!!(fx.eid&&w.eid&&fx.eid!==w.eid);
+  const sportSame=!!fx.sportKey&&fx.sportKey===w.sportKey,dateSame=!!(fx.date&&w.date&&fx.date===w.date);
+  const adjacentDay=!!(fx.date&&w.date&&!dateSame&&(addDaysISO(fx.date,1)===w.date||addDaysISO(fx.date,-1)===w.date));
+  const home=teamRelation(fx.home,w.raw.Home),away=teamRelation(fx.away,w.raw.Away);
+  const aligned=home!=="none"&&away!=="none";
+  let swapped=false;
+  if(!aligned){swapped=teamRelation(fx.home,w.raw.Away)!=="none"&&teamRelation(fx.away,w.raw.Home)!=="none";}
+  const countryEq=!!(fx.country&&w.country&&fx.country===w.country);
+  const leagueEq=!!(w.league&&(w.league===fx.league||fx.leagues2.includes(w.league)));
+  const timeBoth=!!(fx.time&&w.time),timeSame=timeBoth&&fx.time===w.time;
+  const partial=!aligned&&!swapped&&timeSame&&leagueEq&&(home==="exact"||away==="exact");
+  const sameSlot=sportSame&&dateSame&&(aligned||swapped||partial);
+  const nearDay=sportSame&&adjacentDay&&!swapped&&home==="exact"&&away==="exact";
+  if(!idSame&&!sameSlot&&!nearDay)return null;     // not a candidate at all
+  const g=w.eid?groups.get(w.eid):null,groupBad=!!(g&&g.inconsistent);
+  const q=s=>`"${s}"`,pre=idSame?`Same Event ID ${fx.eid} but `:"";
+  const reasons=[];
+  if(idSame&&!sportSame)reasons.push(`Event ID ${fx.eid} is recorded in worked history under a different sport (${q(w.raw.Sport)} vs collected ${q(fx.raw.Sport)}); not treated as the same fixture`);
+  if(idDiff)reasons.push(`Matching fixture details but different Event IDs (collected ${fx.eid} vs worked ${w.eid})`);
+  if(swapped)reasons.push(`Home and away teams appear swapped (collected ${q(fx.home)} vs ${q(fx.away)}; worked ${q(w.raw.Home)} vs ${q(w.raw.Away)})`);
+  else if(idSame){
+    if(home!=="exact")reasons.push(`${pre}the home-team name differs (${q(fx.home)} vs ${q(w.raw.Home)}${home==="similar"?", similar":", unrelated"})`);
+    if(away!=="exact")reasons.push(`${pre}the away-team name differs (${q(fx.away)} vs ${q(w.raw.Away)}${away==="similar"?", similar":", unrelated"})`);
+  } else if(partial){
+    reasons.push(home==="exact"
+      ?`Same league, date and time and the same home team, but the away-team name differs (${q(fx.away)} vs ${q(w.raw.Away)})`
+      :`Same league, date and time and the same away team, but the home-team name differs (${q(fx.home)} vs ${q(w.raw.Home)})`);
+  } else if(home==="similar"||away==="similar"){
+    reasons.push(`Similar team names and matching fixture details (home: ${q(fx.home)} vs ${q(w.raw.Home)} [${home}]; away: ${q(fx.away)} vs ${q(w.raw.Away)} [${away}])`);
+  }
+  if(!dateSame){
+    if(idSame)reasons.push(`${pre}the date differs (collected ${fx.raw.Date} vs worked ${w.raw.Date||"blank"})`);
+    else if(nearDay)reasons.push(`Same sport and teams on the adjacent date (collected ${fx.raw.Date} ${fx.raw.Time} vs worked ${w.raw.Date} ${w.raw.Time}); possible midnight or time-zone shift`);
+  }
+  if(!countryEq){reasons.push(fx.country&&w.country?`Matching teams but conflicting country details (${q(fx.raw.Country)} vs ${q(w.raw.Country)})`:`Country is missing on ${w.country?"the collected fixture":"the worked-history row"}, so the match cannot be confirmed`);}
+  if(!leagueEq){reasons.push(fx.league&&w.league?`Matching teams but conflicting league details (collected ${q(fx.raw["Flashscore League Name"]||fx.raw.League)} vs worked ${q(w.raw.League)})`:`League is missing on ${w.league?"the collected fixture":"the worked-history row"}, so the match cannot be confirmed`);}
+  if(!timeBoth)reasons.push(`Time is missing or unreadable (collected ${q(fx.raw.Time||"blank")}, worked ${q(w.raw.Time||"blank")}); cannot confirm it is the same slot`);
+  if(groupBad)reasons.push(`Multiple worked-history rows with the same Event ID: ${w.eid} appears on ${g.rows.length} rows with inconsistent details (${g.fields.join(", ")}; rows ${g.rows.map(x=>"#"+x.rowNo).join(", ")})`);
+  const exactTeams=!swapped&&home==="exact"&&away==="exact";
+  let cls="possible";
+  if(sportSame&&dateSame&&exactTeams&&countryEq&&leagueEq&&!idDiff&&!groupBad&&timeBoth)cls=timeSame?"already":"time";
+  let type="",timeDiff=null;
+  if(cls==="already")type=`Exact match: sport, date, country, league, home/away teams and time${idSame?" (Event ID "+fx.eid+" agrees)":w.eid?" (history Event ID "+w.eid+")":""}`;
+  if(cls==="time"){timeDiff={from:w.raw.Time,to:fx.raw.Time,shift:describeShift(w.time,fx.time)};
+    reasons.length=0;reasons.push(`Same teams and fixture details${idSame?` and Event ID ${fx.eid}`:""}; current time ${fx.raw.Time} differs from worked time ${w.raw.Time} (${timeDiff.shift})`);}
+  if(cls==="possible"&&!reasons.length)reasons.push("Details match but the record could not be confirmed automatically; please review");
+  const score=(idSame?30:0)+(sportSame?10:0)+(dateSame?10:adjacentDay?4:0)+(home==="exact"?10:home==="similar"?5:0)+(away==="exact"?10:away==="similar"?5:0)+(countryEq?5:0)+(leagueEq?5:0)+(timeSame?3:0)-(groupBad?2:0)-(idDiff?20:0);
+  return {w,cls,reasons,type,timeDiff,score,idSame};
+}
+const CLS_RANK={already:0,time:1,possible:2};
+function classifyFixtures(fixtures,workedRows){
+  const worked=workedRows.map(prepWorked);
+  const groups=buildIdGroups(worked);
+  const byId=new Map(),bySD=new Map();
+  const push=(m,k,v)=>{if(!m.has(k))m.set(k,[]);m.get(k).push(v);};
+  for(const w of worked){if(w.eid)push(byId,w.eid,w);if(w.date)push(bySD,w.sportKey+"|"+w.date,w);}
+  // De-duplicate identical collected fixtures (same normalised details).
+  const seen=new Set(),fxs=[];let duplicatesIgnored=0;
+  fixtures.forEach((f,i)=>{const p=prepFixture(f,i);
+    const k=[p.sportKey,p.date||String(f.Date),p.time||String(f.Time),p.country,p.league,teamKey(f.Home).replace(/ /g,""),teamKey(f.Away).replace(/ /g,""),p.eid].join("|");
+    if(seen.has(k)){duplicatesIgnored++;return;}seen.add(k);fxs.push(p);});
+  const evals=fxs.map(fx=>{
+    const set=new Set();
+    if(fx.eid&&byId.has(fx.eid))byId.get(fx.eid).forEach(w=>set.add(w));
+    if(fx.date){for(const dk of [fx.date,addDaysISO(fx.date,-1),addDaysISO(fx.date,1)]){const k=fx.sportKey+"|"+dk;if(bySD.has(k))bySD.get(k).forEach(w=>set.add(w));}}
+    const cands=[];for(const w of set){const e=evaluateCandidate(fx,w,groups);if(e)cands.push(e);}
+    cands.sort((a,b)=>CLS_RANK[a.cls]-CLS_RANK[b.cls]||b.score-a.score||a.w.rowNo-b.w.rowNo);
+    return {fx,cands,result:null};
+  });
+  const claimed=new Map();   // worked rowNo -> collected fixture index
+  for(const pass of ["already","time"]){
+    for(const ev of evals){
+      if(ev.result)continue;
+      const c=ev.cands.find(x=>x.cls===pass&&!claimed.has(x.w.rowNo));
+      if(c){claimed.set(c.w.rowNo,ev.fx.idx);ev.result={kind:pass,c};}
+    }
+  }
+  const out={newMatches:[],alreadyWorked:[],possible:[],timeChanged:[],conflicts:[],duplicatesIgnored,totalCompared:fxs.length,workedRows:worked.length,invalidWorkedDates:worked.filter(w=>!w.date).length};
+  for(const ev of evals){
+    const f=ev.fx.raw;
+    if(!ev.result){
+      if(!ev.cands.length){out.newMatches.push(f);continue;}
+      const top=ev.cands[0];const reasons=[...top.reasons];
+      if(top.cls!=="possible"){
+        const other=fxs.find(x=>x.idx===claimed.get(top.w.rowNo));
+        reasons.unshift(`Worked row #${top.w.rowNo} would also match this fixture, but it is already matched to another collected fixture${other?" ("+other.raw.Home+" vs "+other.raw.Away+" "+other.raw.Time+")":""}`);
+      }
+      out.possible.push({fixture:f,worked:top.w.raw,rowNo:top.w.rowNo,reason:reasons.join("; "),reasons,otherRows:ev.cands.slice(1,4).map(x=>x.w.rowNo)});
+      continue;
+    }
+    const c=ev.result.c;
+    if(ev.result.kind==="already")out.alreadyWorked.push({fixture:f,worked:c.w.raw,rowNo:c.w.rowNo,type:c.type});
+    else out.timeChanged.push({fixture:f,worked:c.w.raw,rowNo:c.w.rowNo,reason:c.reasons[0],timeDiff:c.timeDiff});
+  }
+  for(const g of groups.values())if(g.inconsistent)out.conflicts.push({id:g.id,eventId:g.rows[0].raw["Event ID"],fields:g.fields,rows:g.rows.map(w=>({rowNo:w.rowNo,...w.raw}))});
+  return out;
+}
+
+/* ---------- comparison UI ---------- */
+let comparisonResults={newMatches:[],alreadyWorked:[],possible:[],timeChanged:[],conflicts:[]};
+function collectedFixtures(){
+  return sortedDays().flatMap(d=>(d.matched||[]).map(r=>({...r,Sport:r.Sport||d.sport,Date:r.Date||d.date})));
+}
+function addCell(tr,value,wrap){const td=document.createElement("td");if(Array.isArray(value)){value.forEach(line=>{const s=document.createElement("span");s.className="line";s.textContent=line;td.appendChild(s);});}else td.textContent=value??"";if(wrap)td.className="wrap";tr.appendChild(td);}
+function renderCompareTable(id,items,cols,rowFn,emptyText){
+  const body=$(id);body.replaceChildren();
+  if(!items.length){emptyRow(body,cols,emptyText);return;}
+  for(const item of items.slice(0,MAX_RENDER_ROWS)){const tr=document.createElement("tr");rowFn(tr,item);body.appendChild(tr);}
+  if(items.length>MAX_RENDER_ROWS)emptyRow(body,cols,`Showing the first ${MAX_RENDER_ROWS} of ${items.length} rows. Use the CSV export for the full list.`);
+}
+function applyResultFilter(){
+  const q=normalize($("resultFilter").value);
+  for(const id of ["newMatchesBody","alreadyWorkedBody","timeChangedBody","possibleDuplicatesBody","conflictsBody"]){
+    for(const tr of $(id).rows){tr.classList.toggle("hidden",Boolean(q)&&!normalize(tr.textContent).includes(q));}
+  }
+}
+function renderComparison(r){
+  const none="No results.";
+  renderCompareTable("newMatchesBody",r.newMatches,8,(tr,f)=>{[f.Sport,f.Date,f.Time,f.Country,f["Flashscore League Name"]||"",f.Home,f.Away,f["Event ID"]||""].forEach(v=>addCell(tr,v));},none);
+  renderCompareTable("alreadyWorkedBody",r.alreadyWorked,3,(tr,x)=>{addCell(tr,fmtFixture(x.fixture));addCell(tr,fmtWorked({raw:x.worked,rowNo:x.rowNo}));addCell(tr,x.type,true);},none);
+  renderCompareTable("timeChangedBody",r.timeChanged,3,(tr,x)=>{addCell(tr,fmtFixture(x.fixture));addCell(tr,fmtWorked({raw:x.worked,rowNo:x.rowNo}));addCell(tr,x.reason,true);},none);
+  renderCompareTable("possibleDuplicatesBody",r.possible,3,(tr,x)=>{addCell(tr,fmtFixture(x.fixture));addCell(tr,fmtWorked({raw:x.worked,rowNo:x.rowNo}));addCell(tr,x.reason,true);},none);
+  renderCompareTable("conflictsBody",r.conflicts,3,(tr,g)=>{addCell(tr,g.eventId);addCell(tr,g.fields.join(", "),true);addCell(tr,g.rows.map(w=>fmtWorked({raw:w,rowNo:w.rowNo})));},"No Event ID conflicts found in the worked history.");
+  $("collectedFixtureCount").textContent=String(r.totalCompared||0);
+  $("newMatchCount").textContent=String(r.newMatches.length);$("alreadyWorkedCount").textContent=String(r.alreadyWorked.length);
+  $("possibleDuplicateCount").textContent=String(r.possible.length);$("timeChangedCount").textContent=String(r.timeChanged.length);$("conflictCount").textContent=String(r.conflicts.length);
+  applyResultFilter();
+}
+function compareWorkedMatches(){
+  const {rows:worked,skipped}=parseWorkedPaste($("workedInput").value);
+  if(!collectionDays.length){setMessage("compareMessage","Collect at least one sport + date first.","error");return;}
+  if(!worked.length){setMessage("compareMessage","Paste worked-match rows from Excel (Sport Name through Event ID) first."+(skipped.length?` ${skipped.length} pasted row(s) were skipped because they had fewer than 7 columns.`:""),"error");return;}
+  const fixtures=collectedFixtures();
+  if(!fixtures.length){setMessage("compareMessage","The collection contains no priority (matching) fixtures to compare.","error");return;}
+  const r=classifyFixtures(fixtures,worked);
+  comparisonResults=r;comparisonStale=false;renderComparison(r);
+  const notes=[];
+  if(r.duplicatesIgnored)notes.push(`${r.duplicatesIgnored} identical collected fixture(s) counted once`);
+  if(r.conflicts.length)notes.push(`${r.conflicts.length} Event ID(s) in the worked history have inconsistent rows — see Worked-History Conflicts`);
+  if(skipped.length)notes.push(`${skipped.length} pasted row(s) skipped (fewer than 7 columns)`);
+  if(r.invalidWorkedDates)notes.push(`${r.invalidWorkedDates} worked row(s) have an unreadable date and can only be matched by Event ID`);
+  setMessage("compareMessage",`Compared ${r.totalCompared} collected priority fixtures against ${worked.length} worked-history rows: ${r.newMatches.length} new, ${r.alreadyWorked.length} already worked, ${r.timeChanged.length} time changed, ${r.possible.length} possible duplicates.${notes.length?" "+notes.join("; ")+".":""}`,(r.possible.length||r.conflicts.length||skipped.length)?"warn":"success");
+}
+const WORKED_HEAD=["Worked Row","Worked Sport","Worked Date","Worked Time","Worked Country","Worked League","Worked Home","Worked Away","Worked Event ID"];
+const FIX_HEAD=["Sport","Date","Time","Country","League","Priority League","Home","Away","Event ID"];
+function fixCols(f){return {"Sport":f.Sport,"Date":f.Date,"Time":f.Time,"Country":f.Country,"League":f["Flashscore League Name"]||f.League||"","Priority League":f["Priority League"]||"","Home":f.Home,"Away":f.Away,"Event ID":f["Event ID"]||""};}
+function workedCols(w,rowNo){return {"Worked Row":rowNo,"Worked Sport":w.Sport,"Worked Date":w.Date,"Worked Time":w.Time,"Worked Country":w.Country,"Worked League":w.League,"Worked Home":w.Home,"Worked Away":w.Away,"Worked Event ID":w["Event ID"]||""};}
+/* Same 8 columns, in the same order, as the worked-history paste, so the rows can be appended to that sheet.
+   Date uses DD-MM-YYYY like the history sheet; League is the Flashscore league name; Event ID stays blank
+   because Flashscore pastes carry none. */
+const HISTORY_HEAD=["Sport Name","Date","Time","Country","League","Home Team","Away Team","Event ID"];
+function historyDate(v){const iso=dateKey(v);if(!iso)return String(v??"");const [y,m,d]=iso.split("-");return `${d}-${m}-${y}`;}
+function historyCols(f){return {"Sport Name":f.Sport,"Date":historyDate(f.Date),"Time":f.Time,"Country":f.Country,"League":f["Flashscore League Name"]||f.League||"","Home Team":f.Home,"Away Team":f.Away,"Event ID":f["Event ID"]||""};}
+function exportComparison(kind){
+  const r=comparisonResults;let rows=[],headers=[],filename="",label="";
+  if(comparisonStale&&!confirm("The collection changed after the last comparison, so these results may be out of date. Export them anyway?"))return;
+  if(kind==="new"){rows=r.newMatches.map(fixCols);headers=FIX_HEAD;filename="fixtures_new_matches.csv";label="new matches";}
+  else if(kind==="newHistory"){rows=r.newMatches.map(historyCols);headers=HISTORY_HEAD;filename="new_matches_worked_history_format.csv";label="new matches";}
+  else if(kind==="worked"){rows=r.alreadyWorked.map(x=>({...fixCols(x.fixture),...workedCols(x.worked,x.rowNo),"Match Type":x.type}));headers=[...FIX_HEAD,...WORKED_HEAD,"Match Type"];filename="fixtures_already_worked.csv";label="already-worked matches";}
+  else if(kind==="time"){rows=r.timeChanged.map(x=>({...fixCols(x.fixture),...workedCols(x.worked,x.rowNo),"Current Time":x.fixture.Time,"Worked Time Value":x.worked.Time,"Time Difference":x.timeDiff?x.timeDiff.shift:"","Note":x.reason}));headers=[...FIX_HEAD,...WORKED_HEAD,"Current Time","Worked Time Value","Time Difference","Note"];filename="fixtures_time_changed_review.csv";label="time-changed matches";}
+  else if(kind==="possible"){rows=r.possible.map(x=>({...fixCols(x.fixture),...workedCols(x.worked,x.rowNo),"Review Reason":x.reason}));headers=[...FIX_HEAD,...WORKED_HEAD,"Review Reason"];filename="fixtures_possible_duplicates_review.csv";label="possible duplicates";}
+  else{rows=r.conflicts.flatMap(g=>g.rows.map(w=>({"Event ID":g.eventId,"Worked Row":w.rowNo,"Sport":w.Sport,"Date":w.Date,"Time":w.Time,"Country":w.Country,"League":w.League,"Home":w.Home,"Away":w.Away,"Differing Details":g.fields.join(", ")})));headers=["Event ID","Worked Row","Sport","Date","Time","Country","League","Home","Away","Differing Details"];filename="worked_history_event_id_conflicts.csv";label="history conflict rows";}
+  if(!rows.length){setMessage("compareMessage",`No ${label} to export. Run the comparison first.`,"error");return;}
+  downloadCSV(filename,headers,rows);setMessage("compareMessage",`Exported ${rows.length} ${label} to ${filename}.`,"success");
+}
+
+/* ---------- event binding ---------- */
+function bindEvents(){
+  bindMappingEvents();
+  $("sport").addEventListener("change",()=>{updateSportHint();$("mapSport").value=$("sport").value;});
+  $("filterBtn").addEventListener("click",()=>processFixtures());
+  $("sampleBtn").addEventListener("click",()=>{$("rawInput").value=sampleText;$("sport").value="Basketball";updateSportHint();setMessage("message","Example fixture data loaded. Select a date and click Parse & Filter.");});
+  $("clearBtn").addEventListener("click",()=>{$("rawInput").value="";setMessage("message","");});
+  $("copyBtn").addEventListener("click",async()=>{
+    if(!convertedRows.length){setMessage("exportMessage","No matching fixtures to copy.","error");return;}
+    const tsv=[columns.join("\t"),...convertedRows.map(r=>columns.map(c=>String(r[c]??"").replace(/[\t\r\n]+/g," ")).join("\t"))].join("\n");
+    try{await navigator.clipboard.writeText(tsv);setMessage("exportMessage","Matching table copied. Paste it into Excel.","success");}
+    catch{const area=document.createElement("textarea");area.value=tsv;document.body.appendChild(area);area.select();let ok=false;try{ok=document.execCommand("copy");}catch{}area.remove();setMessage("exportMessage",ok?"Matching table copied. Paste it into Excel.":"Clipboard access was blocked. Download the CSV instead.",ok?"success":"error");}
+  });
+  $("csvBtn").addEventListener("click",()=>{if(!convertedRows.length){setMessage("exportMessage","No matching fixtures to download.","error");return;}downloadCSV("priority_fixtures.csv",matchedExportColumns,convertedRows);setMessage("exportMessage","Matching fixtures CSV downloaded.","success");});
+  $("excludedCsvBtn").addEventListener("click",()=>{if(!excludedRows.length){setMessage("exportMessage","No excluded fixtures to download.","error");return;}downloadCSV("excluded_fixtures.csv",excludedColumns,excludedRows.map(r=>({"Sport":r.Sport,"Date":r.Date,"Time":r.Time,"Country":r.Country,"Detected League":r.DetectedLeague,"Home":r.Home,"Away":r.Away,"Reason":r.Reason})));setMessage("exportMessage","Excluded fixtures CSV downloaded.","success");});
+  $("addDayBtn").addEventListener("click",addCurrentDayToCollection);
+  $("exportCollectionBtn").addEventListener("click",()=>exportCollection("matched"));
+  $("exportAllCollectionBtn").addEventListener("click",()=>exportCollection("all"));
+  $("exportExcludedCollectionBtn").addEventListener("click",()=>exportCollection("excluded"));
+  $("clearCollectionBtn").addEventListener("click",()=>{
+    if(!collectionDays.length){setMessage("collectionMessage","The collection is already empty.");return;}
+    if(confirm(`Clear ALL ${collectionDays.length} collected sport-date entries (every sport, every date)? This does not clear your league mappings.`)){collectionDays=[];saveCollection();comparisonStale=true;renderCollection();setMessage("collectionMessage","Collection cleared.","success");}
+  });
+  $("clearHistoryBtn").addEventListener("click",()=>{if(confirm("Clear local import history?")){removeKey(STORAGE.history);renderHistory();}});
+  $("compareWorkedBtn").addEventListener("click",compareWorkedMatches);
+  $("clearWorkedBtn").addEventListener("click",()=>{
+    if($("workedInput").value.trim()&&!confirm("Clear the pasted worked-match history and the comparison results?"))return;
+    $("workedInput").value="";comparisonResults={newMatches:[],alreadyWorked:[],possible:[],timeChanged:[],conflicts:[]};
+    renderComparison({...comparisonResults,totalCompared:0});setMessage("compareMessage","");
+    for(const [id,t] of [["newMatchesBody","Compare your collection to see new matches."],["alreadyWorkedBody","No comparison run yet."],["timeChangedBody","No comparison run yet."],["possibleDuplicatesBody","No comparison run yet."],["conflictsBody","No comparison run yet."]]){const b=$(id);b.replaceChildren();emptyRow(b,id==="newMatchesBody"?8:3,t);}
+  });
+  $("resultFilter").addEventListener("input",applyResultFilter);
+  $("exportNewBtn").addEventListener("click",()=>exportComparison("new"));
+  $("exportNewHistoryBtn").addEventListener("click",()=>exportComparison("newHistory"));
+  $("exportWorkedBtn").addEventListener("click",()=>exportComparison("worked"));
+  $("exportTimeChangedBtn").addEventListener("click",()=>exportComparison("time"));
+  $("exportReviewBtn").addEventListener("click",()=>exportComparison("possible"));
+  $("exportConflictsBtn").addEventListener("click",()=>exportComparison("conflicts"));
+}
+
+function init(){
+  fillSportSelect($("sport"));fillSportSelect($("mapSport"));
+  buildMappingSections();
+  migrateStoredData();
+  bindEvents();
+  renderMappings();updateSportHint();renderHistory();renderCollection();
+  const last=readJSON(STORAGE.lastParse,null);
+  if(last&&Array.isArray(last.matched)){convertedRows=last.matched;excludedRows=Array.isArray(last.excluded)?last.excluded:[];
+    if(canonSport(last.sport)){$("sport").value=canonSport(last.sport);$("mapSport").value=canonSport(last.sport);updateSportHint();}
+    if(parseISODate(last.dateISO))$("fixtureDate").value=last.dateISO;
+    renderResults();}
+  else{const saved=readJSON(STORAGE.fixtures,null);if(Array.isArray(saved)&&saved.length){convertedRows=saved.map(r=>({...r,Sport:canonSport(r.Sport)||"Basketball"}));renderResults();}}
+  if(!STORE)noticeState.storage="Browser storage is unavailable in this browser mode. Nothing will be saved after a refresh; export your mappings and collection as CSV.";
+  renderNotices();
+  sharedState.promise=syncSharedMappings();   // runs in the background; the page is usable with the local copy meanwhile
+}
+// Small, read-only hook used by the automated tests; harmless in normal use.
+window.__MSFM={classifyFixtures,parseWorkedPaste,teamRelation,teamKey,makeMatcher,matchFixture,parseFixtures,buildCSV,escapeCSV,dateKey,timeKey,countryKey,canonSport,migrateStoredData,addDaysISO,STORAGE,SPORTS,
+  buildMappingSQL,playoffAlerts,historyCols,syncSharedMappings,sharedReady:()=>sharedState.promise,
+  state:()=>({mappings,collectionDays,convertedRows,excludedRows,comparisonResults})};
+init();
+</script>
+</body>
+</html>

@@ -6,7 +6,9 @@
 <title>DataFeed Check — League & Team Mapper</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- SheetJS upgraded 0.18.5 -> 0.20.3 (patches CVE-2023-30533, CVE-2024-22363).
+     SECURITY TODO (AppSec #5): self-host on approved Entain infra + add SRI. -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <style>
 :root{
   /* Tech Teal & Navy (Clean & Corporate) */
@@ -176,10 +178,6 @@ tr.status-nomap{border-left:3px solid var(--text-faint);opacity:.7;}
           <input type="text" id="dq-br-prefix" value="7,8" style="padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);width:120px;">
         </div>
         <div>
-          <label>OP3 time tolerance (min)</label>
-          <input type="number" id="dq-op3-tol" value="15" min="0" style="padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);width:120px;">
-        </div>
-        <div>
           <label>Event-name match threshold (%)</label>
           <input type="number" id="dq-name-th" value="70" min="0" max="100" style="padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt);color:var(--text);width:120px;">
         </div>
@@ -243,7 +241,7 @@ tr.status-nomap{border-left:3px solid var(--text-faint);opacity:.7;}
             <th>DQ Status</th><th>Event ID</th><th>BCM Event Date</th><th>Sport</th><th>BCM Event Name</th>
             <th>Feed Name</th><th>Provider</th><th>Provider ID</th>
             <th>Provider Event Name</th><th>Provider League</th><th>Provider Date</th><th>Provider Time</th>
-            <th>Provider ID Match</th><th>Date Match</th><th>Time Match</th><th>Event Match</th><th>League Match</th>
+            <th>Provider ID Match</th><th>Date Match</th><th>Time Match</th><th>Event Match</th>
             <th>Similarity %</th><th>Reason</th><th>Source File</th>
           </tr></thead>
           <tbody id="results-tbody"></tbody>
@@ -263,7 +261,7 @@ tr.status-nomap{border-left:3px solid var(--text-faint);opacity:.7;}
         <label>1. DataFeed Check Output (Paste from Excel or use current results)</label>
         <small>Paste rows with columns: BCM Event Name, Feed Name. Or click "Use Current Results" if you just ran DataFeed Check.</small>
         <textarea id="prep-datafeed" style="width:100%;min-height:100px;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--code-bg);color:var(--code-text);font-size:14px;font-family:var(--font-mono);resize:vertical;" placeholder="BCM Event Name&#10;APR BBC - Patriots BC&#10;Greece - Cyprus&#10;KK SC Derby - KB Peja"></textarea>
-        <button class="btn btn-secondary" style="margin-top:8px;" onclick="PREP.useCurrentResults()">↑ Use Current DataFeed Check Results (Valid Mapped only)</button>
+        <button class="btn btn-secondary" style="margin-top:8px;" onclick="PREP.useCurrentResults()">↑ Use Current DataFeed Check Results (Valid Mapping only)</button>
         <div id="prep-state" style="display:none;border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-top:10px;font-size:13px;"></div>
       </div>
 
@@ -494,7 +492,7 @@ const DFC = {
           sourceType = 'Betgenius';
           if (sourceRow) {
             sourceEventName = sourceRow['Event'] || sourceRow['event'] || '';
-            const bgStart = sourceRow['Start (UTC+2)'] || sourceRow['Start (UTC)'] || sourceRow['start (utc)'] || sourceRow['Start'] || '';
+            const bgStart = this.bgStart(sourceRow);
             sourceDateTime = this.formatBGDate(bgStart);
           }
         } else {
@@ -513,7 +511,7 @@ const DFC = {
             if (sourceRow) {
               sourceType = 'Betgenius';
               sourceEventName = sourceRow['Event'] || sourceRow['event'] || '';
-              const bgStart = sourceRow['Start (UTC+2)'] || sourceRow['Start (UTC)'] || sourceRow['start (utc)'] || sourceRow['Start'] || '';
+              const bgStart = this.bgStart(sourceRow);
               sourceDateTime = this.formatBGDate(bgStart);
             }
           }
@@ -602,7 +600,7 @@ const DFC = {
       r._origReason = r.reason;
       r.dqStatus = 'Valid Mapped';
       r.overridden = true;
-      r.reason = 'Agent-verified after review (was: ' + (r._origStatus || 'Mapping Review') + '). ' + (r._origReason || '');
+      r.reason = 'Agent-verified after review (was: ' + this.agentStatus(Object.assign({}, r, { dqStatus: r._origStatus || 'Mapping Review' })) + '). ' + (r._origReason || '');
     } else {
       if (!r.overridden) return;
       r.dqStatus = r._origStatus || 'Mapping Review';
@@ -614,21 +612,48 @@ const DFC = {
     this.renderTable();
   },
 
+  // Agent-facing status names. The engine keeps its internal dqStatus values
+  // (Prepare Mapping and the review checkbox depend on them); these labels are
+  // only what agents see on screen, in the filter and in the export.
+  AGENT_STATUSES: ['Valid Mapping', 'Wrong Mapping', 'Date not matching', 'Time not matching',
+    'Needs Review', 'Provider Data Missing', 'Missed Mapping', 'OP3', 'OP3 - Remove Mapping',
+    'Not Mapped', 'Out of Scope'],
+
+  agentStatus(r){
+    switch (r && r.dqStatus){
+      case 'Valid Mapped': return 'Valid Mapping';
+      case 'Mapping Review':
+        if (r.swapConflict) return 'Wrong Mapping';          // ID belongs to another BCM event
+        if (r.idMatch === false) return 'Wrong Mapping';     // ID not in provider file; a similar event exists
+        if (r.dateMatch === false) return 'Date not matching';
+        if (r.timeMatch === false) return 'Time not matching';
+        return 'Needs Review';
+      case 'Provider Data Not Available': return 'Provider Data Missing';
+      case 'Potential Missed Mapping': return 'Missed Mapping';
+      case 'OP3': return 'OP3';
+      case 'OP3 Mapping DQ': return 'OP3 - Remove Mapping';
+      case 'Coverage Review': return 'Not Mapped';
+      case 'Out of Scope': return 'Out of Scope';
+      default: return (r && r.dqStatus) || '';
+    }
+  },
+
+  agentClass(label){
+    return ({
+      'Valid Mapping':'correct', 'Wrong Mapping':'wrong', 'Date not matching':'wrong',
+      'Time not matching':'review', 'Needs Review':'review', 'Provider Data Missing':'review',
+      'Missed Mapping':'wrong', 'OP3':'op3', 'OP3 - Remove Mapping':'dq',
+      'Not Mapped':'nomap', 'Out of Scope':'nomap'
+    })[label] || 'review';
+  },
+
   renderStats(){
     const rows = this.results;
     const total = rows.length;
-    const count = s => rows.filter(r => r.dqStatus === s).length;
-    const cards = [
-      ['Total', total, ''],
-      ['Valid Mapped', count('Valid Mapped'), 'correct'],
-      ['Mapping Review', count('Mapping Review'), 'review'],
-      ['Provider Data Not Available', count('Provider Data Not Available'), 'review'],
-      ['Potential Missed Mapping', count('Potential Missed Mapping'), 'wrong'],
-      ['OP3', count('OP3'), ''],
-      ['OP3 Mapping DQ', count('OP3 Mapping DQ'), 'wrong'],
-      ['Coverage Review', count('Coverage Review'), 'nomap'],
-      ['Out of Scope', count('Out of Scope'), 'nomap']
-    ];
+    const count = s => rows.filter(r => this.agentStatus(r) === s).length;
+    const cards = [['Total', total, '']].concat(
+      this.AGENT_STATUSES.map(s => [s, count(s), this.agentClass(s)])
+        .filter(([s, n]) => n > 0 || s !== 'Needs Review'));
     document.getElementById('result-stats').innerHTML = cards.map(([l,n,c]) =>
       `<div class="stat-card ${c}"><div class="num">${n}</div><div class="label">${this.esc(l)}</div></div>`).join('');
 
@@ -656,7 +681,9 @@ const DFC = {
     const provSel = document.getElementById('filter-provider');
     const prevStatus = statusSel ? statusSel.value : 'all';
     const prevProv = provSel ? provSel.value : 'all';
-    const statuses = [...new Set(rows.map(r=>r.dqStatus))].sort();
+    const present = new Set(rows.map(r => this.agentStatus(r)));
+    const statuses = this.AGENT_STATUSES.filter(s => present.has(s))
+      .concat([...present].filter(s => !this.AGENT_STATUSES.includes(s)).sort());
     statusSel.innerHTML = '<option value="all">All Statuses</option>' +
       statuses.map(s=>`<option value="${this.esc(s)}">${this.esc(s)}</option>`).join('');
     if ([...statusSel.options].some(o=>o.value===prevStatus)) statusSel.value = prevStatus;
@@ -673,13 +700,14 @@ const DFC = {
     const provFilter = (document.getElementById('filter-provider')||{}).value || 'all';
     const search = (document.getElementById('filter-search').value || '').toLowerCase();
     let rows = this.results;
-    if (statusFilter !== 'all') rows = rows.filter(r => r.dqStatus === statusFilter);
+    if (statusFilter !== 'all') rows = rows.filter(r => this.agentStatus(r) === statusFilter);
     if (provFilter !== 'all') rows = rows.filter(r => r.provider === provFilter);
     if (search) rows = rows.filter(r => [r.eventId,r.bcmSport,r.bcmEventName,r.feedName,r.feedProviderId,r.provEventName,r.provLeague].some(v=>(v||'').toLowerCase().includes(search)));
 
     const tbody = document.getElementById('results-tbody');
     tbody.innerHTML = rows.slice(0, 1000).map(r => {
-      const cls = this.badgeClass(r.dqStatus);
+      const label = this.agentStatus(r);
+      const cls = this.agentClass(label);
       // Agents can promote a reviewed "Mapping Review" row to "Valid Mapped".
       // Rows already promoted show a checked box + an "(agent verified)" note and
       // can be reverted. Only Mapping Review / promoted rows get the control.
@@ -687,14 +715,14 @@ const DFC = {
       let reviewCtrl = '';
       if (r.dqStatus === 'Mapping Review'){
         reviewCtrl = `<label style="display:block;margin-top:6px;font-size:11px;color:var(--text-dim);cursor:pointer;">
-          <input type="checkbox" onchange="DFC.overrideValid(${idx}, this.checked)" style="vertical-align:middle;"> Reviewed → Valid Mapped</label>`;
+          <input type="checkbox" onchange="DFC.overrideValid(${idx}, this.checked)" style="vertical-align:middle;"> Reviewed → Valid Mapping</label>`;
       } else if (r.overridden){
         reviewCtrl = `<label style="display:block;margin-top:6px;font-size:11px;color:var(--success);cursor:pointer;">
           <input type="checkbox" checked onchange="DFC.overrideValid(${idx}, this.checked)" style="vertical-align:middle;"> Agent verified</label>`;
       }
       return `
       <tr class="status-${cls}">
-        <td><span class="status-badge ${cls}">${this.esc(r.dqStatus)}</span>${reviewCtrl}</td>
+        <td><span class="status-badge ${cls}">${this.esc(label)}</span>${reviewCtrl}</td>
         <td>${this.esc(r.eventId)}</td>
         <td>${this.esc(r.bcmDate)}</td>
         <td>${this.esc(r.bcmSport)}</td>
@@ -710,19 +738,18 @@ const DFC = {
         <td>${this._tick(r.dateMatch)}</td>
         <td>${this._tick(r.timeMatch)}</td>
         <td>${this._tick(r.eventMatch)}</td>
-        <td>${this._tick(r.leagueMatch)}</td>
         <td>${r.similarity==null?'—':r.similarity+'%'}</td>
         <td style="white-space:normal;min-width:220px;">${this.esc(r.reason)}</td>
         <td>${this.esc(r.sourceFile||'—')}</td>
       </tr>`;
-    }).join('') || '<tr><td colspan="20" style="text-align:center;padding:24px;color:var(--text-faint);">No rows match the current filters.</td></tr>';
+    }).join('') || '<tr><td colspan="19" style="text-align:center;padding:24px;color:var(--text-faint);">No rows match the current filters.</td></tr>';
   },
 
   download(){
     const wb = XLSX.utils.book_new();
     const S = this.csvSafe;
     const data = this.results.map(r => ({
-      'DQ Status': r.dqStatus,
+      'DQ Status': this.agentStatus(r),
       'Event ID': S(r.eventId),
       'BCM Event Date': S(r.bcmDate),
       'Sport': S(r.bcmSport),
@@ -738,10 +765,8 @@ const DFC = {
       'Date Match': r.dateMatch===true?'Yes':r.dateMatch===false?'No':'',
       'Time Match': r.timeMatch===true?'Yes':r.timeMatch===false?'No':'',
       'Event Match': r.eventMatch===true?'Yes':r.eventMatch===false?'No':'',
-      'League Match': r.leagueMatch===true?'Yes':r.leagueMatch===false?'No':'',
       'Similarity %': r.similarity==null?'':r.similarity,
       'Agent Verified': r.overridden ? 'Yes' : '',
-      'Original Status': r.overridden ? (r._origStatus||'') : '',
       'Reason': S(r.reason),
       'Source File': S(r.sourceFile)
     }));
@@ -773,7 +798,7 @@ const DFC = {
   bgRowFields(row){
     const name = String(row['Event']||row['event']||'').trim();
     const league = String(row['Competition']||row['competition']||row['League']||'').trim();
-    const bgStart = row['Start (UTC+2)'] || row['Start (UTC)'] || row['start (utc)'] || row['Start'] || '';
+    const bgStart = this.bgStart(row);
     const dt = this.formatBGDate(bgStart);
     return { name, league, dt };
   },
@@ -1102,14 +1127,40 @@ const DFC = {
         return String(dateVal || '');
       }
     }
-    // Separate Time column overrides embedded time
-    const ts = String(timeVal || '').trim();
-    const tm = ts.match(/(\d{1,2}):(\d{2})/);
-    if (tm) { h = parseInt(tm[1]); mi = parseInt(tm[2]); }
+    // Separate Time column overrides embedded time. Excel can store the time as
+    // a number (fraction of a day, e.g. 0.70833 = 17:00) or as a full date-time
+    // serial; read the fraction in that case instead of dropping it to 00:00.
+    const tNum = (timeVal === '' || timeVal === null || timeVal === undefined) ? NaN : Number(timeVal);
+    if (timeVal instanceof Date) {
+      h = timeVal.getHours(); mi = timeVal.getMinutes();
+    } else if (!isNaN(tNum) && tNum >= 0 && (tNum < 1 || (tNum > 30000 && tNum < 100000))) {
+      const totalMin = Math.round((tNum - Math.floor(tNum)) * 1440) % 1440;
+      h = Math.floor(totalMin / 60); mi = totalMin % 60;
+    } else {
+      const ts = String(timeVal || '').trim();
+      const tm = ts.match(/(\d{1,2}):(\d{2})/);
+      if (tm) { h = parseInt(tm[1]); mi = parseInt(tm[2]); }
+    }
     // Output as mm-dd-YYYY hh:mm
     return `${this.pad(mo)}-${this.pad(d)}-${y} ${this.pad(h)}:${this.pad(mi)}`;
   },
 
+  // Betgenius kick-off column. The header changes with daylight saving
+  // ("Start (UTC+2)" in summer, "Start (UTC+1)" in winter) and may contain
+  // extra spaces, so match any header that is "Start" optionally followed by a
+  // bracketed zone, ignoring case and spacing. Times are used as given; no
+  // offset conversion is applied (same as before).
+  bgStart(row){
+    if (!row) return '';
+    for (const k of Object.keys(row)){
+      const h = String(k).toLowerCase().replace(/\s+/g, '');
+      if (/^start(\(utc([+-]\d{1,2}(:\d{2})?)?\))?$/.test(h)){
+        const v = row[k];
+        if (v !== '' && v !== null && v !== undefined) return v;
+      }
+    }
+    return '';
+  },
   // Betgenius: input dd-mm-YYYY hh:mm → output mm-dd-YYYY hh:mm
   formatBGDate(val){
     if (val === '' || val === null || val === undefined) return '';
@@ -1224,7 +1275,7 @@ const DQ = {
     return {
       bgPrefixes: parsePrefixes((document.getElementById('dq-bg-prefix')||{}).value || '1'),
       brPrefixes: parsePrefixes((document.getElementById('dq-br-prefix')||{}).value || '7,8'),
-      op3Tol: parseInt((document.getElementById('dq-op3-tol')||{}).value,10) || 15,
+      op3Tol: 0,   // no time tolerance: any difference in minutes is a time difference
       nameTh: (parseInt((document.getElementById('dq-name-th')||{}).value,10) || 70)
     };
   },
@@ -1688,7 +1739,7 @@ const DQ = {
         provDate: rec.provDt ? (this._mdyParts(rec.provDt) ? rec.provDt.split(/\s+/)[0] : rec.provDt) : '',
         provTime: rec.provDt && rec.provDt.split(/\s+/)[1] ? rec.provDt.split(/\s+/)[1] : '',
         idMatch: rec.idMatch, dateMatch: rec.dateMatch, timeMatch: rec.timeMatch,
-        eventMatch: rec.eventMatch, leagueMatch: rec.leagueMatch,
+        eventMatch: rec.eventMatch, leagueMatch: rec.leagueMatch, swapConflict: !!rec.swapConflict,
         similarity: rec.similarity!=null ? Math.round(rec.similarity) : null,
         dqStatus: rec.dqStatus, reason: rec.reason, sourceFile: rec.sourceFile || ''
       };
@@ -1763,7 +1814,7 @@ const PREP = {
     // engine's resolved provider ('BR'/'BG'), not a raw prefix guess.
     const valid = DFC.results.filter(r => r.dqStatus === 'Valid Mapped');
     if (valid.length === 0) {
-      alert('No "Valid Mapped" results found. Run DataFeed Check first (and promote any reviewed Mapping Review rows).');
+      alert('No "Valid Mapping" results found. Run DataFeed Check first, and tick "Reviewed" on any rows you have checked.');
       return;
     }
     this.correctMap = {};
@@ -1805,8 +1856,8 @@ const PREP = {
     }
     el.style.display = 'block';
     el.style.background = 'var(--success-soft)'; el.style.color = 'var(--success)'; el.style.borderColor = 'var(--success)';
-    el.innerHTML = `✓ DataFeed Check results loaded — <b>${s.correctRows}</b> Valid Mapped rows`
-      + (s.promoted ? ` (incl. <b>${s.promoted}</b> promoted from Mapping Review)` : '')
+    el.innerHTML = `✓ DataFeed Check results loaded — <b>${s.correctRows}</b> Valid Mapping rows`
+      + (s.promoted ? ` (incl. <b>${s.promoted}</b> agent verified)` : '')
       + ` · <b>${s.verifiedIds}</b> verified provider IDs · <b>${s.uniqueEvents}</b> unique events · loaded ${DFC.esc(s.loadedAt)}`;
   },
 
@@ -2020,12 +2071,39 @@ const PREP = {
 
   // Decide which source team maps to which BCM team. Similarity is used ONLY for
   // this pairing decision — never to search for or replace the matched event.
+  // Both orientations are scored using BOTH teams (home->home + away->away vs
+  // home->away + away->home). Scoring only the home team let a long, unrelated
+  // opponent name win (sr:match:73686776: "Atlanty Mytischi" was paired with
+  // "Amurskie Tigry Khabarovsk" instead of "Red Machine Atlant"). On a tie the
+  // provider's own home/away order is kept.
   pairTeams(bcmTeam1, bcmTeam2, srcA, srcB){
     srcA = srcA || 'N/A'; srcB = srcB || 'N/A';
     if (srcA === 'N/A' && srcB === 'N/A') return { a:'N/A', b:'N/A' };
-    const s1a = DFC.sim(DFC.normalize(bcmTeam1), DFC.normalize(srcA));
-    const s1b = DFC.sim(DFC.normalize(bcmTeam1), DFC.normalize(srcB));
-    return s1a >= s1b ? { a: srcA, b: srcB } : { a: srcB, b: srcA };
+    const forward  = this.teamScore(bcmTeam1, srcA) + this.teamScore(bcmTeam2, srcB);
+    const reversed = this.teamScore(bcmTeam1, srcB) + this.teamScore(bcmTeam2, srcA);
+    return reversed > forward ? { a: srcB, b: srcA } : { a: srcA, b: srcB };
+  },
+
+  // Team-name score 0..100: the better of whole-name edit similarity and a
+  // word-overlap score, so names sharing a word ("Atlanty" / "Atlant") still
+  // register even when the full names are spelled very differently.
+  teamScore(x, y){
+    const a = DFC.normalize(String(x || '')), b = DFC.normalize(String(y || ''));
+    if (!a || !b || a === 'n a' || b === 'n a') return 0;
+    return Math.max(DFC.sim(a, b), this.wordScore(a, b));
+  },
+
+  // Share of words (3+ letters) that match: equal, one a prefix of the other
+  // (4+ letters), or at least 80% similar. Inputs must already be normalized.
+  wordScore(a, b){
+    const ta = a.split(' ').filter(w => w.length >= 3);
+    const tb = b.split(' ').filter(w => w.length >= 3);
+    if (!ta.length || !tb.length) return 0;
+    const close = (u, v) => u === v
+      || (Math.min(u.length, v.length) >= 4 && (u.startsWith(v) || v.startsWith(u)))
+      || DFC.sim(u, v) >= 80;
+    const hits = ta.filter(u => tb.some(v => close(u, v))).length;
+    return (hits / Math.max(ta.length, tb.length)) * 100;
   },
 
   parseHierarchy(text){
