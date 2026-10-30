@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mapper ↔ Multi-Sport Fixtures integration tests</title>
+<!--
+  Browser harness for the mapper-fixtures-integration spec (design C4).
+  Run with run-mapper-integration-tests.ps1 (headless Edge, --allow-file-access-from-files,
+  --dump-dom). This page is the only file that loads fast-check; index.html and
+  multi-sport-fixtures-manager.html get no new dependency (Req 5.3).
+
+  fast-check (property tests only). If window.fc is undefined at runtime, every
+  property test is recorded as NOT RUN and the example tests still run (Req 7.7).
+
+  fast-check is vendored locally (test-only) as test-vendor/fast-check-3.23.2.js, a
+  classic script that sets window.fc. fast-check 3.x publishes no browser bundle, and
+  module scripts are unreliable from file://, so test-vendor/build-fast-check-vendor.ps1
+  wraps the jsDelivr ESM builds into one IIFE. No SRI attribute: integrity checks on
+  file:// need CORS, which an opaque file origin cannot provide. Pin by hash instead:
+    test-vendor/fast-check-3.23.2.js
+      sha256 b5f2999f19818df011e2e2ba7a1559c9f1956bf6f752938e37a65787a03701c4
+    built from https://cdn.jsdelivr.net/npm/fast-check@3.23.2/+esm
+      sha256 2035475301a0ac4f0e2760b5c7e8eecd3477ef490c7dc18d7d22daac2173dd72
+    and        https://cdn.jsdelivr.net/npm/pure-rand@6.1.0/+esm
+      sha256 ca2f714a3e7c933aecaef1d53a6edcc32a7c2d478e913d08c5e5b6ef8a4efcef
+  Licence texts (MIT) are copied into the vendor file header; see test-vendor/README.txt.
+-->
+<script src="test-vendor/fast-check-3.23.2.js" charset="utf-8"
+        onerror="window.__fcLoadError = 'test-vendor/fast-check-3.23.2.js failed to load';"></script>
+<style>
+  body { font: 13px/1.4 Segoe UI, Arial, sans-serif; margin: 16px; }
+  table { border-collapse: collapse; }
+  td, th { border: 1px solid #ccc; padding: 2px 6px; text-align: left; vertical-align: top; }
+  .PASS { color: #070; } .FAIL { color: #b00; } .NOT-RUN { color: #a60; }
+  #frames { position: absolute; left: -20000px; top: 0; width: 1280px; height: 900px; overflow: hidden; }
+  #results-json { white-space: pre-wrap; word-break: break-all; font-size: 11px; }
+</style>
+</head>
+<body>
+<h1>Mapper ↔ Multi-Sport Fixtures integration tests</h1>
+<p id="summary">Running…</p>
+<table id="results-table"><thead><tr><th>Status</th><th>Group</th><th>Name</th><th>Detail</th></tr></thead><tbody></tbody></table>
+<div id="frames" aria-hidden="true"></div>
+<pre id="results-json"></pre>
+
+<script>
+'use strict';
+/* ==========================================================================
+   Constants
+   ========================================================================== */
+const MAPPER_FILE = 'index.html';
+const MSFM_FILE   = 'multi-sport-fixtures-manager.html';
+// Built by concatenation so this live file is not a reference to the retired file (Req 4.1/4.2).
+const SHIFT_FILE  = 'basketball-' + 'shift.html';
+const TAB_IDS     = ['lbc', 'fixtures', 'shift'];   // tabs whose switchTab branch makes no Supabase call
+const NUM_RUNS    = 100;
+const TEST_TIMEOUT_MS = 45000;                       // per registered test (virtual time)
+
+/* ==========================================================================
+   Result recording
+   ========================================================================== */
+const results = [];
+
+function record(group, name, status, detail) {
+  if (status !== 'PASS' && status !== 'FAIL' && status !== 'NOT RUN') {
+    detail = 'invalid status ' + String(status) + (detail ? '; ' + detail : '');
+    status = 'FAIL';
+  }
+  results.push({ group: String(group), name: String(name), status: status, detail: detail ? String(detail) : '' });
+  publish(false);
+}
+
+// Writes the human table and the machine-readable line. The JSON goes in via
+// textContent, so any '<' in a detail string is serialised as &lt; by --dump-dom and
+// cannot form '</' inside the JSON. The runner HTML-decodes before parsing.
+// Until the run finishes, a FAIL "harness" record is included so a dump taken
+// mid-run (virtual-time budget exhausted) can never look like a clean pass.
+function publish(finished) {
+  const all = results.slice();
+  all.push({ group: 'harness', name: 'all registered tests finished',
+             status: finished ? 'PASS' : 'FAIL',
+             detail: finished ? '' : 'harness still running when the DOM was captured' });
+  const totals = { PASS: 0, FAIL: 0, NOT_RUN: 0 };
+  all.forEach(r => { if (r.status === 'PASS') totals.PASS++; else if (r.status === 'FAIL') totals.FAIL++; else totals.NOT_RUN++; });
+
+  const tbody = document.querySelector('#results-table tbody');
+  tbody.textContent = '';
+  all.forEach(r => {
+    const tr = document.createElement('tr');
+    [r.status, r.group, r.name, r.detail].forEach((v, i) => {
+      const td = document.createElement('td');
+      td.textContent = v;
+      if (i === 0) td.className = v.replace(' ', '-');
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  document.getElementById('summary').textContent =
+    (finished ? 'Finished. ' : 'Running… ') + 'PASS=' + totals.PASS + ' FAIL=' + totals.FAIL + ' NOT_RUN=' + totals.NOT_RUN;
+  document.getElementById('results-json').textContent =
+    'RESULTS_' + 'JSON:' + JSON.stringify({ results: all, totals: totals });
+}
+
+/* ==========================================================================
+   Small utilities
+   ========================================================================== */
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function waitFor(cond, timeoutMs, label) {
+  const limit = timeoutMs || 10000;
+  const start = Date.now();
+  for (;;) {
+    let ok = false;
+    try { ok = !!cond(); } catch (e) { ok = false; }
+    if (ok) return;
+    if (Date.now() - start > limit) throw new Error('timed out waiting for ' + (label || 'condition') + ' after ' + limit + ' ms');
+    await sleep(10);
+  }
+}
+
+function withTimeout(promise, ms, label) {
+  let t;
+  return Promise.race([
+    promise.finally(() => clearTimeout(t)),
+    new Promise((_, rej) => { t = setTimeout(() => rej(new Error(label + ' timed out after ' + ms + ' ms')), ms); })
+  ]);
+}
+
+function errText(e) {
+  if (e == null) return 'unknown error';
+  return (e && e.message) ? e.message : String(e);
+}
+
+function assert(cond, msg) { if (!cond) throw new Error(msg || 'assertion failed'); }
+
+/* ==========================================================================
+   Mapper frame helper
+   --------------------------------------------------------------------------
+   index.html is read once (XHR; file:// needs --allow-file-access-from-files)
+   and each run gets a fresh hidden iframe whose srcdoc is that text with a
+   collector script inserted as the first child of <head>. That installs
+   window.onerror (and a DOMContentLoaded capture listener) before any of
+   index.html's scripts run, which a listener attached from this page after
+   setting iframe.src cannot guarantee. The srcdoc document uses this page's
+   folder as its base URL, so data-src="multi-sport-fixtures-manager.html"
+   resolves to the real file next to index.html.
+
+   index.html's top-level consts (UI, state, UserGuide, HistoryTab) are not
+   window properties, so they are reached with frame.contentWindow.eval(...).
+   The session is never restored (sessionStorage key is never set), so
+   App.boot and its Supabase calls never run.
+   ========================================================================== */
+let mapperSourceText = null;
+
+function loadMapperSource() {
+  if (mapperSourceText !== null) return Promise.resolve(mapperSourceText);
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', MAPPER_FILE, true);
+    xhr.onload = () => {
+      if ((xhr.status === 0 || xhr.status === 200) && xhr.responseText && xhr.responseText.length > 0) {
+        mapperSourceText = xhr.responseText; resolve(mapperSourceText);
+      } else reject(new Error('could not read ' + MAPPER_FILE + ' (status ' + xhr.status + ')'));
+    };
+    xhr.onerror = () => reject(new Error('XHR error reading ' + MAPPER_FILE + ' (is --allow-file-access-from-files set?)'));
+    xhr.send();
+  });
+}
+
+const COLLECTOR =
+  '<script>(function(){' +
+  'window.__pbtErrors=[];window.__pbtDomReady=false;' +
+  'window.onerror=function(msg,src,line,col,err){window.__pbtErrors.push(String(msg)+" @"+(src||"")+":"+line+":"+col);return false;};' +
+  'document.addEventListener("DOMContentLoaded",function(){window.__pbtDomReady=true;},true);' +
+  '})();<\/script>';
+
+function instrument(html) {
+  const m = /<head[^>]*>/i.exec(html);
+  if (!m) return COLLECTOR + html;
+  const at = m.index + m[0].length;
+  return html.slice(0, at) + COLLECTOR + html.slice(at);
+}
+
+/**
+ * Creates a fresh hidden Mapper iframe and returns a handle:
+ *   frame, win, doc, ev(expr), errors(), ui, state,
+ *   fixturesFrame(), msfmLoads(), sentinel(), expectedSentinel, waitForMsfmLoad(n),
+ *   signIn(role), dispose()
+ * signIn() sets state.user = {id:0, username:'pbt', role} and calls UI.buildTabs().
+ */
+async function openMapper(opts) {
+  const o = opts || {};
+  const html = instrument(await loadMapperSource());
+  const host = document.getElementById('frames');
+  const frame = document.createElement('iframe');
+  frame.style.cssText = 'width:1280px;height:900px;border:0;';
+  const loaded = new Promise(res => frame.addEventListener('load', res, { once: true }));
+  frame.srcdoc = html;
+  host.appendChild(frame);
+  await withTimeout(loaded, 20000, 'index.html frame load');
+
+  const win = frame.contentWindow;
+  const ev = expr => win.eval(expr);
+  await waitFor(() => ev('typeof UI') === 'object' && ev('typeof state') === 'object', 5000, 'UI/state in index.html');
+
+  const h = {
+    frame, win, doc: win.document, ev,
+    ui: ev('UI'), state: ev('state'),
+    errors: () => (win.__pbtErrors || []).slice(),
+    domReady: () => !!win.__pbtDomReady,
+    msfmLoadCount: 0,
+    expectedSentinel: null,
+    fixturesFrame: () => win.document.getElementById('fixtures-frame'),
+    msfmLoads: () => h.msfmLoadCount,
+    sentinel: () => {
+      const f = h.fixturesFrame();
+      try { return f && f.contentWindow ? f.contentWindow.__pbtSentinel : undefined; } catch (e) { return undefined; }
+    },
+    waitForMsfmLoad: (n, timeoutMs) => waitFor(() => h.msfmLoadCount >= (n || 1), timeoutMs || 20000, 'MSFM load #' + (n || 1)),
+    signIn: role => {
+      h.state.user = { id: 0, username: 'pbt', role: role || 'user' };
+      h.ui.buildTabs();
+    },
+    dispose: () => { try { frame.remove(); } catch (e) { /* already gone */ } }
+  };
+
+  // #fixtures-frame load counter + sentinel writer. Only loads whose document is
+  // the MSFM file are counted; the initial about:blank load is ignored.
+  const ff = h.fixturesFrame();
+  if (ff) {
+    ff.addEventListener('load', () => {
+      let href = '';
+      try { href = ff.contentWindow.location.href; } catch (e) { href = ''; }
+      if (!href.endsWith(MSFM_FILE)) return;
+      h.msfmLoadCount++;
+      if (h.msfmLoadCount === 1) {
+        h.expectedSentinel = 'pbt-' + Math.random().toString(36).slice(2) + '-' + Date.now();
+        try { ff.contentWindow.__pbtSentinel = h.expectedSentinel; } catch (e) { /* cross-origin: sentinel unreadable */ }
+      }
+    });
+  }
+
+  if (o.signIn !== false) h.signIn(o.role || 'user');
+  return h;
+}
+
+/** Runs fn(handle) against a fresh Mapper frame and always disposes it. */
+async function withMapper(fn, opts) {
+  const h = await openMapper(opts);
+  try { return await fn(h); } finally { h.dispose(); }
+}
+
+/* ==========================================================================
+   Test registry
+   ========================================================================== */
+const registry = [];
+
+/** Property test: fn(fc) must run fc.assert(...) with numRuns: NUM_RUNS and throw on failure.
+ *  opts.timeoutMs overrides TEST_TIMEOUT_MS for slow tests. */
+function registerProperty(group, name, fn, opts) {
+  registry.push({ kind: 'property', group, name, fn, timeoutMs: (opts && opts.timeoutMs) || TEST_TIMEOUT_MS });
+}
+/** Example test: fn() throws (or rejects) on failure. */
+function registerExample(group, name, fn) { registry.push({ kind: 'example', group, name, fn }); }
+
+async function runAll() {
+  // The vendor file is a synchronous classic script, so window.fc is normally set
+  // already. The short wait only covers a slow or deferred load; on timeout or a load
+  // error the property tests fall through to NOT RUN.
+  try {
+    await waitFor(() => (window.fc && typeof window.fc.assert === 'function') || window.__fcLoadError, 3000, 'window.fc');
+  } catch (e) { /* fc missing: handled below */ }
+  const fc = window.fc;
+  const fcMissing = (typeof fc === 'undefined' || !fc || typeof fc.assert !== 'function');
+  const fcReason = 'fast-check not loaded (window.fc undefined)' + (window.__fcLoadError ? ': ' + window.__fcLoadError : '');
+
+  for (const t of registry) {
+    if (t.kind === 'property' && fcMissing) { record(t.group, t.name, 'NOT RUN', fcReason); continue; }
+    try {
+      await withTimeout(Promise.resolve().then(() => t.kind === 'property' ? t.fn(fc) : t.fn()), t.timeoutMs || TEST_TIMEOUT_MS, t.name);
+      record(t.group, t.name, 'PASS', '');
+    } catch (e) {
+      record(t.group, t.name, 'FAIL', errText(e));
+    }
+  }
+  document.getElementById('frames').textContent = '';
+  publish(true);
+}
+
+/* ==========================================================================
+   Scaffold smoke example (keeps the runner's RESULTS_JSON check meaningful
+   until the real tests below are written).
+   ========================================================================== */
+registerExample('scaffold', 'index.html frame loads and UI/state are reachable', async () => {
+  await withMapper(async h => {
+    assert(typeof h.ui.buildTabs === 'function', 'UI.buildTabs is not a function');
+    assert(typeof h.ui.switchTab === 'function', 'UI.switchTab is not a function');
+    assert(h.state.user && h.state.user.username === 'pbt', 'state.user was not set');
+    assert(h.doc.querySelector('#tabs-row .tab-btn'), 'UI.buildTabs() rendered no tab buttons');
+    assert(h.fixturesFrame(), '#fixtures-frame not found');
+  });
+});
+
+// Temporary scaffold check: the vendored fast-check loads and runs a trivial property.
+registerExample('scaffold', 'fast-check is loaded', () => {
+  const fc = window.fc;
+  assert(typeof fc !== 'undefined' && fc, 'window.fc is undefined' + (window.__fcLoadError ? ': ' + window.__fcLoadError : ''));
+  assert(typeof fc.assert === 'function' && typeof fc.property === 'function', 'window.fc has no assert/property');
+  fc.assert(fc.property(fc.integer(), n => n === n), { numRuns: 10 });
+});
+
+/* ==========================================================================
+   Property 1: Tab routing invariant (legacy shift -> fixtures)   [task 5.3]
+   // Feature: mapper-fixtures-integration, Property 1: Tab routing invariant (legacy shift → fixtures)
+   Validates: Requirements 2.6, 1.1, 1.2, 5.2
+   ========================================================================== */
+// Feature: mapper-fixtures-integration, Property 1: Tab routing invariant (legacy shift → fixtures)
+const canonTab = id => (id === 'shift' ? 'fixtures' : id);
+
+registerProperty('properties', 'Property 1: Tab routing invariant (legacy shift → fixtures)', async fc => {
+  await fc.assert(
+    fc.asyncProperty(
+      fc.array(fc.constantFrom(...TAB_IDS), { minLength: 1, maxLength: 8 }),
+      fc.dictionary(fc.string().map(s => 'msfm_pbt_' + s), fc.string()),
+      async (seq, seeded) => {
+        await withMapper(async h => {
+          // The Mapper frame is srcdoc, so it inherits this page's origin and store.
+          // Seed and read through the frame's own window.localStorage so the check
+          // sees exactly what index.html sees.
+          const ls = h.win.localStorage;
+          const keys = Object.keys(seeded);
+          try {
+            keys.forEach(k => ls.setItem(k, seeded[k]));
+
+            seq.forEach(id => h.ui.switchTab(id));
+
+            const want = canonTab(seq[seq.length - 1]);
+            assert(h.state.currentTab === want,
+              'state.currentTab=' + JSON.stringify(h.state.currentTab) + ', expected ' + want);
+
+            const panels = Array.from(h.doc.querySelectorAll('.tab-panel.active'));
+            assert(panels.length === 1,
+              panels.length + ' active .tab-panel elements: ' + JSON.stringify(panels.map(p => p.dataset.panel)));
+            assert(panels[0].dataset.panel === want,
+              'active panel is ' + JSON.stringify(panels[0].dataset.panel) + ', expected ' + want);
+
+            const btns = Array.from(h.doc.querySelectorAll('.tab-btn.active'));
+            assert(btns.length === 1,
+              btns.length + ' active .tab-btn elements: ' + JSON.stringify(btns.map(b => b.dataset.tab)));
+            assert(btns[0].dataset.tab === want,
+              'active button is ' + JSON.stringify(btns[0].dataset.tab) + ', expected ' + want);
+
+            const shiftEls = h.doc.querySelectorAll('[data-panel="shift"], [data-tab="shift"]');
+            assert(shiftEls.length === 0, shiftEls.length + ' element(s) with data-panel/data-tab="shift"');
+
+            keys.forEach(k => {
+              const v = ls.getItem(k);
+              assert(v === seeded[k],
+                'localStorage ' + JSON.stringify(k) + ' changed: ' + JSON.stringify(v) + ' (was ' + JSON.stringify(seeded[k]) + ')');
+            });
+          } finally {
+            keys.forEach(k => { try { ls.removeItem(k); } catch (e) { /* ignore */ } });
+          }
+        });
+      }
+    ),
+    { numRuns: NUM_RUNS }
+  );
+});
+
+/* ==========================================================================
+   Property 2: Fixtures frame lazy-load state                    [task 5.4]
+   // Feature: mapper-fixtures-integration, Property 2: Fixtures frame lazy-load state
+   Validates: Requirements 2.3, 2.5, 2.7, 1.3
+   ========================================================================== */
+// Feature: mapper-fixtures-integration, Property 2: Fixtures frame lazy-load state
+registerProperty('properties', 'Property 2: Fixtures frame lazy-load state', async fc => {
+  await fc.assert(
+    fc.asyncProperty(
+      fc.array(fc.constantFrom(...TAB_IDS), { minLength: 0, maxLength: 8 }),
+      async seq => {
+        await withMapper(async h => {
+          // switchTab sets #fixtures-frame src synchronously, so no MSFM load wait is
+          // needed; withMapper removes the frame afterwards, which aborts any load.
+          seq.forEach(id => h.ui.switchTab(id));
+
+          const ff = h.fixturesFrame();
+          assert(ff, '#fixtures-frame not found');
+          const attr = ff.getAttribute('src');
+          const prop = ff.src;
+          const opened = seq.some(id => canonTab(id) === 'fixtures');
+
+          if (!opened) {
+            assert(attr === 'about:blank',
+              'src attribute is ' + JSON.stringify(attr) + ' before the tab was opened, expected about:blank');
+            assert(prop === 'about:blank',
+              'src property is ' + JSON.stringify(prop) + ' before the tab was opened, expected about:blank');
+          } else {
+            assert(typeof prop === 'string' && prop.endsWith(MSFM_FILE),
+              'resolved src ' + JSON.stringify(prop) + ' does not end with ' + MSFM_FILE);
+            assert(prop.indexOf('#') === -1, 'resolved src ' + JSON.stringify(prop) + ' contains a fragment');
+            assert(attr === null || attr.indexOf('#') === -1, 'src attribute ' + JSON.stringify(attr) + ' contains a fragment');
+          }
+
+          const shiftFrames = Array.from(h.doc.querySelectorAll('iframe')).filter(f =>
+            (f.getAttribute('src') || '').indexOf(SHIFT_FILE) !== -1 || (f.src || '').indexOf(SHIFT_FILE) !== -1);
+          assert(shiftFrames.length === 0,
+            shiftFrames.length + ' iframe(s) with a src containing ' + SHIFT_FILE + ': ' +
+            JSON.stringify(shiftFrames.map(f => f.id || f.src)));
+        });
+      }
+    ),
+    { numRuns: NUM_RUNS }
+  );
+});
+
+/* ==========================================================================
+   Property 3: Re-opening the tab keeps the loaded MSFM document [task 5.5]
+   // Feature: mapper-fixtures-integration, Property 3: Re-opening the tab keeps the loaded MSFM document
+   Validates: Requirements 2.4
+   ========================================================================== */
+// Feature: mapper-fixtures-integration, Property 3: Re-opening the tab keeps the loaded MSFM document
+// Each run loads MSFM once in a fresh Mapper frame, so this test gets its own longer timeout.
+const P3_TIMEOUT_MS = 600000;
+
+function tabSnapshot(h) {
+  const ff = h.fixturesFrame();
+  return JSON.stringify({
+    currentTab: h.state.currentTab,
+    panels: Array.from(h.doc.querySelectorAll('.tab-panel.active')).map(p => p.dataset.panel),
+    buttons: Array.from(h.doc.querySelectorAll('.tab-btn.active')).map(b => b.dataset.tab),
+    srcAttr: ff ? ff.getAttribute('src') : null,
+    srcProp: ff ? ff.src : null
+  });
+}
+
+registerProperty('properties', 'Property 3: Re-opening the tab keeps the loaded MSFM document', async fc => {
+  // Build sequences that always contain at least one fixtures/shift switch:
+  // a random tab list (0..7) with one fixtures-or-shift id inserted at a random position.
+  const seqArb = fc.tuple(
+    fc.array(fc.constantFrom(...TAB_IDS), { minLength: 0, maxLength: 7 }),
+    fc.nat(),
+    fc.constantFrom('fixtures', 'shift')
+  ).map(([rest, pos, open]) => {
+    const at = pos % (rest.length + 1);
+    return rest.slice(0, at).concat([open], rest.slice(at));
+  });
+
+  await fc.assert(
+    fc.asyncProperty(seqArb, async seq => {
+      await withMapper(async h => {
+        let opened = false;
+        for (const id of seq) {
+          h.ui.switchTab(id);
+          if (!opened && canonTab(id) === 'fixtures') {
+            opened = true;
+            // Load #1 writes the sentinel into the MSFM window.
+            await h.waitForMsfmLoad(1, 30000);
+          }
+        }
+        await sleep(100);   // settle: catch any spurious reload
+
+        assert(h.msfmLoads() === 1, 'MSFM loaded ' + h.msfmLoads() + ' times after ' + JSON.stringify(seq) + ', expected 1');
+        assert(typeof h.expectedSentinel === 'string', 'sentinel was not written on MSFM load #1');
+        assert(h.sentinel() === h.expectedSentinel,
+          'MSFM window sentinel is ' + JSON.stringify(h.sentinel()) + ', expected ' + JSON.stringify(h.expectedSentinel) +
+          ' (document was replaced)');
+
+        // Idempotence: switchTab('fixtures') twice gives the same state as once.
+        h.ui.switchTab('fixtures');
+        await sleep(50);
+        const once = tabSnapshot(h);
+        h.ui.switchTab('fixtures');
+        await sleep(100);
+        const twice = tabSnapshot(h);
+
+        assert(h.msfmLoads() === 1, 'MSFM loaded ' + h.msfmLoads() + ' times after repeated switchTab(\'fixtures\'), expected 1');
+        assert(h.sentinel() === h.expectedSentinel,
+          'MSFM window sentinel changed after repeated switchTab(\'fixtures\'): ' + JSON.stringify(h.sentinel()));
+        assert(once === twice, 'state after second switchTab(\'fixtures\') ' + twice + ' differs from after first ' + once);
+        const s = JSON.parse(once);
+        assert(s.currentTab === 'fixtures' && s.panels.length === 1 && s.panels[0] === 'fixtures' &&
+               s.buttons.length === 1 && s.buttons[0] === 'fixtures',
+          'unexpected state after switchTab(\'fixtures\'): ' + once);
+      });
+    }),
+    { numRuns: NUM_RUNS }
+  );
+}, { timeoutMs: P3_TIMEOUT_MS });
+
+/* ==========================================================================
+   Example tests                                                 [task 5.6]
+   Validates: Requirements 1.1, 1.6, 1.7, 1.8, 2.1, 3.1, 3.2, 3.3
+   ========================================================================== */
+registerExample('examples', 'index.html loads with zero onerror events and the login screen visible', async () => {
+  await withMapper(async h => {
+    await sleep(200);   // let App.init() settle
+    const errs = h.errors();
+    assert(errs.length === 0, errs.length + ' onerror event(s): ' + JSON.stringify(errs));
+    const login = h.doc.getElementById('login-screen');
+    assert(login, '#login-screen not found');
+    const disp = h.win.getComputedStyle(login).display;
+    assert(disp !== 'none', '#login-screen computed display is ' + JSON.stringify(disp));
+    const r = login.getBoundingClientRect();
+    assert(r.width > 0 && r.height > 0, '#login-screen has zero size (' + r.width + 'x' + r.height + ')');
+  }, { signIn: false });
+});
+
+['user', 'admin'].forEach(role => {
+  registerExample('examples', 'buildTabs as ' + role + ': fixtures tab between lbc and training, no shift tab', async () => {
+    await withMapper(async h => {
+      const ids = Array.from(h.doc.querySelectorAll('#tabs-row .tab-btn')).map(b => b.dataset.tab);
+      const fx = h.doc.querySelectorAll('#tabs-row .tab-btn[data-tab="fixtures"]');
+      assert(fx.length === 1, fx.length + ' fixtures tab button(s) in ' + JSON.stringify(ids));
+      const iL = ids.indexOf('lbc'), iF = ids.indexOf('fixtures'), iT = ids.indexOf('training');
+      assert(iL >= 0 && iT >= 0, 'lbc/training tab missing from ' + JSON.stringify(ids));
+      assert(iL < iF && iF < iT, 'tab order is not lbc < fixtures < training: ' + JSON.stringify(ids));
+      assert(ids.indexOf('shift') === -1, 'shift tab button present: ' + JSON.stringify(ids));
+      assert(h.doc.querySelectorAll('[data-tab="shift"]').length === 0, 'element with data-tab="shift" present');
+      if (role === 'admin') {
+        assert(ids.indexOf('history') > iT && ids.indexOf('users') > iT, 'admin tabs missing or misplaced: ' + JSON.stringify(ids));
+      } else {
+        assert(ids.indexOf('history') === -1 && ids.indexOf('users') === -1, 'admin tabs shown to user: ' + JSON.stringify(ids));
+      }
+    }, { role });
+  });
+});
+
+registerExample('examples', 'UserGuide.sections: no BR/BG Shift, Multi-Sport Fixtures between Training and History', async () => {
+  await withMapper(async h => {
+    const sections = h.ev('UserGuide').sections;
+    assert(Array.isArray(sections) && sections.length > 0, 'UserGuide.sections is empty or not an array');
+    const titles = sections.map(s => s[0]);
+    assert(titles.indexOf('BR/BG Shift') === -1, 'a section is titled "BR/BG Shift": ' + JSON.stringify(titles));
+    const shiftIn = sections.filter(s => /br\/bg shift/i.test(s[0]) || /br\/bg shift/i.test(s[1])).map(s => s[0]);
+    assert(shiftIn.length === 0, 'section(s) mention "BR/BG Shift": ' + JSON.stringify(shiftIn));
+
+    const iT = titles.indexOf('Training'), iM = titles.indexOf('Multi-Sport Fixtures'), iH = titles.indexOf('History');
+    assert(iM >= 0, 'no "Multi-Sport Fixtures" section: ' + JSON.stringify(titles));
+    assert(iT >= 0 && iH >= 0, 'Training/History section missing: ' + JSON.stringify(titles));
+    assert(iM === iT + 1 && iH === iM + 1,
+      'expected Training, Multi-Sport Fixtures, History adjacent in order: ' + JSON.stringify(titles));
+
+    const msfmHtml = sections[iM][1];
+    assert(msfmHtml.indexOf('msfm_priority_mappings') !== -1, 'Multi-Sport Fixtures section does not name msfm_priority_mappings');
+    assert(/browser/i.test(msfmHtml), 'Multi-Sport Fixtures section does not mention browser storage');
+    assert(!/shift/i.test(sections[iH][1]), 'History section mentions Shift: ' + sections[iH][1]);
+  });
+});
+
+registerExample('examples', 'HistoryTab.render shows a shift_checks history row unchanged', async () => {
+  await withMapper(async h => {
+    const row = {
+      id: 1,
+      created_at: '2026-01-15T09:30:00Z',
+      username: 'legacy_user',
+      action: 'Add',
+      table_name: 'shift_checks',
+      record_details: 'shift: BR/BG Shift check 2026-01-15',
+      change_data: null
+    };
+    h.state.history = [row];
+    h.ev('HistoryTab').render();   // render() only writes #hist-tbody; it makes no Supabase call
+    const trs = h.doc.querySelectorAll('#hist-tbody tr');
+    assert(trs.length === 1, trs.length + ' rows rendered in #hist-tbody, expected 1');
+    const cells = Array.from(trs[0].querySelectorAll('td')).map(td => td.textContent);
+    assert(cells.length === 6, cells.length + ' cells rendered: ' + JSON.stringify(cells));
+    assert(cells[1] === row.username, 'username cell is ' + JSON.stringify(cells[1]));
+    assert(cells[2] === row.action, 'action cell is ' + JSON.stringify(cells[2]));
+    assert(cells[3] === 'shift_checks', 'table cell is ' + JSON.stringify(cells[3]));
+    assert(cells[4] === row.record_details, 'details cell is ' + JSON.stringify(cells[4]));
+    const errs = h.errors();
+    assert(errs.length === 0, 'onerror event(s) during render: ' + JSON.stringify(errs));
+  }, { role: 'admin' });
+});
+
+/* ========================================================================== */
+window.addEventListener('load', () => {
+  publish(false);
+  runAll().catch(e => { record('harness', 'runAll', 'FAIL', errText(e)); publish(true); });
+});
+</script>
+</body>
+</html>

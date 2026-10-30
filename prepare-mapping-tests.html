@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DataFeed Check & Prepare Mapping — Logic Tests</title>
+<style>
+  body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:#0f1420;color:#e6e9ef;margin:0;padding:24px;}
+  h1{font-size:20px;margin:0 0 6px;}
+  .sub{color:#94a3b8;font-size:13px;margin-bottom:18px;max-width:820px;line-height:1.5;}
+  .grp{border:1px solid #263042;border-radius:10px;margin-bottom:14px;overflow:hidden;}
+  .grp>h2{font-size:14px;margin:0;padding:10px 14px;background:#161d2b;border-bottom:1px solid #263042;}
+  .case{display:flex;gap:10px;padding:8px 14px;font-size:13px;border-bottom:1px solid #1b2432;}
+  .case:last-child{border-bottom:none;}
+  .badge{font-family:ui-monospace,monospace;font-size:11px;padding:2px 8px;border-radius:99px;min-width:44px;text-align:center;height:fit-content;}
+  .pass{background:#0f2e1d;color:#4ade80;}
+  .fail{background:#3a1420;color:#f87171;}
+  .desc{flex:1;}
+  .detail{color:#fca5a5;font-family:ui-monospace,monospace;font-size:11.5px;margin-top:3px;white-space:pre-wrap;}
+  #summary{font-size:15px;font-weight:700;padding:12px 14px;border-radius:10px;margin-bottom:18px;}
+  #summary.ok{background:#0f2e1d;color:#4ade80;}
+  #summary.bad{background:#3a1420;color:#f87171;}
+</style>
+</head>
+<body>
+<h1>DataFeed Check &amp; Prepare Mapping — Logic Tests</h1>
+<div class="sub">Verbatim copies of the deterministic logic from <b>datafeed-check.html</b>. Covers ID stripping &amp; provider routing, Excel date/time parsing, name normalization &amp; similarity, event splitting, team pairing, league aggregation, validation, duplicate detection, single-provider enforcement, and CSV safety. File I/O and Supabase are not exercised (browser-only environment).</div>
+<div id="summary">Running…</div>
+<div id="out"></div>
+
+<script>
+/* =====================================================================
+   VERBATIM HELPERS (copied from datafeed-check.html)
+   ===================================================================== */
+
+// ---- ID handling ----
+function stripId(id){ return String(id || '').replace(/^sr:match:/i, '').replace(/^sr:/i, '').trim(); }
+
+// ---- provider routing (7 = Betradar, 1 = Betgenius) ----
+function providerOf(feedId){
+  const p = String(feedId||'').charAt(0);
+  if (p === '7') return 'BR';
+  if (p === '1') return 'BG';
+  return 'UNKNOWN';
+}
+
+// ---- Excel serial → parts (DFC.excelSerialToParts) ----
+function excelSerialToParts(num){
+  const wholeDays = Math.floor(num);
+  const timeFraction = num - wholeDays;
+  let dayCount = wholeDays - 1;
+  if (dayCount >= 60) dayCount--;
+  let year = 1900;
+  const diy = (y) => ((y%4===0 && y%100!==0) || y%400===0) ? 366 : 365;
+  while (dayCount >= diy(year)) { dayCount -= diy(year); year++; }
+  const dim = [31, ((year%4===0 && year%100!==0) || year%400===0)?29:28, 31,30,31,30,31,31,30,31,30,31];
+  let mo = 0;
+  while (dayCount >= dim[mo]) { dayCount -= dim[mo]; mo++; }
+  const totalMin = Math.round(timeFraction * 1440);
+  return { y: year, mo: mo+1, d: dayCount+1, h: Math.floor(totalMin/60), mi: totalMin%60 };
+}
+function pad(n){ return String(n).padStart(2,'0'); }
+
+// ---- Betradar date formatter (DFC.formatBetradarDate) ----
+function formatBetradarDate(dateVal, timeVal){
+  let mo, d, y, h='00', mi='00';
+  const dNum = Number(dateVal);
+  if (dateVal !== '' && !isNaN(dNum) && dNum > 30000 && dNum < 100000) {
+    const p = excelSerialToParts(dNum); mo=p.mo; d=p.d; y=p.y; h=p.h; mi=p.mi;
+  } else if (dateVal instanceof Date) {
+    mo = dateVal.getMonth()+1; d = dateVal.getDate(); y = dateVal.getFullYear(); h = dateVal.getHours(); mi = dateVal.getMinutes();
+  } else {
+    const ds = String(dateVal || '').trim();
+    const m = ds.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[ T]+(\d{1,2}):(\d{2}))?/);
+    if (m) { d = parseInt(m[1]); mo = parseInt(m[2]); y = parseInt(m[3]); if (m[4]) { h = parseInt(m[4]); mi = parseInt(m[5]); } }
+    else { return String(dateVal || ''); }
+  }
+  const ts = String(timeVal || '').trim();
+  const tm = ts.match(/(\d{1,2}):(\d{2})/);
+  if (tm) { h = parseInt(tm[1]); mi = parseInt(tm[2]); }
+  return `${pad(mo)}-${pad(d)}-${y} ${pad(h)}:${pad(mi)}`;
+}
+
+// ---- Betgenius date formatter (DFC.formatBGDate) ----
+function formatBGDate(val){
+  if (val === '' || val === null || val === undefined) return '';
+  const num = Number(val);
+  if (!isNaN(num) && num > 30000 && num < 100000) {
+    const p = excelSerialToParts(num);
+    return `${pad(p.mo)}-${pad(p.d)}-${p.y} ${pad(p.h)}:${pad(p.mi)}`;
+  }
+  const str = String(val).trim();
+  const m = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\s+(\d{1,2}):(\d{2})/);
+  if (m) return `${pad(m[2])}-${pad(m[1])}-${m[3]} ${pad(m[4])}:${m[5]}`;
+  return str;
+}
+
+// ---- dateNums + time comparison (DFC.dateNums / calcTimeDiff) ----
+function dateNums(str){
+  const m = String(str).match(/(\d{1,4})[\/\-](\d{1,2})[\/\-](\d{2,4})\s*(\d{1,2})?:?(\d{2})?/);
+  if (!m) return null;
+  return { a:parseInt(m[1]), b:parseInt(m[2]), y:parseInt(m[3]), h:m[4]?parseInt(m[4]):0, mi:m[5]?parseInt(m[5]):0 };
+}
+function calcTimeDiff(s1, s2){
+  if (!s1 || !s2) return -1;
+  const p1 = dateNums(s1), p2 = dateNums(s2);
+  if (!p1 || !p2) return -1;
+  const timeDiff = Math.abs((p1.h*60+p1.mi) - (p2.h*60+p2.mi));
+  if (p1.y !== p2.y) return 999999;
+  const direct = (p1.a===p2.a && p1.b===p2.b);
+  const swapped = (p1.a===p2.b && p1.b===p2.a);
+  return (direct || swapped) ? timeDiff : 999999;
+}
+
+// ---- normalize + similarity (DFC.normalize / sim / calcSimilarity / levenshtein) ----
+function normalize(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim(); }
+function levenshtein(a,b){
+  const m=a.length,n=b.length,dp=Array.from({length:m+1},()=>Array(n+1).fill(0));
+  for(let i=0;i<=m;i++)dp[i][0]=i; for(let j=0;j<=n;j++)dp[0][j]=j;
+  for(let i=1;i<=m;i++)for(let j=1;j<=n;j++)dp[i][j]=a[i-1]===b[j-1]?dp[i-1][j-1]:1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+  return dp[m][n];
+}
+function sim(a,b){ if(a===b)return 100; if(!a||!b)return 0; const L=a.length>b.length?a:b,S=a.length>b.length?b:a; if(!L.length)return 100; return ((L.length-levenshtein(L,S))/L.length)*100; }
+// splitTeams — split BEFORE normalize so the "-" separator survives (matches the DFC fix).
+function splitTeams(raw){ return String(raw||'').split(/\s+vs\.?\s+|\s+-\s+|\s+v\s+/i).map(s=>normalize(s)).filter(s=>s.length); }
+function calcSimilarity(s1,s2){
+  if(!s1||!s2)return 0; const a=normalize(s1),b=normalize(s2); if(a===b)return 100;
+  const ap=splitTeams(s1), bp=splitTeams(s2);
+  if(ap.length===2&&bp.length===2){
+    const f=(sim(ap[0],bp[0])+sim(ap[1],bp[1]))/2, r=(sim(ap[0],bp[1])+sim(ap[1],bp[0]))/2;
+    return Math.round(Math.max(f,r));
+  }
+  return Math.round(sim(a,b));
+}
+
+// ---- PREP helpers (splitEvent / pairTeams / addUnique) ----
+function splitEvent(name){ const s=String(name||'').trim(); const i=s.lastIndexOf(' - '); return i===-1?{team1:s,team2:''}:{team1:s.slice(0,i).trim(),team2:s.slice(i+3).trim()}; }
+function wordScore(a,b){ const ta=a.split(' ').filter(w=>w.length>=3), tb=b.split(' ').filter(w=>w.length>=3); if(!ta.length||!tb.length)return 0; const close=(u,v)=>u===v||(Math.min(u.length,v.length)>=4&&(u.startsWith(v)||v.startsWith(u)))||sim(u,v)>=80; const hits=ta.filter(u=>tb.some(v=>close(u,v))).length; return (hits/Math.max(ta.length,tb.length))*100; }
+function teamScore(x,y){ const a=normalize(String(x||'')), b=normalize(String(y||'')); if(!a||!b||a==='n a'||b==='n a')return 0; return Math.max(sim(a,b),wordScore(a,b)); }
+function pairTeams(b1,b2,sa,sb){ sa=sa||'N/A'; sb=sb||'N/A'; if(sa==='N/A'&&sb==='N/A')return{a:'N/A',b:'N/A'}; const fwd=teamScore(b1,sa)+teamScore(b2,sb), rev=teamScore(b1,sb)+teamScore(b2,sa); return rev>fwd?{a:sb,b:sa}:{a:sa,b:sb}; }
+function addUnique(list,value){ const v=String(value||'').trim(); if(!v||v==='N/A')return; const lo=v.toLowerCase(); if(list.some(x=>x.toLowerCase()===lo))return; list.push(v); }
+function joinComps(list){ return list.length?list.join(' & '):'N/A'; }
+
+// ---- validation + duplicates (DFC.hasColumn / readId + dup logic) ----
+function hasColumn(rows,names){ if(!rows||!rows.length)return false; const keys=Object.keys(rows[0]).map(k=>k.toLowerCase().trim()); return names.some(n=>keys.includes(n.toLowerCase().trim())); }
+function readId(row){ return String(row['EventId']||row['eventid']||row['EVENTID']||row['Event Id']||row['event_id']||'').trim(); }
+function indexById(rows){ const map={},seen={},dupes=[]; rows.forEach(r=>{ const id=stripId(readId(r)); if(!id)return; if(seen[id])dupes.push(id); else {seen[id]=true;map[id]=r;} }); return {map,dupes}; }
+
+// ---- CSV safety (DFC.csvSafe) ----
+function csvSafe(val){ const s=String(val==null?'':val); return /^[=+\-@\t\r]/.test(s)?"'"+s:s; }
+
+/* ---- integration harness: mimic DFC status assignment ---- */
+function computeStatus(feedNameForCompare, sourceEventName, bcmFmt, sourceDateTime){
+  const similarity = calcSimilarity(feedNameForCompare, sourceEventName);
+  const p1 = dateNums(bcmFmt), p2 = dateNums(sourceDateTime);
+  let dateOk=false, timeOk=false;
+  if (p1 && p2){
+    const sameDate=(p1.y===p2.y)&&((p1.a===p2.a&&p1.b===p2.b)||(p1.a===p2.b&&p1.b===p2.a));
+    dateOk=sameDate; timeOk=Math.abs((p1.h*60+p1.mi)-(p2.h*60+p2.mi))<=30;
+  } else { dateOk=true; timeOk=true; }
+  const nameOk = similarity >= 75;
+  if (nameOk && dateOk && timeOk) return 'correct';
+  const reasons=[]; if(!nameOk)reasons.push('Event name not matching'); if(!dateOk)reasons.push('Date not matching'); if(!timeOk)reasons.push('Time not matching');
+  return reasons.join(', ');
+}
+
+/* ---- integration harness: mimic PREP league/team build ---- */
+function buildLeagues(events){
+  const map={};
+  events.forEach(e=>{
+    const key=`${e.country||'N/A'}|${e.competition}`;
+    if(!map[key])map[key]={country:e.country||'N/A',competition:e.competition,brComps:[],bgComps:[]};
+    addUnique(map[key].brComps,e.brComp); addUnique(map[key].bgComps,e.bgComp);
+  });
+  return Object.values(map).map(l=>({country:l.country,competition:l.competition,betradar:joinComps(l.brComps),betgenius:joinComps(l.bgComps)}));
+}
+// Single-provider team-row build for one event given its providerInfo + source indexes.
+function buildEventRows(bcmEvent, providerInfo, brById, bgById){
+  const {team1:b1, team2:b2} = splitEvent(bcmEvent);
+  const brId = providerInfo && providerInfo.br ? stripId(providerInfo.br.id) : '';
+  const bgId = providerInfo && providerInfo.bg ? stripId(providerInfo.bg.id) : '';
+  const feedProviderId = brId || bgId || 'N/A';
+  const prefix = String(feedProviderId).charAt(0);
+  const isBR = brId && (prefix==='7' || !bgId);
+  const isBG = bgId && (prefix==='1' || !brId);
+  let brComp='N/A',brT1='N/A',brT2='N/A',bgComp='N/A',bgT1='N/A',bgT2='N/A';
+  if (isBR){ const m=brById[brId]; if(m){ brComp=m.competition||'N/A'; const p=pairTeams(b1,b2,m.home,m.away); brT1=p.a; brT2=p.b; } }
+  else if (isBG){ const m=bgById[bgId]; if(m){ bgComp=m.competition||'N/A'; const p=pairTeams(b1,b2,m.team1,m.team2); bgT1=p.a; bgT2=p.b; } }
+  const rows=[{bcmTeam:b1,brComp,brTeam:brT1,bgComp,bgTeam:bgT1}];
+  if(b2) rows.push({bcmTeam:b2,brComp,brTeam:brT2,bgComp,bgTeam:bgT2});
+  return rows;
+}
+
+/* =====================================================================
+   TEST HARNESS
+   ===================================================================== */
+let groups=[];
+function group(n){const g={name:n,cases:[]};groups.push(g);return g;}
+function eq(g,desc,actual,expected){const ok=JSON.stringify(actual)===JSON.stringify(expected);g.cases.push({ok,desc,detail:ok?'':`expected ${JSON.stringify(expected)}\n     got ${JSON.stringify(actual)}`});}
+function truthy(g,desc,a){g.cases.push({ok:!!a,desc,detail:a?'':`expected truthy, got ${JSON.stringify(a)}`});}
+function approx(g,desc,a,lo,hi){const ok=a>=lo&&a<=hi;g.cases.push({ok,desc,detail:ok?'':`expected ${lo}..${hi}, got ${a}`});}
+
+/* ===== 1. ID stripping & provider routing ===== */
+(()=>{ const g=group('ID stripping & provider routing');
+  eq(g,'strips sr:match: prefix', stripId('sr:match:73576386'), '73576386');
+  eq(g,'strips sr: prefix', stripId('sr:12345'), '12345');
+  eq(g,'plain numeric id unchanged', stripId('73576386'), '73576386');
+  eq(g,'does NOT strip a real id that merely contains letters', stripId('ABC123'), 'ABC123');
+  eq(g,'trims whitespace', stripId('  777  '), '777');
+  eq(g,'7-prefix routes to Betradar', providerOf('73576386'), 'BR');
+  eq(g,'1-prefix routes to Betgenius', providerOf('12345678'), 'BG');
+  eq(g,'unknown prefix flagged (not silently guessed)', providerOf('93576386'), 'UNKNOWN');
+})();
+
+/* ===== 2. Excel serial date parsing ===== */
+(()=>{ const g=group('Excel serial date/time parsing');
+  // 44927 = 2023-01-01 (known Excel serial).
+  const p = excelSerialToParts(44927);
+  eq(g,'serial 44927 → 2023-01-01', [p.y,p.mo,p.d], [2023,1,1]);
+  // 45930.5 → noon.
+  const noon = excelSerialToParts(45930.5);
+  eq(g,'fractional .5 → 12:00 noon', [noon.h,noon.mi], [12,0]);
+  // midnight fraction 0.
+  const mid = excelSerialToParts(45930);
+  eq(g,'no fraction → 00:00 midnight', [mid.h,mid.mi], [0,0]);
+  // BR serial formatter keeps calendar values (no dd/mm swap for serials).
+  eq(g,'formatBetradarDate(serial) outputs mm-dd-YYYY', formatBetradarDate(44927, ''), '01-01-2023 00:00');
+  // BR text date is dd-mm-yyyy → output mm-dd.
+  eq(g,'formatBetradarDate("09-02-2026","14:30") swaps to mm-dd', formatBetradarDate('09-02-2026','14:30'), '02-09-2026 14:30');
+  // Separate Time column overrides embedded time.
+  eq(g,'separate Time column overrides embedded time', formatBetradarDate('09-02-2026 10:00','14:30'), '02-09-2026 14:30');
+  // Single-digit hour.
+  eq(g,'single-digit hour padded', formatBetradarDate('01-01-2026','9:05'), '01-01-2026 09:05');
+  // BG dd-mm-YYYY hh:mm → mm-dd.
+  eq(g,'formatBGDate swaps dd/mm', formatBGDate('09-02-2026 20:15'), '02-09-2026 20:15');
+  eq(g,'formatBGDate(serial) works', formatBGDate(44927), '01-01-2023 00:00');
+  eq(g,'blank date → empty string', formatBGDate(''), '');
+})();
+
+/* ===== 3. Date/time comparison (±30 min, same-date, order-tolerant) ===== */
+(()=>{ const g=group('Date/time comparison — ±30 min & same calendar date');
+  eq(g,'identical datetime → 0 min diff', calcTimeDiff('02-09-2026 14:00','02-09-2026 14:00'), 0);
+  eq(g,'20 min apart, same date → 20', calcTimeDiff('02-09-2026 14:00','02-09-2026 14:20'), 20);
+  eq(g,'dd/mm vs mm/dd tolerated when same date', calcTimeDiff('02-09-2026 14:00','09-02-2026 14:00'), 0);
+  eq(g,'different date → huge diff', calcTimeDiff('02-09-2026 14:00','03-09-2026 14:00'), 999999);
+  eq(g,'different year → huge diff', calcTimeDiff('02-09-2026 14:00','02-09-2025 14:00'), 999999);
+  eq(g,'missing input → -1', calcTimeDiff('', '02-09-2026 14:00'), -1);
+  // The 30-min rule itself:
+  truthy(g,'25 min is within tolerance', calcTimeDiff('02-09-2026 14:00','02-09-2026 14:25') <= 30);
+  truthy(g,'40 min exceeds tolerance', calcTimeDiff('02-09-2026 14:00','02-09-2026 14:40') > 30 && calcTimeDiff('02-09-2026 14:00','02-09-2026 14:40') !== 999999);
+})();
+
+/* ===== 4. Name normalization & similarity (preserve qualifiers) ===== */
+(()=>{ const g=group('Name normalization & similarity');
+  eq(g,'lowercases + strips punctuation', normalize('KAO Melission (Women)!'), 'kao melission women');
+  eq(g,'identical names → 100%', calcSimilarity('Team A - Team B','Team A - Team B'), 100);
+  eq(g,'reversed home/away scores high (split-before-normalize fix)', calcSimilarity('Team A - Team B','Team B vs Team A') >= 95 ? 'high' : 'low', 'high');
+  eq(g,'exact reversed real teams = 100', calcSimilarity('Real Madrid - Barcelona','Barcelona vs Real Madrid'), 100);
+  eq(g,'forward exact real teams = 100', calcSimilarity('Real Madrid - Barcelona','Real Madrid vs Barcelona'), 100);
+  // Qualifiers must keep events distinct — "Women" vs base should NOT be ~identical.
+  truthy(g,'"Women" qualifier keeps events distinct (<100%)', calcSimilarity('Greece - Cyprus','Greece (Women) - Cyprus (Women)') < 100);
+  truthy(g,'U21 qualifier lowers similarity vs senior', calcSimilarity('Club A - Club B','Club A U21 - Club B U21') < 100);
+})();
+
+/* ===== 5. Event splitting (last " - ") ===== */
+(()=>{ const g=group('splitEvent — split on LAST " - "');
+  eq(g,'plain two-team split', splitEvent('KAO Melission - AO Sporting'), {team1:'KAO Melission',team2:'AO Sporting'});
+  eq(g,'(Women) qualifiers split on middle dash', splitEvent('KAO Melission (Women) - AO Sporting (Women)'), {team1:'KAO Melission (Women)',team2:'AO Sporting (Women)'});
+  eq(g,'trailing "- Women" goes to away side (last dash)', splitEvent('Team A - Team B - Women'), {team1:'Team A - Team B',team2:'Women'});
+  eq(g,'"- U21" suffix to away side', splitEvent('Club A - Club B - U21'), {team1:'Club A - Club B',team2:'U21'});
+  eq(g,'hyphenated team name preserved', splitEvent('Al-Ahli - Al-Nasr'), {team1:'Al-Ahli',team2:'Al-Nasr'});
+  eq(g,'no separator → single team', splitEvent('Iran'), {team1:'Iran',team2:''});
+})();
+
+/* ===== 6. Team pairing ===== */
+(()=>{ const g=group('pairTeams — assign after ID verification only');
+  const p = pairTeams('Pratt','Amics Castello','Cb Prat','AB Castello');
+  eq(g,'returns both source teams', [p.a,p.b].sort(), ['AB Castello','Cb Prat'].sort());
+  const na = pairTeams('X','Y','N/A','N/A');
+  eq(g,'both-N/A source → N/A pair', na, {a:'N/A',b:'N/A'});
+  const one = pairTeams('Iran','','Iran','');
+  eq(g,'single team pairs to itself', one.a, 'Iran');
+  // Regression (sr:match:73686776): home-only scoring paired Atlanty Mytischi with
+  // its opponent, because the long opponent name scored 16% against 5.6%.
+  const mhl = pairTeams('Atlanty Mytischi','Amurskie Tigry Khabarovsk','Red Machine Atlant','Amurskie Tigry Khabarovsk');
+  eq(g,'MHL: Atlanty Mytischi -> Red Machine Atlant', mhl, {a:'Red Machine Atlant',b:'Amurskie Tigry Khabarovsk'});
+  const rev = pairTeams('Atlanty Mytischi','Amurskie Tigry Khabarovsk','Amurskie Tigry Khabarovsk','Red Machine Atlant');
+  eq(g,'MHL with provider home/away reversed still pairs correctly', rev, {a:'Red Machine Atlant',b:'Amurskie Tigry Khabarovsk'});
+  const away = pairTeams('Dinamo','Spartak Moscow','Spartak Moskva','HC Dinamo Minsk');
+  eq(g,'swapped provider order with a short BCM name pairs correctly', away, {a:'HC Dinamo Minsk',b:'Spartak Moskva'});
+  const tie = pairTeams('Alpha','Beta','Qqqq','Zzzz');
+  eq(g,'no evidence either way -> provider order kept', tie, {a:'Qqqq',b:'Zzzz'});
+})();
+
+/* ===== 7. addUnique + league aggregation ===== */
+(()=>{ const g=group('League aggregation — combine unique competitions with " & "');
+  let l=[]; addUnique(l,'A'); addUnique(l,'a'); addUnique(l,'B'); addUnique(l,'N/A'); addUnique(l,''); addUnique(l,'  ');
+  eq(g,'addUnique skips N/A/blank/case-dupes', l, ['A','B']);
+  const asian = buildLeagues([
+    {country:'World',competition:'Asian Games - Men',brComp:'Asian Games, Group A',bgComp:'Asian Games'},
+    {country:'World',competition:'Asian Games - Men',brComp:'Asian Games, Group B',bgComp:'Asian Games'},
+  ]);
+  eq(g,'one aggregated league row', asian.length, 1);
+  eq(g,'BR groups combined with " & "', asian[0].betradar, 'Asian Games, Group A & Asian Games, Group B');
+  eq(g,'BG deduped', asian[0].betgenius, 'Asian Games');
+  const casing = buildLeagues([
+    {country:'Greece',competition:'Cup - Women',brComp:'Cup, Women',bgComp:'N/A'},
+    {country:'Greece',competition:'Cup - Women',brComp:'CUP, WOMEN',bgComp:'N/A'},
+  ]);
+  eq(g,'case-insensitive dedupe keeps first casing', casing[0].betradar, 'Cup, Women');
+  const order = buildLeagues([
+    {country:'X',competition:'C',brComp:'Beta',bgComp:'N/A'},
+    {country:'X',competition:'C',brComp:'Alpha',bgComp:'N/A'},
+  ]);
+  eq(g,'first-seen order preserved', order[0].betradar, 'Beta & Alpha');
+})();
+
+/* ===== 8. Validation & duplicate detection ===== */
+(()=>{ const g=group('Validation & duplicate provider IDs');
+  const good=[{'Event Name':'A - B','Feed Provider ID':'711'}];
+  truthy(g,'hasColumn finds Event Name', hasColumn(good,['Event Name','EventName']));
+  truthy(g,'hasColumn finds Feed Provider ID', hasColumn(good,['Feed Provider ID']));
+  truthy(g,'hasColumn false when missing', !hasColumn(good,['Nonexistent Column']));
+  truthy(g,'hasColumn false on empty rows', !hasColumn([], ['Event Name']));
+  const dup = indexById([
+    {EventId:'sr:match:701'},{EventId:'701'},{EventId:'702'}
+  ]);
+  eq(g,'duplicate provider id detected (701 twice after strip)', dup.dupes, ['701']);
+  eq(g,'first occurrence kept deterministically', Object.keys(dup.map).sort(), ['701','702']);
+})();
+
+/* ===== 9. Single-provider enforcement (no cross-provider leakage) ===== */
+(()=>{ const g=group('Single-provider enforcement');
+  const brById = { '73576386': {home:'Cb Prat',away:'AB Castello',competition:'LEB Oro'} };
+  const bgById = { '12345678': {team1:'Iran',team2:'Japan',competition:'Asian Games'} };
+
+  // Betradar event → BR filled, BG N/A.
+  const brRows = buildEventRows('Pratt - Amics Castello', { br:{id:'73576386'}, bg:null }, brById, bgById);
+  eq(g,'BR event: BR competition filled', brRows[0].brComp, 'LEB Oro');
+  eq(g,'BR event: BG competition N/A (no leakage)', brRows[0].bgComp, 'N/A');
+  eq(g,'BR event: BG team N/A', brRows[0].bgTeam, 'N/A');
+
+  // Betgenius event → BG filled, BR N/A.
+  const bgRows = buildEventRows('Iran - Japan', { br:null, bg:{id:'12345678'} }, brById, bgById);
+  eq(g,'BG event: BG competition filled', bgRows[0].bgComp, 'Asian Games');
+  eq(g,'BG event: BR competition N/A (no leakage)', bgRows[0].brComp, 'N/A');
+
+  // ID not found in source → N/A (never guess).
+  const missing = buildEventRows('Ghost - Team', { br:{id:'79999999'}, bg:null }, brById, bgById);
+  eq(g,'missing BR id → N/A, no guessing', [missing[0].brComp, missing[0].brTeam], ['N/A','N/A']);
+})();
+
+/* ===== 10. Integration — DataFeed Check status assignment ===== */
+(()=>{ const g=group('Integration — status assignment');
+  // Correct: names match, same date, within 30 min.
+  eq(g,'Correct when name+date+time all pass',
+     computeStatus('Team A vs Team B','Team A vs Team B','02-09-2026 14:00','02-09-2026 14:10'), 'correct');
+  // Name mismatch only.
+  eq(g,'Event name not matching',
+     computeStatus('Real Madrid vs Barcelona','Chelsea vs Arsenal','02-09-2026 14:00','02-09-2026 14:00'), 'Event name not matching');
+  // Date mismatch only.
+  eq(g,'Date not matching',
+     computeStatus('Team A vs Team B','Team A vs Team B','02-09-2026 14:00','03-09-2026 14:00'), 'Date not matching');
+  // Time mismatch only (45 min).
+  eq(g,'Time not matching',
+     computeStatus('Team A vs Team B','Team A vs Team B','02-09-2026 14:00','02-09-2026 14:45'), 'Time not matching');
+  // Combined date + time.
+  eq(g,'combined mismatch reasons',
+     computeStatus('X vs Y','A vs B','02-09-2026 14:00','05-09-2026 16:00'), 'Event name not matching, Date not matching, Time not matching');
+  // Unparseable dates → treated as pass (name still must match).
+  eq(g,'unparseable dates do not fail a good name',
+     computeStatus('Team A vs Team B','Team A vs Team B','', ''), 'correct');
+})();
+
+/* ===== 11. CSV safety ===== */
+(()=>{ const g=group('CSV formula-injection safety');
+  eq(g,'= prefixed value neutralised', csvSafe('=SUM(A1:A2)'), "'=SUM(A1:A2)");
+  eq(g,'+ prefixed value neutralised', csvSafe('+1234'), "'+1234");
+  eq(g,'- prefixed value neutralised', csvSafe('-cmd'), "'-cmd");
+  eq(g,'@ prefixed value neutralised', csvSafe('@formula'), "'@formula");
+  eq(g,'normal text unchanged', csvSafe('LEB Oro'), 'LEB Oro');
+  eq(g,'empty unchanged', csvSafe(''), '');
+})();
+
+/* ---------- render ---------- */
+let total=0, passed=0;
+const out=document.getElementById('out');
+groups.forEach(g=>{
+  const div=document.createElement('div'); div.className='grp';
+  let html=`<h2>${g.name}</h2>`;
+  g.cases.forEach(c=>{
+    total++; if(c.ok) passed++;
+    html+=`<div class="case"><span class="badge ${c.ok?'pass':'fail'}">${c.ok?'PASS':'FAIL'}</span><div class="desc">${c.desc}${c.detail?`<div class="detail">${c.detail}</div>`:''}</div></div>`;
+  });
+  div.innerHTML=html; out.appendChild(div);
+});
+const s=document.getElementById('summary');
+s.className = passed===total ? 'ok' : 'bad';
+s.textContent = `${passed} / ${total} tests passed` + (passed===total?'  ✓ all green':'  ✗ failures above — see red rows');
+</script>
+</body>
+</html>

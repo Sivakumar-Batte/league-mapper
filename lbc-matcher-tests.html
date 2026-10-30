@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LBC Matcher — Engine Tests</title>
+<style>body{font-family:Consolas,monospace;background:#0b1020;color:#d1d5db;padding:24px;font-size:13px}
+.pass{color:#34d399}.fail{color:#f87171}.head{font-size:16px;color:#a78bfa;margin:14px 0 6px}
+#summary{font-size:15px;font-weight:700;margin:16px 0;padding:10px 14px;border-radius:8px}
+.ok{background:#052e16;color:#34d399}.bad{background:#450a0a;color:#f87171}</style>
+</head>
+<body>
+<h1 style="color:#fff">⚡ LBC Matcher — Engine Test Suite</h1>
+<p>Open this file in a browser. It runs the exact engine functions from lbc-matcher.html against the required scenarios.</p>
+<div id="summary"></div>
+<div id="out"></div>
+<script>
+/* Stub the date-format selector the engine reads. Tests flip DATE_FMT. */
+var DATE_FMT='auto';
+(function(){var real=document.getElementById.bind(document);document.getElementById=function(id){if(id==='dateFormatSelect')return{value:DATE_FMT};return real(id);};})();
+
+/* ===== ENGINE (verbatim copy of the functions in lbc-matcher.html) ===== */
+const STATUS={MATCHED:'MATCHED',AMBIGUOUS:'AMBIGUOUS',NOT_FOUND:'NOT FOUND',MALFORMED:'MALFORMED',UNRECOGNIZED:'UNRECOGNIZED FEED'};
+function normalizeText(s){if(s==null)return'';let r=String(s);try{r=r.normalize('NFKC');}catch(e){}r=r.toLowerCase();try{r=r.normalize('NFD').replace(/[\u0300-\u036f]/g,'');}catch(e){}r=r.replace(/[\u2018\u2019\u02bc\u2032]/g,"'").replace(/[\u201c\u201d]/g,'"').replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/g,'-').replace(/\u00a0/g,' ');r=r.replace(/\s+/g,' ').trim();r=r.replace(/[.,;:]+$/,'').trim();return r;}
+function separatorNormalize(s){return String(s).replace(/(^|\s)(?:vs\.?|v\.?)(\s|$)/gi,'$1vs$2');}
+function normalizeEvent(s){return normalizeText(separatorNormalize(String(s))).replace(/\s+/g,' ').trim();}
+function normalizeLeague(s){return normalizeText(s);}function normalizeSport(s){return normalizeText(s);}
+function normalizeDate(input){if(input==null)return null;const t=String(input).trim();if(!t)return null;const fmt=(document.getElementById('dateFormatSelect')||{}).value||'auto';let m=t.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);if(m)return validDate(+m[1],+m[2],+m[3]);m=t.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);if(m){const a=+m[1],b=+m[2],y=+m[3];if(fmt==='mdy')return validDate(y,a,b);if(fmt==='dmy')return validDate(y,b,a);if(a>12)return validDate(y,b,a);if(b>12)return validDate(y,a,b);return validDate(y,b,a);}return null;}
+function validDate(y,mo,d){if(!(y>=1900&&y<=2999))return null;if(mo<1||mo>12)return null;const dim=[31,28,31,30,31,30,31,31,30,31,30,31];let mx=dim[mo-1];if(mo===2&&((y%4===0&&y%100!==0)||y%400===0))mx=29;if(d<1||d>mx)return null;return y+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0');}
+function normalizeTime(input){if(input==null)return null;const t=String(input).trim();if(!t)return null;const m=t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);if(!m)return null;const h=+m[1],mn=+m[2];if(m[3]!==undefined){const s=+m[3];if(s<0||s>59)return null;}if(h<0||h>23||mn<0||mn>59)return null;return String(h).padStart(2,'0')+':'+String(mn).padStart(2,'0');}
+function splitBgDateTime(s){if(s==null)return null;const t=String(s).trim().replace(/\s+/g,' ');if(!t)return null;const i=t.lastIndexOf(' ');if(i===-1)return null;const dp=t.substring(0,i).trim(),tp=t.substring(i+1).trim();if(!dp||!tp)return null;const d=normalizeDate(dp),ti=normalizeTime(tp);if(!d||!ti)return null;return{date:d,time:ti};}
+function routeFeed(f){const n=normalizeText(f);if(n==='sportradar')return'sportradar';if(n==='genius sports')return'betgenius';return'unrecognized';}
+function checkMalformed(r){if(!r.date||!String(r.date).trim())return'Malformed: Date is missing';if(!r.time||!String(r.time).trim())return'Malformed: Time is missing';if(!r.tickerChannel||!String(r.tickerChannel).trim())return'Malformed: Ticker Channel is missing';if(!r.league||!String(r.league).trim())return'Malformed: League is missing';if(!r.matches||!String(r.matches).trim())return'Malformed: Matches is missing';if(!normalizeDate(r.date))return'Malformed: Date is invalid';if(!normalizeTime(r.time))return'Malformed: Time is invalid';return null;}
+function buildProviderIndex(records,src){const bySlot=new Map(),byDate=new Map();for(const ref of records){let date,time,league,event,sport;if(src==='sportradar'){date=normalizeDate(ref.date);time=normalizeTime(ref.time);league=normalizeLeague(ref.tournament);event=normalizeEvent(ref.event);sport=normalizeSport(ref.sport);}else{const bg=splitBgDateTime(ref.startUtcPlus2);if(bg){date=bg.date;time=bg.time;}else{date=null;time=null;}league=normalizeLeague(ref.competition);event=normalizeEvent(ref.event);sport='';}const cand={eventId:String(ref.eventId||'').trim(),file:ref.__file||'',date,time,league,event,sport};if(date){if(!byDate.has(date))byDate.set(date,[]);byDate.get(date).push(cand);}if(date&&time){const k=date+'|'+time;if(!bySlot.has(k))bySlot.set(k,[]);bySlot.get(k).push(cand);}}return{bySlot,byDate};}
+function deduplicateCandidates(cands){const seen=new Set(),out=[];for(const c of cands){const k=c.eventId+'\u0001'+c.league+'\u0001'+c.event;if(seen.has(k))continue;seen.add(k);out.push(c);}return out;}
+function findExactMatches(norm,slotCands){const out=[];for(const c of slotCands){if(c.league!==norm.league)continue;if(c.event!==norm.event)continue;if(norm.sport&&c.sport&&norm.sport!==c.sport)continue;out.push(c);}return deduplicateCandidates(out);}
+function diagnoseMismatch(norm,index,src){const sameDate=index.byDate.get(norm.date)||[];if(!sameDate.length)return'No matching event found in selected data source';let best=null,bestScore=-1;for(const c of sameDate){const score=(c.time===norm.time?1:0)+(c.league===norm.league?1:0)+(c.event===norm.event?1:0);if(score>bestScore){bestScore=score;best=c;}}const msgs=[];if(best.time!==norm.time)msgs.push('Time is not matching');if(best.league!==norm.league)msgs.push('League is different');if(best.event!==norm.event)msgs.push(src==='sportradar'?'Team names are different':'Event name is different');if(!msgs.length)return'No matching event found in selected data source';return msgs.join('; ');}
+function buildResult(row,patch){const out={...row,eventId:patch.eventId,comments:patch.comments,status:patch.status};out._audit=patch.audit||null;return out;}
+function processRow(row,srIndex,bgIndex){const mErr=checkMalformed(row);if(mErr)return buildResult(row,{eventId:'ERROR',status:STATUS.MALFORMED,comments:mErr});const feed=routeFeed(row.tickerChannel);if(feed==='unrecognized')return buildResult(row,{eventId:'NOT FOUND',status:STATUS.UNRECOGNIZED,comments:'Unrecognized feed value'});const index=feed==='sportradar'?srIndex:bgIndex;if(!index||index.byDate.size===0){const name=feed==='sportradar'?'Sportradar':'BetGenius';return buildResult(row,{eventId:'NOT FOUND',status:STATUS.NOT_FOUND,comments:name+' file not uploaded'});}const norm={date:normalizeDate(row.date),time:normalizeTime(row.time),league:normalizeLeague(row.league),event:normalizeEvent(row.matches),sport:normalizeSport(row.sport)};const slot=index.bySlot.get(norm.date+'|'+norm.time)||[];const matches=findExactMatches(norm,slot);if(matches.length===1){const c=matches[0];return buildResult(row,{eventId:c.eventId,status:STATUS.MATCHED,comments:'Match Found',audit:{provider:feed==='sportradar'?'Sportradar':'BetGenius',file:c.file,eventId:c.eventId}});}if(matches.length>1){const ids=matches.map(c=>c.eventId).join(', ');return buildResult(row,{eventId:'AMBIGUOUS',status:STATUS.AMBIGUOUS,comments:'Multiple matching provider events found: '+ids});}return buildResult(row,{eventId:'NOT FOUND',status:STATUS.NOT_FOUND,comments:diagnoseMismatch(norm,index,feed)});}
+
+/* ===== TESTS ===== */
+var out=document.getElementById('out'),pass=0,fail=0;
+function grp(t){var h=document.createElement('div');h.className='head';h.textContent=t;out.appendChild(h);}
+function eq(name,got,exp){var ok=got===exp;if(ok)pass++;else fail++;var d=document.createElement('div');d.className=ok?'pass':'fail';d.textContent=(ok?'✓ ':'✗ ')+name+(ok?'':'  (expected '+JSON.stringify(exp)+', got '+JSON.stringify(got)+')');out.appendChild(d);}
+
+grp('Normalization');
+eq('lower/space',normalizeText('  Barcelona   FC  '),'barcelona fc');
+eq('diacritics',normalizeText('Köln'),'koln');
+eq('sep vs.',normalizeEvent('Team A vs. Team B'),'team a vs team b');
+eq('sep v',normalizeEvent('Team A v Team B'),'team a vs team b');
+eq('sep v.',normalizeEvent('Team A v. Team B'),'team a vs team b');
+eq('sep VS',normalizeEvent('Team A VS Team B'),'team a vs team b');
+eq('keeps word starting v',normalizeEvent('Vsetin v Karlovy'),'vsetin vs karlovy');
+eq('Barca != Barca B',normalizeEvent('Barcelona')===normalizeEvent('Barcelona B'),false);
+eq('Barca != Barca Women',normalizeEvent('Barcelona')===normalizeEvent('Barcelona Women'),false);
+eq('MU != MU U21',normalizeEvent('Man United')===normalizeEvent('Man United U21'),false);
+
+grp('Dates');
+eq('iso',normalizeDate('2026-08-05'),'2026-08-05');
+DATE_FMT='auto';eq('auto default d/m',normalizeDate('05/08/2026'),'2026-08-05');
+DATE_FMT='mdy';eq('mdy',normalizeDate('05/08/2026'),'2026-05-08');
+DATE_FMT='dmy';eq('dmy',normalizeDate('05/08/2026'),'2026-08-05');
+DATE_FMT='auto';eq('day>12 forces day',normalizeDate('13/08/2026'),'2026-08-13');
+eq('invalid day 32',normalizeDate('32/01/2026'),null);
+eq('invalid month 13',normalizeDate('01/13/2026'),null);
+eq('feb 30',normalizeDate('30/02/2026'),null);
+eq('blank',normalizeDate(''),null);
+eq('garbage',normalizeDate('nope'),null);
+
+grp('Times');
+eq('9:00',normalizeTime('9:00'),'09:00');
+eq('09:00',normalizeTime('09:00'),'09:00');
+eq('09:00:00',normalizeTime('09:00:00'),'09:00');
+eq('25:00 invalid',normalizeTime('25:00'),null);
+eq('12:75 invalid',normalizeTime('12:75'),null);
+eq('blank',normalizeTime(''),null);
+
+grp('BetGenius UTC+2 timestamp');
+eq('split',JSON.stringify(splitBgDateTime('05/08/2026 09:00')),JSON.stringify({date:'2026-08-05',time:'09:00'}));
+eq('midnight',JSON.stringify(splitBgDateTime('05/08/2026 00:00')),JSON.stringify({date:'2026-08-05',time:'00:00'}));
+eq('extra spaces',JSON.stringify(splitBgDateTime('  05/08/2026    9:0  ')),JSON.stringify({date:'2026-08-05',time:'09:00'}));
+eq('no time',splitBgDateTime('05/08/2026'),null);
+eq('malformed',splitBgDateTime('garbage stuff here'),null);
+
+grp('Excel serial coercion (Sportradar numeric cells)');
+function excelSerialToYMD(serial){var whole=Math.floor(serial);var dayCount=whole-1;if(dayCount>=60)dayCount--;var year=1900;var diy=function(y){return(((y%4===0&&y%100!==0)||y%400===0)?366:365);};while(dayCount>=diy(year)){dayCount-=diy(year);year++;}var dim=[31,((year%4===0&&year%100!==0)||year%400===0)?29:28,31,30,31,30,31,31,30,31,30,31];var month=0;while(dayCount>=dim[month]){dayCount-=dim[month];month++;}var day=dayCount+1;return year+'-'+String(month+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');}
+function coerceExcelDate(v){if(typeof v==='number'&&isFinite(v)&&v>=1&&v<60000)return excelSerialToYMD(v);return String(v==null?'':v);}
+function coerceExcelTime(v){if(typeof v==='number'&&isFinite(v)){var frac=v-Math.floor(v);var mins=Math.round(frac*24*60);if(mins>=1440)mins-=1440;var h=Math.floor(mins/60),m=mins%60;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');}return String(v==null?'':v);}
+eq('serial 45658 -> 2025-01-01', coerceExcelDate(45658), '2025-01-01');
+eq('serial 46271 -> 2026-09-06', coerceExcelDate(46271), '2026-09-06');
+eq('serial 46023 -> 2026-01-01', coerceExcelDate(46023), '2026-01-01');
+eq('time 0.0833.. -> 02:00', coerceExcelTime(2/24), '02:00');
+eq('time 0.6666.. -> 16:00', coerceExcelTime(16/24), '16:00');
+eq('time midnight 0 -> 00:00', coerceExcelTime(0), '00:00');
+eq('date passthrough string', coerceExcelDate('06/09/2026'), '06/09/2026');
+eq('time passthrough string', coerceExcelTime('2:00'), '2:00');
+// End-to-end: SR file with numeric date/time cells must MATCH the LBC row
+DATE_FMT='mdy';
+var srNum=buildProviderIndex([{__file:'sr',eventId:'999',date:coerceExcelDate(46271),time:coerceExcelTime(2/24),sport:'Basketball',tournament:'Copa Value',event:'Soles de Mexicali vs. Astros de Jalisco'}],'sportradar');
+var rr=processRow({date:'9/6/2026',time:'2:00',tickerChannel:'Sportradar',league:'Copa Value',matches:'Soles de Mexicali VS. Astros de Jalisco',sport:'Basketball'},srNum,{bySlot:new Map(),byDate:new Map()});
+eq('SR numeric-cell end-to-end MATCHED', rr.status, STATUS.MATCHED);
+eq('SR numeric-cell id 999', rr.eventId, '999');
+DATE_FMT='auto';
+
+grp('Feed routing');
+eq('Sportradar',routeFeed('Sportradar'),'sportradar');
+eq('Genius Sports',routeFeed('Genius Sports'),'betgenius');
+eq('unknown',routeFeed('Foobar'),'unrecognized');
+
+grp('Matching / Safety');
+DATE_FMT='auto';
+var sr=[{__file:'sr1',eventId:'111',date:'05/08/2026',time:'09:00',sport:'Basketball',tournament:'ACB',event:'Team A vs. Team B'},
+        {__file:'sr1',eventId:'222',date:'05/08/2026',time:'09:00',sport:'Basketball',tournament:'ACB',event:'Team C vs. Team D'},
+        {__file:'sr1',eventId:'333',date:'05/08/2026',time:'10:00',sport:'Ice Hockey',tournament:'KHL',event:'Team A vs. Team B'}];
+var bg=[{__file:'bg1',eventId:'B1',competition:'Euroleague',startUtcPlus2:'05/08/2026 20:00',event:'Real v Barca'},
+        {__file:'bg1',eventId:'B2',competition:'Euroleague',startUtcPlus2:'05/08/2026 20:00',event:'Real v Barca'}];
+var srIdx=buildProviderIndex(sr,'sportradar'),bgIdx=buildProviderIndex(bg,'betgenius');
+var r;
+r=processRow({date:'05/08/2026',time:'9:00',tickerChannel:'Sportradar',league:'ACB',matches:'Team A v Team B',sport:'Basketball'},srIdx,bgIdx);
+eq('SR exact MATCHED',r.status,STATUS.MATCHED);eq('SR exact id 111',r.eventId,'111');
+r=processRow({date:'05/08/2026',time:'9:00',tickerChannel:'Sportradar',league:'ACB',matches:'Team A v Team C',sport:'Basketball'},srIdx,bgIdx);
+eq('SR different opponent NOT FOUND (no false positive)',r.status,STATUS.NOT_FOUND);
+r=processRow({date:'05/08/2026',time:'9:00',tickerChannel:'Sportradar',league:'ACB',matches:'Team A v Team B',sport:'Ice Hockey'},srIdx,bgIdx);
+eq('SR sport mismatch blocked',r.status,STATUS.NOT_FOUND);
+r=processRow({date:'05/08/2026',time:'11:00',tickerChannel:'Sportradar',league:'ACB',matches:'Team A v Team B',sport:'Basketball'},srIdx,bgIdx);
+eq('SR wrong time -> only time diagnosis',r.comments,'Time is not matching');
+r=processRow({date:'05/08/2026',time:'20:00',tickerChannel:'Genius Sports',league:'Euroleague',matches:'Real vs Barca'},srIdx,bgIdx);
+eq('BG two different ids -> AMBIGUOUS',r.status,STATUS.AMBIGUOUS);
+eq('BG ambiguous lists both ids',r.comments.indexOf('B1')>-1&&r.comments.indexOf('B2')>-1,true);
+
+grp('Duplicate provider data');
+var bgDup=[{__file:'a',eventId:'X1',competition:'Liga',startUtcPlus2:'06/08/2026 18:00',event:'P v Q'},
+           {__file:'b',eventId:'X1',competition:'Liga',startUtcPlus2:'06/08/2026 18:00',event:'P v Q'}];
+var bgDupIdx=buildProviderIndex(bgDup,'betgenius');
+r=processRow({date:'06/08/2026',time:'18:00',tickerChannel:'Genius Sports',league:'Liga',matches:'P vs Q'},srIdx,bgDupIdx);
+eq('identical dup across files -> MATCHED not ambiguous',r.status,STATUS.MATCHED);eq('dup id X1',r.eventId,'X1');
+
+grp('Malformed / Unrecognized / Missing file');
+r=processRow({date:'',time:'9:00',tickerChannel:'Sportradar',league:'ACB',matches:'A v B'},srIdx,bgIdx);
+eq('missing date MALFORMED',r.status,STATUS.MALFORMED);
+r=processRow({date:'99/99/2026',time:'9:00',tickerChannel:'Sportradar',league:'ACB',matches:'A v B'},srIdx,bgIdx);
+eq('invalid date MALFORMED',r.status,STATUS.MALFORMED);
+r=processRow({date:'05/08/2026',time:'9:00',tickerChannel:'Unknown',league:'ACB',matches:'A v B'},srIdx,bgIdx);
+eq('unknown feed UNRECOGNIZED',r.status,STATUS.UNRECOGNIZED);
+r=processRow({date:'05/08/2026',time:'9:00',tickerChannel:'Sportradar',league:'ACB',matches:'A v B'},null,bgIdx);
+eq('SR file not uploaded NOT FOUND',r.status,STATUS.NOT_FOUND);
+
+grp('Large dataset performance');
+var big=[];for(var i=0;i<50000;i++)big.push({__file:'big',eventId:'E'+i,date:'07/08/2026',time:String(i%24).padStart(2,'0')+':00',sport:'Basketball',tournament:'Lg'+(i%100),event:'H'+i+' vs. A'+i});
+var t0=performance.now();var bigIdx=buildProviderIndex(big,'sportradar');
+var lbc=[];for(var j=0;j<5000;j++)lbc.push({date:'07/08/2026',time:String(j%24).padStart(2,'0')+':00',tickerChannel:'Sportradar',league:'Lg'+(j%100),matches:'H'+j+' v A'+j,sport:'Basketball'});
+var hit=0;for(var k=0;k<lbc.length;k++){if(processRow(lbc[k],bigIdx,bgIdx).status===STATUS.MATCHED)hit++;}
+var t1=performance.now();
+eq('all 5000 matched against 50k index',hit,5000);
+var perf=document.createElement('div');perf.className='pass';perf.textContent='⏱ indexed 50,000 + matched 5,000 rows in '+Math.round(t1-t0)+' ms';out.appendChild(perf);
+
+var sum=document.getElementById('summary');
+sum.className=fail===0?'ok':'bad';
+sum.textContent=(fail===0?'ALL TESTS PASSED — ':'TESTS FAILED — ')+pass+' passed, '+fail+' failed';
+</script>
+</body>
+</html>

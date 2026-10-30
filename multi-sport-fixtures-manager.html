@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Multi-Sport Fixtures Priority League Manager</title>
+<!-- Local SheetJS (xlsx) 0.20.3 for Excel import on the Team Mappings tab. Relative path so the page works offline.
+     If this file is missing or blocked, Excel import is disabled and CSV import keeps working (see vendor/README.txt). -->
+<script src="vendor/xlsx-0.20.3.full.min.js"></script>
 <style>
 :root{--bg:#f4f7fb;--panel:#fff;--text:#172033;--muted:#64748b;--border:#dbe3ef;--accent:#2457d6;--accent2:#1946b4;--soft:#eef4ff;--danger:#b42318;--green:#087443;--amber:#9a5b00;--amber-bg:#fff4dc}
 *{box-sizing:border-box}body{margin:0;padding:22px;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.container{max-width:1400px;margin:auto}h1{margin:0 0 6px;font-size:clamp(1.6rem,3vw,2.2rem)}h2{margin:0;font-size:1.2rem}h3{margin:18px 0 8px;font-size:1.02rem}.intro{color:var(--muted);margin:0 0 16px}.panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:18px;box-shadow:0 4px 18px rgba(23,32,51,.04)}
@@ -40,10 +43,15 @@ details.sport-block[open]>summary{border-bottom:1px solid var(--border);margin-b
 details.sport-block .table-wrap{margin-bottom:12px}
 .notice.ok{border-color:#a7e3c0;background:#e9f8ef;color:#087443}#sharedMappingBar{margin-bottom:14px}#playoffAlerts{margin-top:10px}
 .notices{margin:0 0 14px}.notice{border:1px solid #f0d58a;background:var(--amber-bg);color:#6b4400;border-radius:9px;padding:8px 12px;font-size:13px;margin-bottom:6px}.notice.error{border-color:#f1b5b0;background:#fff0ef;color:var(--danger)}
+.persistence-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-8px 0 14px;font-size:12px;color:var(--muted)}#persistenceStatus[data-state="saving"]{color:var(--amber)}#persistenceStatus[data-state="saved"]{color:var(--green)}#persistenceStatus[data-state="error"]{color:var(--danger)}#newerDataNotice{margin:0}
 .filterbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:14px 0 4px}.filterbar input{max-width:360px}
+.operational-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:9px;margin:0 0 16px}.operational-summary .stat{min-height:70px}.operational-summary .wide{grid-column:span 2}.toolbar-group{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.toolbar-group label{margin:0}.toolbar-group select{width:auto;min-width:130px}.pagination{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.sortable{cursor:pointer}.processing{color:var(--amber)}.accounting{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:12px}.accounting .stat{min-width:0}.freshness[data-state="current"]{color:var(--green)}.freshness[data-state="stale"]{color:var(--amber)}.freshness[data-state="not-run"]{color:var(--muted)}
+#invalidRecords{margin-top:10px}.issue-summary{margin:0 0 6px}.issue-table{min-width:0;font-size:12px}.issue-table th,.issue-table td{padding:5px 7px;white-space:normal;vertical-align:top}.issue-table td:first-child{width:70px;white-space:nowrap}.issue-table td:nth-child(2){font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+#invalidRecords{margin-top:10px}.issue-summary{margin:0 0 6px}.issue-table{min-width:0;font-size:12px}.issue-table th,.issue-table td{padding:5px 7px;white-space:normal;vertical-align:top}.issue-table td:first-child{width:70px;white-space:nowrap}.issue-table td:nth-child(2){font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 .overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
 .dialog{background:#fff;border-radius:12px;padding:20px;max-width:520px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.25)}.dialog p{margin:0 0 14px;white-space:pre-line}.dialog .actions{margin-top:0;justify-content:flex-end}
 .line{display:block}
+.bcm-cell{min-width:150px}.fs-name{font-weight:600}.bcm-name{display:block;color:var(--green);margin-top:2px;font-size:13px}.bcm-name.none{color:var(--muted);font-style:italic}.copy-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:3px}.copy-btn{background:var(--soft);color:#1e40af;border:0;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:650;cursor:pointer}.copy-btn:hover:not(:disabled){background:#dce7ff}.copy-btn:disabled{opacity:.5;cursor:not-allowed}.copy-btn.copied{background:#e9f8ef;color:var(--green)}.copy-btn.copy-error{background:#fff0ef;color:var(--danger)}.copy-both-btn{background:#edf0f5;color:#273449;border:0;border-radius:6px;padding:4px 9px;font-size:12px;font-weight:650;cursor:pointer}.copy-both-btn:hover:not(:disabled){background:#e2e7ef}.copy-both-btn:disabled{opacity:.5;cursor:not-allowed}.copy-both-btn.copied{background:#e9f8ef;color:var(--green)}.copy-both-btn.copy-error{background:#fff0ef;color:var(--danger)}
 .tabbar{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 16px;border-bottom:1px solid var(--border)}
 .tabbar button{background:transparent;color:var(--muted);border-radius:8px 8px 0 0;padding:10px 16px;border-bottom:3px solid transparent;margin-bottom:-1px}
 .tabbar button:hover{color:var(--text);background:var(--soft)}
@@ -58,13 +66,16 @@ details.sport-block .table-wrap{margin-bottom:12px}
 <main class="container">
   <h1>Multi-Sport Fixtures Priority League Manager</h1>
   <p class="intro">Manage Basketball, Ice hockey, Floorball, Waterpolo, Bandy, and Field hockey priority leagues, paste Flashscore fixtures, filter matches, keep a seven-date collection, and compare it against worked matches. Everything is stored in this browser.</p>
+  <div class="persistence-bar" aria-live="polite"><span id="persistenceStatus">Local storage ready</span><div id="newerDataNotice" class="notice hidden"><span id="newerDataText"></span> <button id="reloadNewerDataBtn" type="button" class="small secondary">Reload newer data</button></div></div>
   <div id="appNotices" class="notices" aria-live="polite"></div>
   <div id="sharedMappingBar" class="notice hidden" role="status" aria-live="polite"><span id="sharedMappingText"></span> <button class="small primary hidden" id="useSharedMappingsBtn" type="button">Use the shared list (replaces this browser's mappings)</button></div>
+  <section class="operational-summary" aria-label="Operational summary"><div class="stat"><span class="count">Active mappings</span><strong id="summaryActiveMappings">0</strong></div><div class="stat"><span class="count">Collection fixtures</span><strong id="summaryCollectionFixtures">0</strong></div><div class="stat"><span class="count">New</span><strong id="summaryNew">Unavailable</strong></div><div class="stat"><span class="count">Review</span><strong id="summaryReview">Unavailable</strong></div><div class="stat"><span class="count">Excluded</span><strong id="summaryExcluded">0</strong></div><div class="stat wide"><span class="count">Last successful local save</span><strong id="summaryLocalSave">Unavailable</strong></div><div class="stat wide"><span class="count">Last successful shared sync</span><strong id="summarySharedSync">Unavailable</strong></div></section>
 
   <nav class="tabbar" role="tablist" aria-label="Sections">
     <button type="button" role="tab" id="tabBtn-mappings" data-tab="mappings" aria-selected="false">Mappings</button>
     <button type="button" role="tab" id="tabBtn-fixtures" data-tab="fixtures" aria-selected="true">Fixtures</button>
     <button type="button" role="tab" id="tabBtn-compare" data-tab="compare" aria-selected="false">Compare</button>
+    <button type="button" role="tab" id="tabBtn-teammappings" data-tab="teammappings" aria-selected="false">Team Mappings</button>
   </nav>
 
   <section class="panel mapping-panel" data-tab="mappings">
@@ -82,15 +93,25 @@ details.sport-block .table-wrap{margin-bottom:12px}
     </form>
     <div class="mapping-tools">
       <input id="mappingSearch" type="text" placeholder="Search country or league..." aria-label="Search mappings">
-      <select id="mappingFilter" aria-label="Filter mappings"><option value="all">All mappings</option><option value="active">Active only</option><option value="inactive">Inactive only</option><option value="blank">Blank Flashscore name</option><option value="flagged">Duplicates / shared names</option></select>
+      <select id="mappingSportFilter" aria-label="Filter mappings by sport"><option value="all">All sports</option></select>
+      <select id="mappingCountryFilter" aria-label="Filter mappings by country"><option value="all">All countries</option></select>
+      <select id="mappingFilter" aria-label="Filter mappings by status"><option value="all">All statuses</option><option value="active">Active only</option><option value="inactive">Inactive only</option><option value="blank">Blank Flashscore name</option><option value="flagged">Duplicates / shared names</option></select>
+      <select id="mappingSort" aria-label="Sort mappings"><option value="runtime">Runtime order</option><option value="sport-asc">Sport A–Z</option><option value="country-asc">Country A–Z</option><option value="priority-asc">Priority league A–Z</option><option value="flashscore-asc">Flashscore league A–Z</option><option value="status-asc">Status</option></select>
+      <label for="mappingPageSize">Rows per page</label><select id="mappingPageSize"><option>25</option><option>50</option><option selected>100</option><option value="292">292</option></select>
       <input id="mappingFile" type="file" accept=".csv,.tsv,.txt,.md,text/csv,text/plain" aria-label="Mapping file">
       <button class="secondary" id="importMappingsBtn" type="button">Import Mapping File</button>
       <button class="secondary" id="exportMappingsBtn" type="button">Export Mappings CSV</button>
       <button class="secondary" id="reloadSharedMappingsBtn" type="button">Reload Shared Mappings</button>
       <button class="secondary" id="exportMappingsSqlBtn" type="button">Export Mappings as Supabase SQL</button>
       <button class="neutral" id="resetSportMappingsBtn" type="button">Reset selected sport to default list</button>
-      <button class="danger" id="resetMappingsBtn" type="button">Reset ALL sports…</button>
+      <button class="danger" id="resetMappingsBtn" type="button">Reset ALL sports...</button>
     </div>
+    <div class="toolbar-group" aria-label="Full backup and restore">
+      <button class="secondary" id="exportBackupBtn" type="button">Export Backup (JSON)</button>
+      <input id="restoreBackupFile" type="file" accept=".json,application/json,text/plain" aria-label="Backup file to restore">
+      <button class="secondary" id="restoreBackupBtn" type="button">Restore Backup...</button>
+    </div>    <div class="toolbar-group" aria-label="Bulk mapping actions"><button class="secondary" id="selectVisibleMappingsBtn" type="button">Select visible</button><button class="neutral" id="clearMappingSelectionBtn" type="button">Clear selection</button><button class="primary" id="bulkActivateBtn" type="button">Activate selected...</button><button class="danger" id="bulkDeactivateBtn" type="button">Deactivate selected...</button><span class="count" id="mappingSelectionCount">0 selected</span></div>
+    <div class="pagination" aria-label="Mapping pagination"><button class="neutral small" id="mappingPrevBtn" type="button">Previous</button><span id="mappingPageStatus" class="count">Page 1 of 1</span><button class="neutral small" id="mappingNextBtn" type="button">Next</button></div>
     <div id="mappingMessage" class="message" role="status" aria-live="polite"></div>
     <div id="mappingTables"></div>
       </div>
@@ -104,13 +125,16 @@ details.sport-block .table-wrap{margin-bottom:12px}
       <div><label for="fixtureDate">Fixture date</label><input id="fixtureDate" type="date"></div>
     </div>
     <label for="rawInput">Raw Flashscore fixtures</label>
-    <textarea id="rawInput" spellcheck="false" placeholder="Paste fixtures here, including league headings, country/region headings, match times and team names..."></textarea>
+    <p class="hint" id="pasteInstructions">Copy one Flashscore date at a time. Include each league heading, COUNTRY/REGION heading, time, home team, and away team on separate lines. Do not flatten the paste into one line.</p>
+    <textarea id="rawInput" aria-describedby="pasteInstructions" spellcheck="false" placeholder="Paste fixtures here, including league headings, country/region headings, match times and team names..."></textarea>
     <div class="actions">
       <button class="primary" id="filterBtn" type="button">Parse &amp; Filter</button>
       <button class="secondary" id="sampleBtn" type="button">Load Example Data</button>
       <button class="neutral" id="clearBtn" type="button">Clear Input</button>
     </div>
     <div id="message" class="message" role="status" aria-live="polite"></div>
+    <div id="parseAccounting" class="accounting" aria-label="Fixture processing accounting"><div class="stat"><span class="count">Input nonblank lines</span><strong id="inputLineCount">0</strong></div><div class="stat"><span class="count">Parsed unique fixtures</span><strong id="uniqueFixtureCount">0</strong></div><div class="stat"><span class="count">Matched</span><strong id="accountMatchedCount">0</strong></div><div class="stat"><span class="count">Excluded</span><strong id="accountExcludedCount">0</strong></div><div class="stat"><span class="count">Duplicate source rows</span><strong id="duplicateSourceCount">0</strong></div><div class="stat"><span class="count">Invalid groups</span><strong id="invalidGroupCount">0</strong></div></div>
+    <div id="invalidRecords" class="hint" aria-live="polite"></div>
     <div id="playoffAlerts" class="hidden" aria-live="polite"></div>
   </section>
   <section class="panel" id="collectionPanel" data-tab="compare">
@@ -150,6 +174,7 @@ details.sport-block .table-wrap{margin-bottom:12px}
       <button class="neutral" id="clearWorkedBtn" type="button">Clear Worked Matches</button>
     </div>
     <div id="compareMessage" class="message" role="status" aria-live="polite"></div>
+    <p class="freshness" id="comparisonFreshness" data-state="not-run" role="status">Comparison: not run. Worked draft updated: unavailable.</p>
     <div class="statusline">
       <div class="stat"><span class="count">Collected priority fixtures</span><strong id="collectedFixtureCount">0</strong></div>
       <div class="stat"><span class="count">New matches</span><strong id="newMatchCount">0</strong></div>
@@ -158,9 +183,11 @@ details.sport-block .table-wrap{margin-bottom:12px}
       <div class="stat"><span class="count">Time changed</span><strong id="timeChangedCount">0</strong></div>
       <div class="stat"><span class="count">History Event ID conflicts</span><strong id="conflictCount">0</strong></div>
     </div>
-    <div class="filterbar"><label for="resultFilter" style="margin:0">Filter result tables</label><input id="resultFilter" type="text" placeholder="Team, league, country, sport, Event ID…"></div>
+    <div class="filterbar"><label for="resultFilter" style="margin:0">Filter result tables</label><input id="resultFilter" type="text" placeholder="Team, league, country, sport, Event ID…"><label for="resultGroupFilter" style="margin:0">Group</label><select id="resultGroupFilter"><option value="all">All groups</option><option value="new">New</option><option value="worked">Worked</option><option value="review">Review</option><option value="conflicts">Conflicts</option></select><label for="newResultSort" style="margin:0">Sort new</label><select id="newResultSort"><option value="runtime">Collection order</option><option value="sport">Sport</option><option value="date">Date</option><option value="time">Time</option><option value="country">Country</option><option value="league">League</option><option value="home">Home</option><option value="away">Away</option></select></div>
+    <div class="statusline"><div class="stat"><span class="count">New</span><strong id="compactNewCount">0</strong></div><div class="stat"><span class="count">Worked</span><strong id="compactWorkedCount">0</strong></div><div class="stat"><span class="count">Review (possible + time + conflicts)</span><strong id="compactReviewCount">0</strong></div></div>
     <h3>New Matches</h3>
-    <div class="table-wrap"><table><thead><tr><th>Sport</th><th>Date</th><th>Time</th><th>Country</th><th>League</th><th>Home</th><th>Away</th><th>Event ID</th></tr></thead><tbody id="newMatchesBody"><tr><td colspan="8">Compare your collection to see new matches.</td></tr></tbody></table></div>
+    <div class="filterbar"><label style="margin:0;display:flex;gap:6px;align-items:center;font-weight:650"><input type="checkbox" id="unmappedOnlyFilter" style="width:17px;height:17px"> Show only fixtures with unmapped teams</label><span class="count" id="newMatchesMappingStatus"></span></div>
+    <div class="table-wrap"><table><thead><tr><th>Sport</th><th>Date</th><th>Time</th><th>Country</th><th>League</th><th>Home</th><th>Away</th><th>Event ID</th><th>BCM Home</th><th>BCM Away</th><th>Mapping Status</th></tr></thead><tbody id="newMatchesBody"><tr><td colspan="11">Compare your collection to see new matches.</td></tr></tbody></table></div>
     <h3>Already Worked</h3>
     <div class="table-wrap"><table><thead><tr><th>Fixture</th><th>Worked-history match</th><th>Match type</th></tr></thead><tbody id="alreadyWorkedBody"><tr><td colspan="3">No comparison run yet.</td></tr></tbody></table></div>
     <h3>Time Changed — Review</h3>
@@ -194,13 +221,46 @@ details.sport-block .table-wrap{margin-bottom:12px}
   <section class="panel" data-tab="fixtures">
     <div class="table-head"><h2>6. Excluded Fixtures</h2><span class="count" id="excludedTableCount">0 excluded</span></div>
     <p class="hint">Use this list to spot leagues that need a mapping. Exclusion reasons are shown for troubleshooting.</p>
-    <div class="table-wrap"><table><thead><tr><th>Time</th><th>Country</th><th>Detected League</th><th>Home</th><th>Away</th><th>Reason</th></tr></thead><tbody id="excludedBody"><tr><td colspan="6">No excluded fixtures.</td></tr></tbody></table></div>
+    <div class="filterbar"><label for="excludedFilter" style="margin:0">Filter excluded</label><input id="excludedFilter" type="text" placeholder="Country, league, team, reason…"><label for="excludedCategoryFilter" style="margin:0">Category</label><select id="excludedCategoryFilter"><option value="all">All categories</option></select></div>
+    <div class="table-wrap"><table><thead><tr><th>Time</th><th>Country</th><th>Detected League</th><th>Home</th><th>Away</th><th>Reason</th><th>Category</th></tr></thead><tbody id="excludedBody"><tr><td colspan="7">No excluded fixtures.</td></tr></tbody></table></div>
   </section>
 
   <section class="panel" data-tab="fixtures">
     <div class="subhead"><h2>7. Local Import History</h2><button class="danger small" id="clearHistoryBtn" type="button">Clear History</button></div>
     <p class="hint">Recent processing summaries are saved in this browser only.</p>
-    <div class="table-wrap"><table><thead><tr><th>Processed At</th><th>Sport</th><th>Input Fixtures</th><th>Matched</th><th>Excluded</th></tr></thead><tbody id="historyBody"><tr><td colspan="5">No import history yet.</td></tr></tbody></table></div>
+    <div class="table-wrap"><table><thead><tr><th>Processed At</th><th>Sport</th><th>Input</th><th>Matched</th><th>Excluded</th><th>Date</th><th>Time</th><th>Valid</th><th>Invalid</th><th>Duplicate</th><th>Status</th></tr></thead><tbody id="historyBody"><tr><td colspan="11">No import history yet.</td></tr></tbody></table></div>
+  </section>
+
+  <section class="panel" data-tab="teammappings">
+    <div class="table-head"><h2>Team Mapping Manager</h2><span class="count" id="teamMappingCount">0 team mappings</span></div>
+    <div class="section-note">Map a <b>Flashscore team</b> to a <b>BCM team</b>, scoped by <b>Sport + Country + Flashscore League</b>. These mappings add BCM Home / BCM Away / Mapping Status columns to the New Matches table on the Compare tab. Matching is exact (after trimming, collapsing spaces and ignoring accents/case). Nothing here changes the priority league mappings or the fixture comparison logic.</div>
+    <div class="persistence-bar" aria-live="polite"><span id="teamSharedStatus" class="badge off">Local only - not yet shared to Supabase</span> <span class="count" id="teamLocalSaveStatus"></span></div>
+    <form id="teamMappingForm" class="mapping-form" style="grid-template-columns:.9fr 1fr 1.3fr 1.3fr 1.3fr auto auto">
+      <div><label for="tmSport">Sport</label><select id="tmSport"></select></div>
+      <div><label for="tmCountry">Country</label><input id="tmCountry" type="text" required placeholder="e.g. Australia"></div>
+      <div><label for="tmLeague">Flashscore League</label><input id="tmLeague" type="text" required placeholder="e.g. WNBL Women"></div>
+      <div><label for="tmFsTeam">Flashscore Team</label><input id="tmFsTeam" type="text" required placeholder="e.g. Southside W"></div>
+      <div><label for="tmBcmTeam">BCM Team</label><input id="tmBcmTeam" type="text" required placeholder="e.g. Southside Flyers (Women)"></div>
+      <button class="primary" id="saveTeamMappingBtn" type="submit">Add Mapping</button>
+      <button class="neutral hidden" id="cancelTeamEditBtn" type="button">Cancel edit</button>
+    </form>
+    <div class="mapping-tools">
+      <input id="teamSearch" type="text" placeholder="Search team, league, country..." aria-label="Search team mappings">
+      <select id="teamSportFilter" aria-label="Filter by sport"><option value="all">All sports</option></select>
+      <select id="teamCountryFilter" aria-label="Filter by country"><option value="all">All countries</option></select>
+      <select id="teamLeagueFilter" aria-label="Filter by league"><option value="all">All leagues</option></select>
+      <select id="teamStatusFilter" aria-label="Filter by status"><option value="all">All statuses</option><option value="active">Active only</option><option value="inactive">Inactive only</option></select>
+    </div>
+    <div class="mapping-tools">
+      <input id="teamMappingFile" type="file" accept=".csv,.tsv,.txt,.xlsx,.xls,text/csv,text/plain" aria-label="Team mapping file">
+      <button class="secondary" id="importTeamMappingsBtn" type="button">Import CSV / Excel</button>
+      <button class="secondary" id="exportTeamMappingsCsvBtn" type="button">Export Team Mappings CSV</button>
+      <button class="secondary" id="exportTeamMappingsSqlBtn" type="button">Export Team Mappings as Supabase SQL</button>
+      <button class="secondary" id="reloadSharedTeamMappingsBtn" type="button">Reload Shared Team Mappings</button>
+      <span class="count" id="teamExcelStatus"></span>
+    </div>
+    <div id="teamMappingMessage" class="message" role="status" aria-live="polite"></div>
+    <div class="table-wrap" style="margin-top:10px"><table><thead><tr><th>Sport</th><th>Country</th><th>Flashscore League</th><th>Flashscore Team</th><th>BCM Team</th><th>Active</th><th>Actions</th></tr></thead><tbody id="teamMappingBody"><tr><td colspan="7">No team mappings yet. Add one above or import a CSV / Excel file.</td></tr></tbody></table></div>
   </section>
 </main>
 <script>
@@ -216,7 +276,11 @@ const STORAGE = {
   lastParse: "msfm_last_parse_v2",
   schema: "msfm_schema_version",
   seeded: "msfm_seeded_sports_v1",
-  sharedSync: "msfm_shared_mapping_sync_v1"     // new in v2.2: fingerprint of the last shared list applied
+  sharedSync: "msfm_shared_mapping_sync_v1",    // new in v2.2: fingerprint of the last shared list applied
+  workedDraft: "msfm_worked_history_draft_v1",
+  rawDraft: "msfm_raw_fixture_draft_v1",
+  revision: "msfm_revision_v1",
+  teamMappings: "msfm_team_mappings_v1"   // NEW: Flashscore team -> BCM team mappings (local; shared copy is read-only from Supabase)
 };
 const SCHEMA_VERSION = 2;
 const SPORTS = ["Basketball","Ice hockey","Floorball","Waterpolo","Bandy","Field hockey"];
@@ -224,13 +288,15 @@ const MAX_DATES = 7;
 const MAX_RENDER_ROWS = 2000;
 const columns = ["Sport","Date","Time","Country","Flashscore League Name","Home","Away"];
 const matchedExportColumns = [...columns,"Priority League"];
-const excludedColumns = ["Sport","Date","Time","Country","Detected League","Home","Away","Reason"];
+const excludedColumns = ["Sport","Date","Time","Country","Detected League","Home","Away","Reason","Category"];
+const MAX_INVALID_RECORDS=50;
 let mappings = [];
 let convertedRows = [];
 let excludedRows = [];
 let collectionDays = [];
 let editingId = null;
-let lastParseMeta = null;
+let lastParseMeta = null,lastParseAccounting={inputLines:0,unique:0,matched:0,excluded:0,invalid:0,duplicate:0,invalidRecords:[]};
+let lastLocalSaveAt="";
 const startupNotices = [];
 
 /* Storage backend. Normally the browser's localStorage. The automated test harness opens this file with
@@ -284,20 +350,37 @@ const SEEDS_BY_SPORT = (()=>{
 })();
 function seedRowsFor(sport){return (SEEDS_BY_SPORT[sport]||[]).map(s=>({id:uid(),country:s.country,priorityLeague:s.priorityLeague,flashscoreLeague:s.flashscoreLeague,active:true,sport}));}
 
-/* ---------- storage helpers (never throw into the UI, never overwrite unreadable data silently) ---------- */
-const noticeState = {storage:""};
+/* ---------- durable local persistence ---------- */
+const TEST_MODE=/msfm-test/.test(location.hash);
+const PERSISTED_KEYS=Object.freeze(Object.values(STORAGE));
+const IDB_CONFIG=Object.freeze({name:"msfm_local_persistence",version:1,state:"state",recovery:"recovery",metadata:"metadata"});
+const TAB_ID=Date.now().toString(36)+Math.random().toString(36).slice(2);
+const noticeState={storage:"",idb:""};
+const bootOverrides=Object.create(null);
+let persistenceDb=null,currentRevision=0,persistenceWriteTimer=0,persistenceDirty=false,broadcast=null,persistenceReady=Promise.resolve({pending:true});
+let draftTimer=0;const pendingDraftKinds=new Set();
 function renderNotices(){
   const box=$("appNotices");if(!box)return;box.replaceChildren();
   const add=(t,cls)=>{const d=document.createElement("div");d.className="notice"+(cls?" "+cls:"");d.textContent=t;box.appendChild(d);};
   if(noticeState.storage)add(noticeState.storage,"error");
+  if(noticeState.idb)add(noticeState.idb);
   for(const n of startupNotices)add(n);
 }
-function safeSet(key,value){
-  try{if(!STORE)throw new Error("NoStorage");STORE.setItem(key,value);return true;}
-  catch(e){noticeState.storage="Browser storage is unavailable or full ("+(e&&e.name||"error")+"). Recent changes may NOT persist after a refresh. Export your mappings and collection as CSV now.";renderNotices();return false;}
+function setStorageStatus(state,when){
+  const el=$("persistenceStatus");if(!el)return;
+  el.dataset.state=state;
+  if(state==="saving")el.textContent="Saving…";
+  else if(state==="saved"){const d=when||new Date();lastLocalSaveAt=d.toISOString();el.textContent="Saved locally "+d.toLocaleTimeString();}
+  else if(state==="error")el.textContent="Storage error";
+  else el.textContent="Local storage ready";
+  updateOperationalSummary();
 }
-function readRaw(key){try{return STORE?STORE.getItem(key):null;}catch{return null;}}
-function removeKey(key){try{if(STORE)STORE.removeItem(key);}catch{}}
+function safeSet(key,value){
+  try{if(!STORE)throw new Error("NoStorage");STORE.setItem(key,value);delete bootOverrides[key];return true;}
+  catch(e){noticeState.storage="Browser storage is unavailable or full ("+(e&&e.name||"error")+"). Recent changes may NOT persist after a refresh. Export your mappings and collection as CSV now.";setStorageStatus("error");renderNotices();return false;}
+}
+function readRaw(key){if(Object.prototype.hasOwnProperty.call(bootOverrides,key))return bootOverrides[key];try{return STORE?STORE.getItem(key):null;}catch{return null;}}
+function removeKey(key){bootOverrides[key]=null;try{if(!STORE)throw new Error("NoStorage");STORE.removeItem(key);delete bootOverrides[key];return true;}catch{return false;}}
 function readJSON(key,fallback){
   const raw=readRaw(key);
   if(raw==null||raw==="")return fallback;
@@ -308,6 +391,134 @@ function readJSON(key,fallback){
     return fallback;
   }
 }
+function parseRevision(raw){
+  if(raw==null||raw==="")return 0;
+  try{const v=JSON.parse(raw),n=Number(v&&typeof v==="object"?v.revision:v);return Number.isSafeInteger(n)&&n>=0?n:0;}catch{return 0;}
+}
+function validStoredValue(key,raw){
+  if(raw==null)return false;
+  try{
+    const value=JSON.parse(raw),objects=a=>Array.isArray(a)&&a.every(x=>x&&typeof x==="object"&&!Array.isArray(x));
+    if(key===STORAGE.mappings)return Array.isArray(value)&&value.every(x=>x&&typeof x==="object"&&typeof x.country==="string"&&typeof x.priorityLeague==="string"&&typeof x.flashscoreLeague==="string");
+    if(key===STORAGE.fixtures)return objects(value);
+    if(key===STORAGE.history)return objects(value);
+    if(key===STORAGE.collection)return Array.isArray(value)&&value.every(x=>x&&typeof x==="object"&&(!("matched" in x)||Array.isArray(x.matched))&&(!("excluded" in x)||Array.isArray(x.excluded)));
+    if(key===STORAGE.seeded)return Array.isArray(value)&&value.every(x=>typeof x==="string");
+    if(key===STORAGE.lastParse)return value&&typeof value==="object"&&Array.isArray(value.matched)&&(!("excluded" in value)||Array.isArray(value.excluded));
+    if(key===STORAGE.sharedSync)return value&&typeof value==="object"&&!Array.isArray(value);
+    if(key===STORAGE.rawDraft)return value&&typeof value==="object"&&typeof value.raw==="string"&&typeof value.sport==="string"&&typeof value.dateISO==="string";
+    if(key===STORAGE.workedDraft)return value&&typeof value==="object"&&typeof value.text==="string"&&(!("parsed" in value)||(value.parsed&&Array.isArray(value.parsed.rows)&&Array.isArray(value.parsed.skipped)));
+    if(key===STORAGE.revision){const n=value&&typeof value==="object"?value.revision:value;return Number.isInteger(Number(n))&&Number(n)>=0;}
+    if(key===STORAGE.teamMappings)return Array.isArray(value)&&value.every(x=>x&&typeof x==="object"&&typeof x.sport==="string"&&typeof x.country==="string"&&typeof x.flashscoreLeague==="string"&&typeof x.flashscoreTeam==="string"&&typeof x.bcmTeam==="string");
+    if(key===STORAGE.schema)return Number.isInteger(Number(value))&&Number(value)>=0;
+    return true;
+  }catch{return false;}
+}function snapshotStore(){const data={};for(const key of PERSISTED_KEYS){const raw=readRaw(key);if(raw!=null)data[key]=raw;}return data;}
+function validSnapshot(data){const out={};for(const key of PERSISTED_KEYS)if(key!==STORAGE.revision&&validStoredValue(key,data&&data[key]))out[key]=data[key];return out;}
+/* Pure reconciliation is exposed for deterministic tests. Each key is validated independently, so malformed
+   data from either backend can never replace a valid value from the other backend. */
+function reconcileRecords(localData,idbRecord){
+  const remote=idbRecord&&idbRecord.data&&typeof idbRecord.data==="object"?idbRecord.data:{};
+  const localRevision=parseRevision(localData&&localData[STORAGE.revision]);
+  const idbNumber=Number(idbRecord&&idbRecord.revision),idbRevision=Number.isSafeInteger(idbNumber)&&idbNumber>=0?idbNumber:0;
+  const data={},replaced=[],invalidLocal=[],invalidIdb=[];
+  for(const key of PERSISTED_KEYS){
+    if(key===STORAGE.revision)continue;
+    const lp=localData&&localData[key]!=null,ip=remote[key]!=null;
+    const lv=lp&&validStoredValue(key,localData[key]),iv=ip&&validStoredValue(key,remote[key]);
+    if(lp&&!lv)invalidLocal.push(key);if(ip&&!iv)invalidIdb.push(key);
+    if(idbRevision>localRevision&&iv){data[key]=remote[key];if(!lv||remote[key]!==localData[key])replaced.push(key);}
+    else if(lv)data[key]=localData[key];
+    else if(iv){data[key]=remote[key];replaced.push(key);}
+  }
+  const recovery=replaced.length?{revision:localRevision,data:{...(localData||{})}}:null;
+  return {data,revision:Math.max(localRevision,idbRevision),localRevision,idbRevision,replaced,invalidLocal,invalidIdb,recovery,source:idbRevision>localRevision?"idb":"local"};
+}
+function idbRequest(req){return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error("IndexedDB request failed"));});}
+function openPersistenceDb(){
+  if(TEST_MODE)return Promise.resolve(null);
+  return new Promise((resolve,reject)=>{
+    if(!window.indexedDB){reject(new Error("IndexedDB unavailable"));return;}
+    let done=false;const finish=(fn,v)=>{if(done)return;done=true;clearTimeout(timer);fn(v);};
+    const timer=setTimeout(()=>finish(reject,new Error("IndexedDB open timed out")),2500);
+    let req;try{req=indexedDB.open(IDB_CONFIG.name,IDB_CONFIG.version);}catch(e){finish(reject,e);return;}
+    req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(IDB_CONFIG.state))db.createObjectStore(IDB_CONFIG.state,{keyPath:"id"});if(!db.objectStoreNames.contains(IDB_CONFIG.recovery))db.createObjectStore(IDB_CONFIG.recovery,{keyPath:"id",autoIncrement:true});if(!db.objectStoreNames.contains(IDB_CONFIG.metadata))db.createObjectStore(IDB_CONFIG.metadata,{keyPath:"key"});};
+    req.onsuccess=()=>finish(resolve,req.result);req.onerror=()=>finish(reject,req.error||new Error("IndexedDB open failed"));req.onblocked=()=>finish(reject,new Error("IndexedDB upgrade blocked"));
+  });
+}
+async function readIdbSnapshot(db){if(!db)return null;return idbRequest(db.transaction(IDB_CONFIG.state,"readonly").objectStore(IDB_CONFIG.state).get("current"));}
+function completeTransaction(tx){return new Promise((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=tx.onabort=()=>reject(tx.error||new Error("IndexedDB transaction failed"));});}
+async function writeIdbSnapshot(db,record,recovery){
+  if(!db)return;
+  const names=recovery?[IDB_CONFIG.state,IDB_CONFIG.recovery,IDB_CONFIG.metadata]:[IDB_CONFIG.state,IDB_CONFIG.metadata];
+  const tx=db.transaction(names,"readwrite");
+  if(recovery)tx.objectStore(IDB_CONFIG.recovery).add({createdAt:new Date().toISOString(),reason:"before-local-replacement",record:recovery});
+  tx.objectStore(IDB_CONFIG.state).put({id:"current",schema:1,revision:record.revision,updatedAt:record.updatedAt,data:record.data});
+  tx.objectStore(IDB_CONFIG.metadata).put({key:"schema",value:1,updatedAt:record.updatedAt});
+  tx.objectStore(IDB_CONFIG.metadata).put({key:"revision",value:record.revision,updatedAt:record.updatedAt});
+  await completeTransaction(tx);
+}
+function stateRecord(){return {revision:currentRevision,updatedAt:new Date().toISOString(),data:validSnapshot(snapshotStore())};}
+function noteIdbFailure(){noticeState.idb="Extra recovery storage is unavailable. Your data is still being saved in this browser's Local Storage.";renderNotices();}
+function queueIdbWrite(localOk=true,savedAt=new Date()){
+  if(!persistenceDb)return;
+  clearTimeout(persistenceWriteTimer);persistenceWriteTimer=setTimeout(async()=>{
+    try{
+      await writeIdbSnapshot(persistenceDb,stateRecord());
+      if(!localOk){noticeState.storage="The Local Storage compatibility mirror is unavailable, but your data was saved in browser recovery storage.";setStorageStatus("saved",savedAt);renderNotices();announceRevision({revision:currentRevision,updatedAt:savedAt.toISOString(),tabId:TAB_ID});}
+    }catch{
+      if(localOk)noteIdbFailure();
+      else{noticeState.idb="Browser recovery storage is also unavailable. Export your mappings and collection before closing this page.";setStorageStatus("error");renderNotices();}
+    }
+  },80);
+}
+function announceRevision(meta){try{if(broadcast)broadcast.postMessage(meta);}catch{}}
+function persistValue(key,value){
+  setStorageStatus("saving");
+  const now=new Date(),next=currentRevision+1,meta={revision:next,updatedAt:now.toISOString(),tabId:TAB_ID},metaRaw=JSON.stringify(meta);
+  bootOverrides[key]=value;bootOverrides[STORAGE.revision]=metaRaw;
+  const valueOk=safeSet(key,value),revisionOk=safeSet(STORAGE.revision,metaRaw),ok=valueOk&&revisionOk;
+  currentRevision=next;
+  if(!ok){persistenceDirty=true;queueIdbWrite(false,now);return false;}
+  persistenceDirty=pendingDraftKinds.size>0;setStorageStatus("saved",now);queueIdbWrite(true,now);announceRevision(meta);return true;
+}
+function persistRemove(key){
+  setStorageStatus("saving");
+  const now=new Date(),next=currentRevision+1,meta={revision:next,updatedAt:now.toISOString(),tabId:TAB_ID},metaRaw=JSON.stringify(meta);
+  bootOverrides[key]=null;bootOverrides[STORAGE.revision]=metaRaw;
+  const removed=removeKey(key),revisionOk=safeSet(STORAGE.revision,metaRaw),ok=removed&&revisionOk;
+  currentRevision=next;
+  if(!ok){noticeState.storage="Browser storage is unavailable or full. The change will be retained in recovery storage when available.";persistenceDirty=true;setStorageStatus("error");renderNotices();queueIdbWrite(false,now);return false;}
+  persistenceDirty=false;setStorageStatus("saved",now);queueIdbWrite(true,now);announceRevision(meta);return true;
+}function showNewerData(meta){
+  if(!meta||Number(meta.revision)<=currentRevision||meta.tabId===TAB_ID)return;
+  const box=$("newerDataNotice"),text=$("newerDataText");if(!box||!text)return;
+  text.textContent=persistenceDirty?"Newer saved data is available in another tab. Reload when you have finished editing here.":"Newer saved data is available in another tab.";
+  box.classList.remove("hidden");
+}
+function setupCrossTab(){
+  if(TEST_MODE)return;
+  try{if(typeof BroadcastChannel==="function"){broadcast=new BroadcastChannel("msfm-persistence-v1");broadcast.onmessage=e=>showNewerData(e.data);}}catch{}
+  window.addEventListener("storage",e=>{if(e.key===STORAGE.revision&&e.newValue)try{showNewerData(JSON.parse(e.newValue));}catch{}});
+}
+async function preparePersistence(){
+  currentRevision=parseRevision(readRaw(STORAGE.revision));
+  if(TEST_MODE)return {testMode:true};
+  try{
+    persistenceDb=await openPersistenceDb();
+    const local=snapshotStore(),stored=await readIdbSnapshot(persistenceDb),merged=reconcileRecords(local,stored);
+    if(merged.replaced.length){
+      const recovery={...merged.recovery,updatedAt:new Date().toISOString()};
+      await writeIdbSnapshot(persistenceDb,{revision:merged.revision,updatedAt:new Date().toISOString(),data:merged.data},recovery);
+      for(const key of merged.replaced){bootOverrides[key]=merged.data[key];safeSet(key,merged.data[key]);}
+      safeSet(STORAGE.revision,JSON.stringify({revision:merged.revision,updatedAt:new Date().toISOString(),tabId:TAB_ID}));
+      startupNotices.push("A newer valid browser-database recovery copy was restored before the app loaded. The previous local values were backed up first.");
+    }else if(!stored||merged.localRevision>=merged.idbRevision){
+      await writeIdbSnapshot(persistenceDb,{revision:merged.revision,updatedAt:new Date().toISOString(),data:merged.data});
+    }
+    currentRevision=merged.revision;return merged;
+  }catch(e){persistenceDb=null;noteIdbFailure();return {error:String(e&&e.message||e)};}
+}
 /* Keep a copy of a stored value whose shape is not what the app expects, before anything replaces it. */
 function backupUnrecognised(key){
   const raw=readRaw(key);if(raw==null||raw==="")return;
@@ -315,10 +526,29 @@ function backupUnrecognised(key){
   safeSet(bk,raw);
   startupNotices.push(`Stored data for "${key}" was not in the expected list format. A copy was kept in Local Storage under "${bk}"; nothing was deleted.`);
 }
-function saveMappings(){return safeSet(STORAGE.mappings,JSON.stringify(mappings));}
-function saveCollection(){return safeSet(STORAGE.collection,JSON.stringify(collectionDays));}
+function backupBeforeMappingReplace(reason){
+  const createdAt=new Date().toISOString(),key="msfm_backup_before_"+reason+"_"+Date.now();
+  safeSet(key,JSON.stringify(mappings));
+  if(persistenceDb){
+    try{const tx=persistenceDb.transaction(IDB_CONFIG.recovery,"readwrite");tx.objectStore(IDB_CONFIG.recovery).add({createdAt,reason:"before-"+reason,record:stateRecord()});}
+    catch{noteIdbFailure();}
+  }
+  return key;
+}
+function saveMappings(){const ok=persistValue(STORAGE.mappings,JSON.stringify(mappings));updateOperationalSummary();return ok;}
+function saveCollection(){const ok=persistValue(STORAGE.collection,JSON.stringify(collectionDays));updateOperationalSummary();return ok;}
+function fmtOperationalTime(v){if(!v)return "Unavailable";const d=new Date(v);return Number.isNaN(d.getTime())?"Unavailable":d.toLocaleString();}
+function updateOperationalSummary(){
+  if(!$("summaryActiveMappings"))return;
+  $("summaryActiveMappings").textContent=String(mappings.filter(m=>m.active!==false).length);
+  $("summaryCollectionFixtures").textContent=String(collectionDays.reduce((n,d)=>n+(d.matched?.length||0)+(d.excluded?.length||0),0));
+  $("summaryExcluded").textContent=String(collectionDays.reduce((n,d)=>n+(d.excluded?.length||0),0));
+  const ran=!!comparisonRunAt,review=(comparisonResults.possible?.length||0)+(comparisonResults.timeChanged?.length||0)+(comparisonResults.conflicts?.length||0);
+  $("summaryNew").textContent=ran?String(comparisonResults.newMatches.length):"Unavailable";$("summaryReview").textContent=ran?String(review):"Unavailable";
+  const rev=readJSON(STORAGE.revision,null);$("summaryLocalSave").textContent=fmtOperationalTime(lastLocalSaveAt||(rev&&rev.updatedAt));
+  const sh=sharedMeta();$("summarySharedSync").textContent=fmtOperationalTime(sh&&sh.at);
+}
 function setMessage(id,text,type=""){const el=$(id);if(!el)return;el.textContent=text;el.className="message"+(type?" "+type:"");}
-
 /* ---------- CSV ---------- */
 function escapeCSV(value){
   let s=String(value??"");
@@ -514,13 +744,14 @@ function fillSportSelect(sel,withValue){sel.replaceChildren();for(const s of SPO
 
 /* ---------- mapping tables (one independent table per sport) ---------- */
 const sectionRefs={};
+const selectedMappingIds=new Set();let mappingPage=1;
 function buildMappingSections(){
   const host=$("mappingTables");host.replaceChildren();
   const make=(label,id,open)=>{
     const det=document.createElement("details");det.className="sport-block";if(open)det.open=true;
     const sum=document.createElement("summary");const t=document.createElement("span");t.textContent=label;const c=document.createElement("span");c.className="count";sum.append(t,c);det.appendChild(sum);
     const wrap=document.createElement("div");wrap.className="table-wrap";const table=document.createElement("table");
-    table.innerHTML="<thead><tr><th>Sport</th><th>Country / region</th><th>Priority League</th><th>Flashscore League Name</th><th>Active</th><th>Flags</th><th>Actions</th></tr></thead>";
+    table.innerHTML="<thead><tr><th>Sport</th><th>Country / region</th><th>Priority League</th><th>Flashscore League Name</th><th>Active</th><th>Flags</th><th>Actions</th><th>Select</th></tr></thead>";
     const body=document.createElement("tbody");body.id=id;table.appendChild(body);wrap.appendChild(table);det.appendChild(wrap);host.appendChild(det);
     return {det,body,count:c};
   };
@@ -549,45 +780,37 @@ function mappingStats(){
   }
   return {exact,share};
 }
-function renderMappings(){
-  const query=normalize($("mappingSearch").value),filter=$("mappingFilter").value;
-  const stats=mappingStats();
-  const passes=m=>{
-    if(query&&![m.sport,m.country,m.priorityLeague,m.flashscoreLeague].some(v=>normalize(v).includes(query)))return false;
-    const flags=mappingFlags(m,stats).map(f=>f[0]);
-    if(filter==="active")return m.active!==false;
-    if(filter==="inactive")return m.active===false;
-    if(filter==="blank")return leagueKey(m.flashscoreLeague)==="";
-    if(filter==="flagged")return flags.includes("Duplicate")||flags.includes("Shared name");
-    return true;
-  };
-  const filtering=Boolean(query||filter!=="all");
-  const groups=[...SPORTS.map(s=>({key:s,rows:mappings.filter(m=>canonSport(m.sport)===s)})),{key:"__other",rows:mappings.filter(m=>!canonSport(m.sport))}];
-  for(const g of groups){
-    const ref=sectionRefs[g.key];const shown=g.rows.filter(passes);
-    ref.body.replaceChildren();
-    if(g.key==="__other")ref.det.classList.toggle("hidden",g.rows.length===0);
-    if(!shown.length)emptyRow(ref.body,7,g.rows.length?"No mappings match your search or filter.":"No mappings for this sport.");
-    for(const m of shown){
-      const tr=document.createElement("tr");tr.dataset.mappingId=m.id;
-      for(const val of [m.sport||"(none)",m.country,m.priorityLeague,m.flashscoreLeague||"(blank — no auto-match)"]){const td=document.createElement("td");td.textContent=val;tr.appendChild(td);}
-      const activeTd=document.createElement("td"),check=document.createElement("input");check.type="checkbox";check.checked=m.active!==false;check.setAttribute("aria-label","Mapping active");
-      check.addEventListener("change",()=>{m.active=check.checked;saveMappings();renderMappings();updateSportHint();setMessage("mappingMessage",`${m.sport} mapping "${m.priorityLeague}" (${m.country}) set to ${m.active?"active":"inactive"}.`,"success");});
-      activeTd.appendChild(check);tr.appendChild(activeTd);
-      const flagTd=document.createElement("td");
-      for(const [label,cls,title] of mappingFlags(m,stats)){const b=document.createElement("span");b.className="badge "+cls;b.textContent=label;b.title=title;flagTd.appendChild(b);}
-      tr.appendChild(flagTd);
-      const actions=document.createElement("td"),edit=document.createElement("button"),del=document.createElement("button");
-      edit.type="button";edit.className="secondary small";edit.textContent="Edit";edit.addEventListener("click",()=>startEdit(m.id));
-      del.type="button";del.className="danger small";del.style.marginLeft="5px";del.textContent="Delete";
-      del.addEventListener("click",()=>{if(confirm(`Delete ${m.sport||"unassigned"} mapping "${m.priorityLeague}" (${m.country})? Only this mapping is removed.`)){mappings=mappings.filter(x=>x.id!==m.id);saveMappings();renderMappings();updateSportHint();setMessage("mappingMessage","Mapping deleted.","success");}});
-      actions.append(edit,del);tr.appendChild(actions);ref.body.appendChild(tr);
-    }
-    ref.count.textContent=g.key==="__other"?`${g.rows.length}`:`${shown.length}${filtering?" of "+g.rows.length:""} mapping${g.rows.length===1?"":"s"} · ${g.rows.filter(m=>m.active!==false&&leagueKey(m.flashscoreLeague)).length} usable for matching`;
-    if(filtering&&shown.length)ref.det.open=true;
-  }
-  $("mappingCount").textContent=`${mappings.length} total mappings`;
+function populateMappingCountryFilter(){
+  const sel=$("mappingCountryFilter"),value=sel.value||"all",countries=[...new Set(mappings.map(m=>m.country).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  sel.replaceChildren(new Option("All countries","all"),...countries.map(c=>new Option(c,c)));sel.value=countries.includes(value)?value:"all";
 }
+function mappingView(){
+  const query=normalize($("mappingSearch").value),filter=$("mappingFilter").value,sport=$("mappingSportFilter").value,country=$("mappingCountryFilter").value,sort=$("mappingSort").value,stats=mappingStats();
+  let rows=mappings.map((m,index)=>({m,index})).filter(({m})=>{
+    if(sport!=="all"&&canonSport(m.sport)!==sport)return false;if(country!=="all"&&m.country!==country)return false;
+    if(query&&![m.sport,m.country,m.priorityLeague,m.flashscoreLeague].some(v=>normalize(v).includes(query)))return false;
+    const flags=mappingFlags(m,stats).map(f=>f[0]);if(filter==="active"&&m.active===false)return false;if(filter==="inactive"&&m.active!==false)return false;if(filter==="blank"&&leagueKey(m.flashscoreLeague)!=="")return false;if(filter==="flagged"&&!flags.some(x=>x==="Duplicate"||x==="Shared name"))return false;return true;
+  });
+  const field={"sport-asc":x=>canonSport(x.m.sport),"country-asc":x=>x.m.country,"priority-asc":x=>x.m.priorityLeague,"flashscore-asc":x=>x.m.flashscoreLeague,"status-asc":x=>x.m.active===false?"1":"0"}[sort];
+  if(field)rows.sort((a,b)=>String(field(a)).localeCompare(String(field(b)))||a.index-b.index);return {rows,stats};
+}
+function renderMappings(){
+  populateMappingCountryFilter();const {rows,stats}=mappingView(),size=Math.max(1,+$("mappingPageSize").value||100),pages=Math.max(1,Math.ceil(rows.length/size));mappingPage=Math.min(Math.max(1,mappingPage),pages);
+  const shownEntries=rows.slice((mappingPage-1)*size,mappingPage*size),shownSet=new Set(shownEntries.map(x=>x.m.id)),filtering=rows.length!==mappings.length||$("mappingSort").value!=="runtime";
+  const groups=[...SPORTS.map(key=>({key,all:mappings.filter(m=>canonSport(m.sport)===key)})),{key:"__other",all:mappings.filter(m=>!canonSport(m.sport))}];
+  for(const g of groups){const ref=sectionRefs[g.key],shown=shownEntries.filter(x=>(canonSport(x.m.sport)||"__other")===g.key).map(x=>x.m);ref.body.replaceChildren();if(g.key==="__other")ref.det.classList.toggle("hidden",g.all.length===0);
+    if(!shown.length)emptyRow(ref.body,8,g.all.length?"No mappings on this page match the filters.":"No mappings for this sport.");
+    for(const m of shown){const tr=document.createElement("tr");tr.dataset.mappingId=m.id;for(const val of [m.sport||"(none)",m.country,m.priorityLeague,m.flashscoreLeague||"(blank — no auto-match)"]){const td=document.createElement("td");td.textContent=val;tr.appendChild(td);}
+      const activeTd=document.createElement("td"),check=document.createElement("input");check.type="checkbox";check.checked=m.active!==false;check.setAttribute("aria-label","Mapping active");check.addEventListener("change",()=>{m.active=check.checked;saveMappings();renderMappings();updateSportHint();setMessage("mappingMessage",`${m.sport} mapping "${m.priorityLeague}" (${m.country}) set to ${m.active?"active":"inactive"}.`,"success");});activeTd.appendChild(check);tr.appendChild(activeTd);
+      const flagTd=document.createElement("td");for(const [label,cls,title] of mappingFlags(m,stats)){const b=document.createElement("span");b.className="badge "+cls;b.textContent=label;b.title=title;flagTd.appendChild(b);}tr.appendChild(flagTd);
+      const actions=document.createElement("td"),edit=document.createElement("button"),del=document.createElement("button");edit.type="button";edit.className="secondary small";edit.textContent="Edit";edit.addEventListener("click",()=>startEdit(m.id));del.type="button";del.className="danger small";del.style.marginLeft="5px";del.textContent="Delete";del.addEventListener("click",()=>{if(confirm(`Delete ${m.sport||"unassigned"} mapping "${m.priorityLeague}" (${m.country})? Only this mapping is removed.`)){selectedMappingIds.delete(m.id);mappings=mappings.filter(x=>x.id!==m.id);saveMappings();renderMappings();updateSportHint();setMessage("mappingMessage","Mapping deleted.","success");}});actions.append(edit,del);tr.appendChild(actions);
+      const pickTd=document.createElement("td"),pick=document.createElement("input");pick.type="checkbox";pick.checked=selectedMappingIds.has(m.id);pick.setAttribute("aria-label",`Select ${m.sport} ${m.country} ${m.priorityLeague}`);pick.addEventListener("change",()=>{pick.checked?selectedMappingIds.add(m.id):selectedMappingIds.delete(m.id);updateMappingSelection();});pickTd.appendChild(pick);tr.appendChild(pickTd);ref.body.appendChild(tr);}
+    ref.count.textContent=`${shown.length}${filtering?" on page / "+g.all.length:""} mapping${g.all.length===1?"":"s"} · ${g.all.filter(m=>m.active!==false&&leagueKey(m.flashscoreLeague)).length} usable for matching`;if(filtering&&shown.length)ref.det.open=true;}
+  $("mappingCount").textContent=`${mappings.length} total mappings`;$("mappingPageStatus").textContent=`Page ${mappingPage} of ${pages} · ${rows.length} filtered`;$("mappingPrevBtn").disabled=mappingPage<=1;$("mappingNextBtn").disabled=mappingPage>=pages;updateMappingSelection();
+}
+function updateMappingSelection(){$("mappingSelectionCount").textContent=`${selectedMappingIds.size} selected`;}
+function bulkSetMappings(active){const ids=[...selectedMappingIds].filter(id=>mappings.some(m=>m.id===id));if(!ids.length){setMessage("mappingMessage","Select at least one mapping first.","error");return;}if(!confirm(`${active?"Activate":"Deactivate"} ${ids.length} selected mapping(s)?`))return;for(const m of mappings)if(selectedMappingIds.has(m.id))m.active=active;saveMappings();renderMappings();updateSportHint();setMessage("mappingMessage",`${ids.length} mapping(s) ${active?"activated":"deactivated"}.`,"success");}
+
 function updateSportHint(){
   const sp=$("sport").value;const rows=mappings.filter(m=>canonSport(m.sport)===sp);
   const usable=rows.filter(m=>m.active!==false&&leagueKey(m.flashscoreLeague)).length;
@@ -602,40 +825,164 @@ function startEdit(id){
 }
 function activeFlag(v){const s=normalize(v);if(["false","0","no","n","inactive","off"].includes(s))return false;return true;}
 function importMappingCSV(text,defaultSport){
-  const records=parseCSV(text);if(records.length<2)throw new Error("File has no mapping rows.");
-  const headers=records[0].map(h=>String(h).replace(/^\uFEFF/,"").trim());
-  const countryI=headerIndex(headers,["country","region","country region","country / region"]);
-  const priorityI=headerIndex(headers,["priority league","priorityleague"]);
-  const flashI=headerIndex(headers,["flashscore league name","flashscore league","flashscoreleague name","flashscore"]);
-  const sportI=headerIndex(headers,["sport","sport name"]);
-  const activeI=headerIndex(headers,["active","status","enabled"]);
+  const records=parseCSV(text);if(records.length<2)throw new Error("File has no mapping rows.");const headers=records[0].map(h=>String(h).replace(/^\uFEFF/,"").trim());
+  const countryI=headerIndex(headers,["country","region","country region","country / region"]),priorityI=headerIndex(headers,["priority league","priorityleague"]),flashI=headerIndex(headers,["flashscore league name","flashscore league","flashscoreleague name","flashscore"]),sportI=headerIndex(headers,["sport","sport name"]),activeI=headerIndex(headers,["active","status","enabled"]);
   if(countryI<0||priorityI<0||flashI<0)throw new Error("Required columns: Country, Priority League, Flashscore League Name.");
-  const imported=[],skipped=[];
-  for(const r of records.slice(1)){
-    const country=String(r[countryI]??"").trim(),priorityLeague=String(r[priorityI]??"").trim(),flashscoreLeague=String(r[flashI]??"").trim();
-    if(!country||!priorityLeague)continue;
-    let sport=defaultSport;
-    if(sportI>=0){const raw=String(r[sportI]??"").trim();sport=raw?canonSport(raw):defaultSport;if(!sport){skipped.push(`${raw} / ${country} / ${priorityLeague}`);continue;}}
-    imported.push({id:uid(),sport,country,priorityLeague,flashscoreLeague,active:activeI>=0?activeFlag(r[activeI]):true});
+  const imported=[],skipped=[],duplicates=[],seen=new Map();for(let i=1;i<records.length;i++){const r=records[i],row=i+1,country=String(r[countryI]??"").trim(),priorityLeague=String(r[priorityI]??"").trim(),flashscoreLeague=String(r[flashI]??"").trim();
+    if(!country||!priorityLeague){skipped.push({row,reason:[!country?"Country is blank":"",!priorityLeague?"Priority League is blank":""].filter(Boolean).join("; "),text:r.join(" | ")});continue;}
+    let sport=defaultSport;if(sportI>=0){const raw=String(r[sportI]??"").trim();sport=raw?canonSport(raw):defaultSport;if(!sport){skipped.push({row,reason:`Sport "${raw}" is not supported`,text:r.join(" | ")});continue;}}
+    const item={id:uid(),sport,country,priorityLeague,flashscoreLeague,active:activeI>=0?activeFlag(r[activeI]):true,rowNo:row},key=[sport,countryKey(country),leagueKey(priorityLeague)].join("|");
+    if(seen.has(key)){duplicates.push({row,firstRow:seen.get(key).rowNo,reason:"Duplicate sport + country + priority league in import",item});continue;}seen.set(key,item);imported.push(item);
   }
-  if(!imported.length)throw new Error("No valid mappings found. Country and Priority League are required"+(skipped.length?`, and the Sport value must be one of: ${SPORTS.join(", ")}.`:"."));
-  return {imported,skipped,hasSport:sportI>=0};
+  if(!imported.length)throw new Error("No valid mappings found. Review the reported row numbers and reasons.");
+  const conflicts=imported.filter(inc=>{const ex=mappings.find(m=>mergeKey(m)===mergeKey(inc));return ex&&(ex.flashscoreLeague!==inc.flashscoreLeague||ex.active!==inc.active);}).map(inc=>({row:inc.rowNo,key:mergeKey(inc),local:mappings.find(m=>mergeKey(m)===mergeKey(inc)),incoming:inc}));
+  return {imported,skipped,duplicates,conflicts,hasSport:sportI>=0,totalRows:records.length-1};
 }
 function mergeKey(m){return canonSport(m.sport)+"|"+countryKey(m.country)+"|"+leagueKey(m.priorityLeague);}
-function applyImport(incoming,mode){
-  let added=0,updated=0,replacedSports=[];
-  if(mode==="replace"){
-    const sports=new Set(incoming.map(m=>m.sport));replacedSports=[...sports];
-    mappings=[...mappings.filter(m=>!sports.has(canonSport(m.sport))),...incoming];added=incoming.length;
-  } else {
-    const index=new Map(mappings.map(m=>[mergeKey(m),m]));
-    for(const inc of incoming){
-      const ex=index.get(mergeKey(inc));
-      if(ex){ex.flashscoreLeague=inc.flashscoreLeague;ex.active=inc.active;updated++;}
-      else{mappings.push(inc);index.set(mergeKey(inc),inc);added++;}
-    }
+function applyImport(incoming,mode,conflictPolicy="use-import"){
+  let added=0,updated=0,keptLocal=0,replacedSports=[];if(mode==="replace"){backupBeforeMappingReplace("mapping-import");const sports=new Set(incoming.map(m=>m.sport));replacedSports=[...sports];mappings=[...mappings.filter(m=>!sports.has(canonSport(m.sport))),...incoming.map(({rowNo,...m})=>m)];added=incoming.length;}
+  else{const index=new Map(mappings.map(m=>[mergeKey(m),m]));for(const inc0 of incoming){const {rowNo,...inc}=inc0,ex=index.get(mergeKey(inc));if(ex){const differs=ex.flashscoreLeague!==inc.flashscoreLeague||ex.active!==inc.active;if(differs&&conflictPolicy==="keep-local"){keptLocal++;continue;}ex.flashscoreLeague=inc.flashscoreLeague;ex.active=inc.active;updated++;}else{mappings.push(inc);index.set(mergeKey(inc),inc);added++;}}}
+  return {added,updated,keptLocal,replacedSports};
+}
+/* ---------- full local backup & restore (local-only; never touches Supabase) ----------
+   A backup is a versioned JSON document containing a parsed copy of every STORAGE value this app
+   persists in this browser, EXCEPT the internal revision counter (which is a device-local bookkeeping
+   value, not user data). Restore validates every key independently with the same validStoredValue()
+   rules used by the persistence layer, so a malformed backup can never overwrite good data. */
+const BACKUP_FORMAT_VERSION=1;
+const APP_VERSION="2.2";
+/* Keys included in a backup: everything that is persisted, minus the revision bookkeeping value. */
+function backupKeys(){return PERSISTED_KEYS.filter(k=>k!==STORAGE.revision);}
+/* Build the in-memory backup object from whatever is currently stored. Uses validSnapshot() so only
+   values that pass validation are included; unreadable/garbage values are simply omitted. */
+function buildBackup(){
+  const snapshot=validSnapshot(snapshotStore()),data={};
+  for(const key of backupKeys()){
+    if(snapshot[key]==null)continue;
+    try{data[key]=JSON.parse(snapshot[key]);}catch{/* snapshot already validated as JSON; skip if somehow not */}
   }
-  return {added,updated,replacedSports};
+  return {formatVersion:BACKUP_FORMAT_VERSION,appVersion:APP_VERSION,schemaVersion:SCHEMA_VERSION,createdAt:new Date().toISOString(),data};
+}
+function serializeBackup(backup){return JSON.stringify(backup,null,2);}
+/* Parse and validate a backup document from text. Throws Error with a human message on any problem.
+   Returns {backup, keys, mappingCount, collectionCount, duplicateKeys, unsupportedVersion:false}. */
+function parseBackupText(text){
+  let doc;
+  try{doc=JSON.parse(String(text??""));}catch{throw new Error("This file is not valid JSON, so it is not a backup file.");}
+  if(!doc||typeof doc!=="object"||Array.isArray(doc))throw new Error("The file does not contain a backup object.");
+  const fv=Number(doc.formatVersion);
+  if(!Number.isInteger(fv)||fv<1)throw new Error("The file is missing a valid backup format version.");
+  if(fv>BACKUP_FORMAT_VERSION)throw new Error(`This backup was made by a newer version (format ${fv}). This page understands up to format ${BACKUP_FORMAT_VERSION}. Update the page, then try again.`);
+  if(!doc.data||typeof doc.data!=="object"||Array.isArray(doc.data))throw new Error("The backup has no data section.");
+  const keys=[],invalid=[];
+  for(const key of backupKeys()){
+    if(!Object.prototype.hasOwnProperty.call(doc.data,key))continue;
+    let raw;try{raw=JSON.stringify(doc.data[key]);}catch{invalid.push(key);continue;}
+    if(validStoredValue(key,raw))keys.push(key);else invalid.push(key);
+  }
+  if(!keys.length)throw new Error("The backup contains no recognisable data for this app.");
+  const mappingsVal=keys.includes(STORAGE.mappings)?doc.data[STORAGE.mappings]:[];
+  const mappingCount=Array.isArray(mappingsVal)?mappingsVal.length:0;
+  const collectionVal=keys.includes(STORAGE.collection)?doc.data[STORAGE.collection]:[];
+  const collectionCount=Array.isArray(collectionVal)?collectionVal.length:0;
+  const duplicateKeys=Array.isArray(mappingsVal)?backupDuplicateKeys(mappingsVal):[];
+  return {backup:doc,keys,invalidKeys:invalid,mappingCount,collectionCount,duplicateKeys};
+}
+/* Duplicate business keys (sport|country|priority league) inside a set of mappings. */
+function backupDuplicateKeys(list){
+  const seen=new Map(),dups=[];
+  for(const m of (Array.isArray(list)?list:[])){
+    if(!m||typeof m!=="object")continue;
+    const k=mergeKey(m);
+    if(seen.has(k)){if(!dups.includes(k))dups.push(k);}else seen.set(k,m);
+  }
+  return dups;
+}
+/* Count how many backup mapping rows would be ADDED vs would UPDATE an existing local mapping (merge mode). */
+function backupMergePreview(list){
+  const index=new Map(mappings.map(m=>[mergeKey(m),m]));let added=0,conflicts=0,same=0;
+  for(const m of (Array.isArray(list)?list:[])){
+    if(!m||typeof m!=="object")continue;
+    const ex=index.get(mergeKey(m));
+    if(!ex){added++;continue;}
+    if(ex.flashscoreLeague!==String(m.flashscoreLeague??"")||(ex.active!==false)!==(m.active!==false))conflicts++;else same++;
+  }
+  return {added,conflicts,same};
+}
+/* Apply a validated backup to storage. mode is "merge" (mappings merge by business key, every other key
+   is only filled in if MISSING locally) or "replace" (every key in the backup overwrites local).
+   Always takes a recovery snapshot first, writes through the normal persist functions, then reads the
+   values back and rolls back from the snapshot if verification fails. Returns a result summary.
+   conflictPolicy applies to merge conflicts only ("use-import" | "keep-local"). */
+function restoreFromBackup(parsed,mode,conflictPolicy="use-import"){
+  const keys=parsed.keys,data=parsed.backup.data;
+  // 1) Recovery snapshot of current state (Local Storage key + IndexedDB recovery store if available).
+  const recoveryKey=backupBeforeMappingReplace("restore");
+  const before={};for(const key of PERSISTED_KEYS)before[key]=readRaw(key);
+  const result={mode,mappingsAdded:0,mappingsUpdated:0,mappingsKeptLocal:0,keysReplaced:[],keysFilled:[],recoveryKey};
+  try{
+    if(mode==="replace"){
+      for(const key of keys){
+        if(key===STORAGE.mappings){
+          mappings=(Array.isArray(data[key])?data[key]:[]).map(m=>({id:(typeof m.id==="string"&&m.id)?m.id:uid(),sport:canonSport(m.sport)||(m.sport?String(m.sport).trim():"Basketball"),country:String(m.country??""),priorityLeague:String(m.priorityLeague??""),flashscoreLeague:String(m.flashscoreLeague??""),active:m.active!==false}));
+          if(!persistValue(STORAGE.mappings,JSON.stringify(mappings))&&!persistenceDb)throw new Error("durable write failed: mappings could not be saved");
+        } else if(key===STORAGE.collection){
+          collectionDays=Array.isArray(data[key])?data[key]:[];
+          persistValue(STORAGE.collection,JSON.stringify(collectionDays));
+        } else {
+          persistValue(key,JSON.stringify(data[key]));
+        }
+        result.keysReplaced.push(key);
+      }
+    } else { // merge
+      // Mappings: merge by business key using the same semantics as applyImport merge.
+      if(keys.includes(STORAGE.mappings)){
+        const incoming=(Array.isArray(data[STORAGE.mappings])?data[STORAGE.mappings]:[]).map(m=>({sport:canonSport(m.sport)||(m.sport?String(m.sport).trim():"Basketball"),country:String(m.country??""),priorityLeague:String(m.priorityLeague??""),flashscoreLeague:String(m.flashscoreLeague??""),active:m.active!==false}));
+        const index=new Map(mappings.map(m=>[mergeKey(m),m]));
+        for(const inc of incoming){
+          const ex=index.get(mergeKey(inc));
+          if(ex){
+            const differs=ex.flashscoreLeague!==inc.flashscoreLeague||(ex.active!==false)!==(inc.active!==false);
+            if(differs&&conflictPolicy==="keep-local"){result.mappingsKeptLocal++;continue;}
+            if(differs){ex.flashscoreLeague=inc.flashscoreLeague;ex.active=inc.active;result.mappingsUpdated++;}
+          } else {const row={id:uid(),...inc};mappings.push(row);index.set(mergeKey(row),row);result.mappingsAdded++;}
+        }
+        if(!persistValue(STORAGE.mappings,JSON.stringify(mappings))&&!persistenceDb)throw new Error("durable write failed: mappings could not be saved");
+      }
+      // Every other key: only fill in if there is NO local value, so merge never clobbers unrelated data.
+      for(const key of keys){
+        if(key===STORAGE.mappings)continue;
+        if(readRaw(key)!=null&&readRaw(key)!=="")continue;
+        if(key===STORAGE.collection)collectionDays=Array.isArray(data[key])?data[key]:[];
+        persistValue(key,JSON.stringify(data[key]));
+        result.keysFilled.push(key);
+      }
+    }
+    // 2) Verify: read mappings back and confirm the stored value is valid and matches memory.
+    const storedRaw=readRaw(STORAGE.mappings);
+    if(keys.includes(STORAGE.mappings)){
+      if(!validStoredValue(STORAGE.mappings,storedRaw))throw new Error("verification failed: mappings did not read back as valid");
+      if(JSON.parse(storedRaw).length!==mappings.length)throw new Error("verification failed: mapping count mismatch after write");
+    }
+    return result;
+  }catch(err){
+    // 3) Roll back every persisted key to the pre-restore snapshot.
+    for(const key of PERSISTED_KEYS){
+      const v=before[key];
+      if(v==null)persistRemove(key);else persistValue(key,v);
+    }
+    mappings=readJSON(STORAGE.mappings,[]);
+    collectionDays=readJSON(STORAGE.collection,[]);
+    const e=new Error("Restore was cancelled and your previous data was put back. "+(err&&err.message?err.message:""));
+    e.rolledBack=true;throw e;
+  }
+}
+/* Re-read state from storage and refresh every view after a restore. */
+function reloadFromStorage(){
+  mappings=readJSON(STORAGE.mappings,[]);
+  collectionDays=readJSON(STORAGE.collection,[]);
+  loadTeamMappings();renderTeamMappings();
+  renderMappings();updateSportHint();renderHistory();renderCollection();updateComparisonFreshness();updateOperationalSummary();
 }
 function bindMappingEvents(){
   $("mappingForm").addEventListener("submit",e=>{
@@ -651,20 +998,23 @@ function bindMappingEvents(){
     setMessage("mappingMessage",`${sport} mapping ${wasEditing?"updated":"added"}.${flashscoreLeague?"":" Blank Flashscore name: it will not match fixtures until you fill it in."}`,"success");
   });
   $("cancelEditBtn").addEventListener("click",()=>{resetMappingForm();setMessage("mappingMessage","Edit cancelled.");});
-  $("mappingSearch").addEventListener("input",renderMappings);
-  $("mappingFilter").addEventListener("change",renderMappings);
+  const resetMapPage=()=>{mappingPage=1;renderMappings();};
+  $("mappingSearch").addEventListener("input",resetMapPage);$("mappingFilter").addEventListener("change",resetMapPage);$("mappingSportFilter").addEventListener("change",resetMapPage);$("mappingCountryFilter").addEventListener("change",resetMapPage);$("mappingSort").addEventListener("change",resetMapPage);$("mappingPageSize").addEventListener("change",resetMapPage);
+  $("mappingPrevBtn").addEventListener("click",()=>{mappingPage--;renderMappings();});$("mappingNextBtn").addEventListener("click",()=>{mappingPage++;renderMappings();});
+  $("selectVisibleMappingsBtn").addEventListener("click",()=>{for(const ref of Object.values(sectionRefs))for(const tr of ref.body.rows)if(tr.dataset.mappingId)selectedMappingIds.add(tr.dataset.mappingId);renderMappings();});$("clearMappingSelectionBtn").addEventListener("click",()=>{selectedMappingIds.clear();renderMappings();});$("bulkActivateBtn").addEventListener("click",()=>bulkSetMappings(true));$("bulkDeactivateBtn").addEventListener("click",()=>bulkSetMappings(false));
   $("importMappingsBtn").addEventListener("click",async()=>{
     const file=$("mappingFile").files[0];if(!file){setMessage("mappingMessage","Choose a CSV, TSV, TXT, or Markdown mapping file first.","error");return;}
     try{
       const defaultSport=$("mapSport").value;
-      const {imported,skipped,hasSport}=importMappingCSV(await file.text(),defaultSport);
-      const sports=[...new Set(imported.map(m=>m.sport))];
-      const choice=await askChoice(`Import ${imported.length} mapping(s) for: ${sports.join(", ")}.\n\nReplace: removes the existing mappings of ONLY these sports and uses the file's rows. Other sports are untouched.\nMerge: updates matching sport + country + priority league entries and adds new ones.`,[{label:"Merge",value:"merge",cls:"primary"},{label:"Replace these sports",value:"replace",cls:"danger"},{label:"Cancel",value:null,cls:"neutral"}]);
+      const preview=importMappingCSV(await file.text(),defaultSport),{imported,skipped,duplicates,conflicts,hasSport}=preview;
+      const sports=[...new Set(imported.map(m=>m.sport))],issues=[...skipped,...duplicates];
+      const detail=issues.slice(0,8).map(x=>`Row ${x.row}: ${x.reason}`).join("\n");
+      const choice=await askChoice(`Preview ${preview.totalRows} data row(s): ${imported.length} valid unique; ${skipped.length} invalid; ${duplicates.length} duplicate; ${conflicts.length} merge conflict(s). Sports: ${sports.join(", ")}.${detail?"\n\n"+detail:""}\n\nMerge keeps all sports and resolves matching business keys. Replace removes ONLY the listed sports.`,[{label:"Merge",value:"merge",cls:"primary"},{label:"Replace these sports",value:"replace",cls:"danger"},{label:"Cancel",value:null,cls:"neutral"}]);
       if(!choice){setMessage("mappingMessage","Import cancelled. Nothing was changed.");return;}
-      const r=applyImport(imported,choice);
-      saveMappings();renderMappings();updateSportHint();$("mappingFile").value="";
-      const noSport=hasSport?"":` No Sport column found, so all rows were assigned to ${defaultSport}.`;
-      setMessage("mappingMessage",`${imported.length} mapping(s) read from ${file.name}: ${r.added} added, ${r.updated} updated${r.replacedSports.length?`; existing mappings replaced for ${r.replacedSports.join(", ")} only`:""}.${noSport}${skipped.length?` Skipped ${skipped.length} row(s) with an unrecognised sport.`:""}`,skipped.length?"warn":"success");
+      let policy="use-import";if(choice==="merge"&&conflicts.length){policy=await askChoice(`${conflicts.length} merge conflict(s) have a different Flashscore name or status. Choose one policy for all conflicts.`,[{label:"Keep local values",value:"keep-local",cls:"neutral"},{label:"Use import values",value:"use-import",cls:"primary"},{label:"Cancel import",value:null,cls:"danger"}]);if(!policy){setMessage("mappingMessage","Import cancelled. Nothing was changed.");return;}}
+      if(choice==="replace"&&!confirm(`Replace all mappings for ${sports.join(", ")} with ${imported.length} validated import rows? A backup will be kept.`)){setMessage("mappingMessage","Import cancelled. Nothing was changed.");return;}
+      const r=applyImport(imported,choice,policy);saveMappings();renderMappings();updateSportHint();$("mappingFile").value="";const noSport=hasSport?"":` No Sport column found, so all rows were assigned to ${defaultSport}.`;
+      setMessage("mappingMessage",`${imported.length} valid unique mapping(s) read from ${file.name}: ${r.added} added, ${r.updated} updated, ${r.keptLocal} conflicts kept local${r.replacedSports.length?`; existing mappings replaced for ${r.replacedSports.join(", ")} only`:""}.${noSport}${issues.length?` ${issues.length} row(s) skipped; preview listed row numbers and reasons.`:""}`,issues.length?"warn":"success");
     }catch(err){setMessage("mappingMessage",err.message||"Could not import the file.","error");}
   });
   $("reloadSharedMappingsBtn").addEventListener("click",()=>{syncSharedMappings();});
@@ -680,9 +1030,53 @@ function bindMappingEvents(){
     setMessage("mappingMessage",`Exported ${mappings.length} mappings as Supabase SQL. Run it in the Supabase SQL Editor to make this list the shared list.`,"success");
   });
   $("exportMappingsBtn").addEventListener("click",()=>downloadCSV("priority_league_mappings.csv",["Sport","Country","Priority League","Flashscore League Name","Active"],mappings.map(m=>({"Sport":m.sport,"Country":m.country,"Priority League":m.priorityLeague,"Flashscore League Name":m.flashscoreLeague,"Active":m.active!==false?"TRUE":"FALSE"}))));
-  $("resetSportMappingsBtn").addEventListener("click",()=>{
+  $("exportBackupBtn").addEventListener("click",()=>{
+    const backup=buildBackup();
+    const stamp=new Date().toISOString().replace(/[:.]/g,"-").slice(0,19);
+    downloadText(`msfm_backup_${stamp}.json`,serializeBackup(backup),"application/json;charset=utf-8;");
+    const n=Array.isArray(backup.data[STORAGE.mappings])?backup.data[STORAGE.mappings].length:0;
+    setMessage("mappingMessage",`Backup downloaded: ${n} mappings plus your collection, history and drafts. Keep this JSON file to restore later.`,"success");
+  });
+  $("restoreBackupBtn").addEventListener("click",async()=>{
+    const file=$("restoreBackupFile").files[0];
+    if(!file){setMessage("mappingMessage","Choose a backup .json file first.","error");return;}
+    let parsed;
+    try{parsed=parseBackupText(await file.text());}
+    catch(err){setMessage("mappingMessage",err.message||"That file could not be read as a backup.","error");return;}
+    const created=parsed.backup.createdAt?new Date(parsed.backup.createdAt).toLocaleString():"unknown date";
+    const dupNote=parsed.duplicateKeys.length?` ${parsed.duplicateKeys.length} duplicate mapping key(s) inside the backup will be de-duplicated.`:"";
+    const invalidNote=parsed.invalidKeys.length?` ${parsed.invalidKeys.length} section(s) were skipped as unreadable.`:"";
+    const mp=backupMergePreview(parsed.backup.data[STORAGE.mappings]||[]);
+    const choice=await askChoice(
+      `Backup from ${created}: ${parsed.mappingCount} mappings, ${parsed.collectionCount} collected fixture day(s).${dupNote}${invalidNote}\n\n`+
+      `MERGE adds ${mp.added} new mapping(s), updates ${mp.conflicts} that differ, keeps ${mp.same} unchanged, and fills in any other saved data only if empty.\n`+
+      `REPLACE overwrites ALL current mappings, collection, history and drafts with the backup.\n\n`+
+      `A recovery snapshot is always saved first.`,
+      [{label:"Merge",value:"merge",cls:"primary"},{label:"Replace everything...",value:"replace",cls:"danger"},{label:"Cancel",value:null,cls:"neutral"}]
+    );
+    if(!choice){setMessage("mappingMessage","Restore cancelled. Nothing was changed.");return;}
+    let conflictPolicy="use-import";
+    if(choice==="merge"&&mp.conflicts){
+      conflictPolicy=await askChoice(`${mp.conflicts} mapping(s) in the backup differ from your current values. Choose one policy for all of them.`,
+        [{label:"Keep my current values",value:"keep-local",cls:"neutral"},{label:"Use backup values",value:"use-import",cls:"primary"},{label:"Cancel restore",value:null,cls:"danger"}]);
+      if(!conflictPolicy){setMessage("mappingMessage","Restore cancelled. Nothing was changed.");return;}
+    }
+    if(choice==="replace"&&!confirm(`Replace ALL current data with the backup from ${created}? Your current data will be saved to a recovery snapshot first, but this cannot be undone from the page.`)){
+      setMessage("mappingMessage","Restore cancelled. Nothing was changed.");return;
+    }
+    try{
+      const r=restoreFromBackup(parsed,choice,conflictPolicy);
+      reloadFromStorage();resetMappingForm();$("restoreBackupFile").value="";
+      if(choice==="replace")setMessage("mappingMessage",`Restored from backup: ${mappings.length} mappings and all other saved data were replaced. A recovery snapshot was kept (${r.recoveryKey}).`,"success");
+      else setMessage("mappingMessage",`Merged backup: ${r.mappingsAdded} added, ${r.mappingsUpdated} updated, ${r.mappingsKeptLocal} kept local; ${r.keysFilled.length} empty section(s) filled. A recovery snapshot was kept (${r.recoveryKey}).`,"success");
+    }catch(err){
+      reloadFromStorage();
+      setMessage("mappingMessage",err.message||"Restore failed and your data was left unchanged.","error");
+    }
+  });  $("resetSportMappingsBtn").addEventListener("click",()=>{
     const sport=$("mapSport").value;const n=mappings.filter(m=>canonSport(m.sport)===sport).length;
     if(confirm(`Replace the ${n} current ${sport} mapping(s) with the default ${sport} list?\n\nOnly ${sport} is affected; all other sports keep their mappings. Export a backup first if needed.`)){
+      backupBeforeMappingReplace("sport-reset");
       mappings=[...mappings.filter(m=>canonSport(m.sport)!==sport),...seedRowsFor(sport)];
       saveMappings();renderMappings();updateSportHint();resetMappingForm();$("mapSport").value=sport;setMessage("mappingMessage",`${sport} mappings reset to the default list. Other sports were not changed.`,"success");
     }
@@ -690,6 +1084,7 @@ function bindMappingEvents(){
   $("resetMappingsBtn").addEventListener("click",()=>{
     if(!confirm("Reset ALL six sports to the default league lists?\n\nThis replaces every mapping you have edited, added or deactivated. Use 'Reset selected sport' to reset only one sport. Export a backup first if needed."))return;
     if(!confirm("Please confirm once more: replace ALL mappings for ALL sports with the defaults?"))return;
+    backupBeforeMappingReplace("all-sports-reset");
     const keepUnassigned=mappings.filter(m=>!canonSport(m.sport));
     mappings=[...SPORTS.flatMap(seedRowsFor),...keepUnassigned];
     saveMappings();renderMappings();updateSportHint();resetMappingForm();setMessage("mappingMessage","Full league list restored for all sports.","success");
@@ -706,7 +1101,7 @@ let sharedState={pending:null,backupKey:"",promise:null};
 function mappingSignature(list){return list.map(m=>[canonSport(m.sport)||String(m.sport??""),m.country,m.priorityLeague,m.flashscoreLeague,m.active!==false?1:0].join("\u0001")).join("\u0002");}
 function hashStr(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return (h>>>0).toString(36)+":"+s.length;}
 function sharedMeta(){const m=readJSON(STORAGE.sharedSync,null);return m&&typeof m==="object"?m:null;}
-function recordSharedSync(){safeSet(STORAGE.sharedSync,JSON.stringify({hash:hashStr(mappingSignature(mappings)),at:new Date().toISOString(),count:mappings.length}));}
+function recordSharedSync(){safeSet(STORAGE.sharedSync,JSON.stringify({hash:hashStr(mappingSignature(mappings)),at:new Date().toISOString(),count:mappings.length}));updateOperationalSummary();}
 function localHasUnsharedEdits(){
   const cur=hashStr(mappingSignature(mappings)),meta=sharedMeta();
   if(meta&&meta.hash)return cur!==meta.hash;
@@ -914,10 +1309,12 @@ function parseFixtures(raw,sport,date){
       const home=lines[i+1],away=lines[i+2];
       if(!home||!away||isTime(home)||isTime(away)||isCountryHeading(home)||isCountryHeading(away))continue;
       const row={Sport:sport,Date:date,Time:tl.time,Country:country,DetectedLeague:league,Home:home,Away:away};
-      // A date prefix that is not the selected date means the fixture belongs to another day's collection.
+      Object.defineProperties(row,{SourceLine:{value:i+1},SourceContext:{value:lines.slice(Math.max(0,i-1),i+3).join(" | ")}});
+      // Valid prefixes on another date are Wrong date. Impossible calendar prefixes are malformed source groups.
       if(tl.d&&selISO){
-        const iso=isoFromParts(tl.y||selY,tl.mo,tl.d);
-        if(iso!==selISO)row.DateNote=`Flashscore lists this fixture on ${String(tl.d).padStart(2,"0")}.${String(tl.mo).padStart(2,"0")}.${tl.y||""}, not on the selected date ${date}, so it was not collected under ${date}.`;
+        const iso=isoFromParts(tl.y||selY,tl.mo,tl.d),prefix=`${String(tl.d).padStart(2,"0")}.${String(tl.mo).padStart(2,"0")}.${tl.y||""}`;
+        if(!iso)Object.defineProperty(row,"MalformedDateReason",{value:`Malformed or unsupported date prefix ${prefix}`});
+        else if(iso!==selISO)row.DateNote=`Flashscore lists this fixture on ${prefix}, not on the selected date ${date}, so it was not collected under ${date}.`;
       }
       rows.push(row);i+=2;
     }
@@ -926,6 +1323,18 @@ function parseFixtures(raw,sport,date){
   // instead of being dropped silently.
   return rows.filter(r=>r.Home&&r.Away);
 }
+function fixtureIdentity(f){return [sportKey(f.Sport),dateKey(f.Date)||String(f.Date||""),timeKey(f.Time)||String(f.Time||""),countryKey(f.Country),leagueKey(f.DetectedLeague||f["Flashscore League Name"]||f.League),teamKey(f.Home),teamKey(f.Away),eventIdKey(f["Event ID"]||f.EventID)].join("|");}
+function parseFixturesDetailed(raw,sport,date){
+  const inputLines=String(raw??"").split(/\r?\n/).filter(x=>x.trim()).length,all=parseFixtures(raw,sport,date),seen=new Set(),rows=[],duplicates=[],duplicateRecords=[];
+  for(const f of all){const key=fixtureIdentity(f);if(seen.has(key)){const reason="Duplicate source fixture; the first identical row was retained.";duplicates.push({...f,Category:"Duplicate",Reason:reason});duplicateRecords.push({line:f.SourceLine||1,reason,context:f.SourceContext||`${f.Time} | ${f.Home} | ${f.Away}`});continue;}seen.add(key);rows.push(f);}
+  const clean=cleanLines(raw),invalidRecords=[];
+  for(const f of all)if(f.MalformedDateReason)invalidRecords.push({line:f.SourceLine||1,reason:f.MalformedDateReason,context:f.SourceContext||`${f.Time} | ${f.Home} | ${f.Away}`});
+  for(let i=0;i<clean.length;i++){const tl=timeLine(clean[i]);if(!tl)continue;const home=clean[i+1],away=clean[i+2];if(!home||!away||timeLine(home)||timeLine(away)||isCountryHeading(home)||isCountryHeading(away))invalidRecords.push({line:i+1,reason:"Time was not followed by valid home and away team lines",context:clean.slice(Math.max(0,i-1),i+4).join(" | ")});}
+  if(!all.length&&String(raw).trim())invalidRecords.push({line:1,reason:"No complete fixture groups were detected",context:String(raw).trim().slice(0,240)});
+  const issueRecords=[...invalidRecords,...duplicateRecords].sort((a,b)=>a.line-b.line);
+  return {rows,duplicates,inputLines,invalidRecords:issueRecords.slice(0,MAX_INVALID_RECORDS),invalidCount:invalidRecords.length};
+}
+function exclusionCategory(reason){const r=String(reason||"");if(/not on the selected date|wrong date/i.test(r))return "Wrong date";if(/duplicate source/i.test(r))return "Duplicate";if(/blank Flashscore/i.test(r))return "Blank mapping";if(/disabled/i.test(r))return "Inactive mapping";if(/Could not detect|malformed|unsupported/i.test(r))return "Malformed/unsupported";return "No mapping";}
 
 /* ---------- priority league matching ---------- */
 function makeMatcher(sport){
@@ -964,55 +1373,37 @@ function makeMatcher(sport){
 function matchFixture(fixture){return makeMatcher(fixture.Sport)(fixture);}
 
 /* ---------- results rendering ---------- */
+function filteredExcludedRows(){const q=normalize($("excludedFilter")?.value||""),cat=$("excludedCategoryFilter")?.value||"all";return excludedRows.filter(r=>(cat==="all"||r.Category===cat)&&(!q||normalize([r.Country,r.DetectedLeague,r.Home,r.Away,r.Reason,r.Category].join(" ")).includes(q)));}
+function refreshExcludedCategories(){const sel=$("excludedCategoryFilter");if(!sel)return;const old=sel.value||"all",cats=[...new Set(excludedRows.map(r=>r.Category).filter(Boolean))].sort();sel.replaceChildren(new Option("All categories","all"),...cats.map(c=>new Option(c,c)));sel.value=cats.includes(old)?old:"all";}
 function renderResults(){
-  const body=$("resultsBody");body.replaceChildren();
-  if(!convertedRows.length)emptyRow(body,7,"No matching fixtures. Review the excluded list and mapping table.");
-  for(const row of convertedRows.slice(0,MAX_RENDER_ROWS)){const tr=document.createElement("tr");for(const col of columns){const td=document.createElement("td");td.textContent=row[col]??"";tr.appendChild(td);}body.appendChild(tr);}
-  if(convertedRows.length>MAX_RENDER_ROWS)emptyRow(body,7,`Showing the first ${MAX_RENDER_ROWS} of ${convertedRows.length} rows. Use the CSV download for the full list.`);
-  const exBody=$("excludedBody");exBody.replaceChildren();
-  if(!excludedRows.length)emptyRow(exBody,6,"No excluded fixtures.");
-  for(const row of excludedRows.slice(0,MAX_RENDER_ROWS)){const tr=document.createElement("tr");for(const val of [row.Time,row.Country,row.DetectedLeague||"(not detected)",row.Home,row.Away,row.Reason]){const td=document.createElement("td");td.textContent=val??"";tr.appendChild(td);}exBody.appendChild(tr);}
-  if(excludedRows.length>MAX_RENDER_ROWS)emptyRow(exBody,6,`Showing the first ${MAX_RENDER_ROWS} of ${excludedRows.length} rows. Use the CSV download for the full list.`);
-  $("resultCount").textContent=`${convertedRows.length} fixture${convertedRows.length===1?"":"s"}`;
-  $("parsedCount").textContent=String(convertedRows.length+excludedRows.length);
-  $("matchedCount").textContent=String(convertedRows.length);$("excludedCount").textContent=String(excludedRows.length);
-  $("excludedTableCount").textContent=`${excludedRows.length} excluded`;
+  const body=$("resultsBody");body.replaceChildren();if(!convertedRows.length)emptyRow(body,7,"No matching fixtures. Review the excluded list and mapping table.");for(const row of convertedRows.slice(0,MAX_RENDER_ROWS)){const tr=document.createElement("tr");for(const col of columns){const td=document.createElement("td");td.textContent=row[col]??"";tr.appendChild(td);}body.appendChild(tr);}if(convertedRows.length>MAX_RENDER_ROWS)emptyRow(body,7,`Showing the first ${MAX_RENDER_ROWS} of ${convertedRows.length} rows. Use the CSV download for the full list.`);
+  refreshExcludedCategories();const visible=filteredExcludedRows(),exBody=$("excludedBody");exBody.replaceChildren();if(!visible.length)emptyRow(exBody,7,excludedRows.length?"No excluded fixtures match this filter.":"No excluded fixtures.");for(const row of visible.slice(0,MAX_RENDER_ROWS)){const tr=document.createElement("tr");for(const val of [row.Time,row.Country,row.DetectedLeague||"(not detected)",row.Home,row.Away,row.Reason,row.Category]){const td=document.createElement("td");td.textContent=val??"";tr.appendChild(td);}exBody.appendChild(tr);}if(visible.length>MAX_RENDER_ROWS)emptyRow(exBody,7,`Showing the first ${MAX_RENDER_ROWS} of ${visible.length} rows. Use the CSV download for the full list.`);
+  $("resultCount").textContent=`${convertedRows.length} fixture${convertedRows.length===1?"":"s"}`;$("parsedCount").textContent=String(lastParseAccounting.unique||convertedRows.length+excludedRows.filter(r=>r.Category!=="Duplicate").length);$("matchedCount").textContent=String(convertedRows.length);$("excludedCount").textContent=String(excludedRows.length);$("excludedTableCount").textContent=`${visible.length}${visible.length!==excludedRows.length?" of "+excludedRows.length:""} excluded`;
+  for(const [id,val] of [["inputLineCount",lastParseAccounting.inputLines],["uniqueFixtureCount",lastParseAccounting.unique],["accountMatchedCount",convertedRows.length],["accountExcludedCount",excludedRows.length],["duplicateSourceCount",lastParseAccounting.duplicate],["invalidGroupCount",lastParseAccounting.invalid]])if($(id))$(id).textContent=String(val||0);
+  const issues=$("invalidRecords"),records=Array.isArray(lastParseAccounting.invalidRecords)?lastParseAccounting.invalidRecords:[];issues.replaceChildren();
+  if(records.length){const summary=document.createElement("p");summary.className="issue-summary";summary.textContent=`${lastParseAccounting.invalid} invalid group(s) and ${lastParseAccounting.duplicate} duplicate source row(s) detected.${lastParseAccounting.invalid+lastParseAccounting.duplicate>records.length?` Showing the first ${MAX_INVALID_RECORDS} issue records.`:""}`;const wrap=document.createElement("div");wrap.className="table-wrap";const table=document.createElement("table");table.className="issue-table";table.innerHTML="<thead><tr><th>Line</th><th>Context</th><th>Reason</th></tr></thead>";const tbody=document.createElement("tbody");for(const record of records){const tr=document.createElement("tr");for(const value of [record.line,record.context,record.reason]){const td=document.createElement("td");td.textContent=value??"";tr.appendChild(td);}tbody.appendChild(tr);}table.appendChild(tbody);wrap.appendChild(table);issues.append(summary,wrap);}updateOperationalSummary();
 }
+function rawDraftRecord(){return {sport:$("sport").value,dateISO:$("fixtureDate").value,raw:$("rawInput").value,updatedAt:new Date().toISOString()};}
+function workedDraftRecord(){const parsed=parseWorkedPaste($("workedInput").value);return {text:$("workedInput").value,parsed:{rows:parsed.rows,skipped:parsed.skipped},updatedAt:new Date().toISOString()};}
+function saveDraft(kind){pendingDraftKinds.delete(kind);const ok=kind==="raw"?persistValue(STORAGE.rawDraft,JSON.stringify(rawDraftRecord())):persistValue(STORAGE.workedDraft,JSON.stringify(workedDraftRecord()));persistenceDirty=pendingDraftKinds.size>0||!ok;return ok;}
+function scheduleDraftSave(kind){pendingDraftKinds.add(kind);persistenceDirty=true;setStorageStatus("saving");clearTimeout(draftTimer);draftTimer=setTimeout(flushDraftSaves,350);}
+function flushDraftSaves(){clearTimeout(draftTimer);draftTimer=0;for(const kind of [...pendingDraftKinds])saveDraft(kind);return !persistenceDirty;}
 function persistLastParse(){
   lastParseMeta={sport:$("sport").value,dateISO:$("fixtureDate").value};
-  safeSet(STORAGE.lastParse,JSON.stringify({...lastParseMeta,matched:convertedRows,excluded:excludedRows}));
-  safeSet(STORAGE.fixtures,JSON.stringify(convertedRows));   // legacy key kept for compatibility
-}
-/* Returns {parsed,sport,dateISO,date} or null when validation failed. */
+  persistValue(STORAGE.lastParse,JSON.stringify({...lastParseMeta,matched:convertedRows,excluded:excludedRows,accounting:lastParseAccounting}));
+  persistValue(STORAGE.fixtures,JSON.stringify(convertedRows));   // legacy key kept for compatibility
+  saveDraft("raw");
+}/* Returns {parsed,sport,dateISO,date} or null when validation failed. */
 function processFixtures(messageId="message"){
-  const sport=canonSport($("sport").value),dateISO=$("fixtureDate").value,date=formatDate(parseISODate(dateISO)),raw=$("rawInput").value;
-  if(!sport||!date||!raw.trim()){setMessage(messageId,"Please choose a Sport, a valid Fixture date, and paste the raw fixture text.","error");return null;}
-  const parsed=parseFixtures(raw,sport,date),matcher=makeMatcher(sport);
-  convertedRows=[];excludedRows=[];
-  for(const f of parsed){
-    const result=matcher(f);
-    if(f.DateNote){excludedRows.push({Sport:sport,Date:date,Time:f.Time,Country:f.Country,DetectedLeague:f.DetectedLeague,Home:f.Home,Away:f.Away,Reason:f.DateNote+(result.match?" It is a priority-league fixture: collect it under its own date.":"")});continue;}
-    if(result.match)convertedRows.push({Sport:sport,Date:date,Time:f.Time,Country:f.Country,"Flashscore League Name":result.match.flashscoreLeague,Home:f.Home,Away:f.Away,"Priority League":[...new Set((result.all||[result.match]).map(m=>m.priorityLeague))].join(" / ")});
-    else excludedRows.push({Sport:sport,Date:date,Time:f.Time,Country:f.Country,DetectedLeague:f.DetectedLeague,Home:f.Home,Away:f.Away,Reason:result.reason});
-  }
-  const alerts=playoffAlerts(sport,excludedRows);
-  for(const r of excludedRows)if(alerts.some(a=>a.key===countryKey(r.Country)+"|"+leagueKey(r.DetectedLeague)))r.Reason+=" Possible playoff stage of a priority league — see Playoff alerts.";
-  renderResults();renderPlayoffAlerts(alerts);
-  const oneLine=!parsed.length&&!/[\r\n]/.test(raw.trim())&&/\d{1,2}:\d{2}/.test(raw);
-  const otherDay=excludedRows.filter(r=>/not on the selected date/.test(r.Reason)).length;
-  setMessage("message",`${sport} ${date}: parsed ${parsed.length} fixtures: ${convertedRows.length} matched, ${excludedRows.length} excluded.`
-    +(otherDay?` ${otherDay} fixture(s) are dated another day and were excluded.`:"")
-    +(alerts.length?` ${alerts.length} playoff alert(s): see below.`:"")
-    +(oneLine?" The pasted text has no line breaks, so league headings, times and teams cannot be told apart. Copy directly from the Flashscore page (one item per line) and paste again.":""),
-    parsed.length?(alerts.length?"warn":convertedRows.length?"success":"warn"):"error");
-  setMessage("exportMessage","");
-  persistLastParse();
-  const history=readJSON(STORAGE.history,[]);
-  const list=Array.isArray(history)?history:[];
-  list.unshift({at:new Date().toLocaleString(),sport,input:parsed.length,matched:convertedRows.length,excluded:excludedRows.length});
-  safeSet(STORAGE.history,JSON.stringify(list.slice(0,30)));
-  renderHistory();
-  return {parsed:parsed.length,sport,dateISO,date};
+  const sport=canonSport($("sport").value),dateISO=$("fixtureDate").value,date=formatDate(parseISODate(dateISO)),raw=$("rawInput").value;if(!sport||!date||!raw.trim()){setMessage(messageId,"Please choose a supported Sport, a valid Fixture date, and paste the raw fixture text.","error");return null;}
+  setMessage(messageId,"Validating and processing pasted fixtures…","processing");const detail=parseFixturesDetailed(raw,sport,date),parsed=detail.rows,matcher=makeMatcher(sport);convertedRows=[];excludedRows=[];
+  for(const f of parsed){const result=matcher(f);if(f.MalformedDateReason){excludedRows.push({...f,Reason:f.MalformedDateReason,Category:"Malformed/unsupported"});continue;}if(f.DateNote){const Reason=f.DateNote+(result.match?" It is a priority-league fixture: collect it under its own date.":"");excludedRows.push({...f,Reason,Category:"Wrong date"});continue;}if(result.match)convertedRows.push({Sport:sport,Date:date,Time:f.Time,Country:f.Country,"Flashscore League Name":result.match.flashscoreLeague,Home:f.Home,Away:f.Away,"Priority League":[...new Set((result.all||[result.match]).map(m=>m.priorityLeague))].join(" / ")});else excludedRows.push({...f,Reason:result.reason,Category:exclusionCategory(result.reason)});}
+  const businessExcluded=excludedRows.length;
+  lastParseAccounting={inputLines:detail.inputLines,unique:parsed.length,matched:convertedRows.length,excluded:excludedRows.length,invalid:detail.invalidCount,duplicate:detail.duplicates.length,invalidRecords:detail.invalidRecords};
+  const alerts=playoffAlerts(sport,excludedRows);for(const r of excludedRows)if(alerts.some(a=>a.key===countryKey(r.Country)+"|"+leagueKey(r.DetectedLeague)))r.Reason+=" Possible playoff stage of a priority league — see Playoff alerts.";renderResults();renderPlayoffAlerts(alerts);
+  const oneLine=!parsed.length&&!/[\r\n]/.test(raw.trim())&&/\d{1,2}:\d{2}/.test(raw),otherDay=excludedRows.filter(r=>r.Category==="Wrong date").length,status=detail.invalidCount?"completed-with-invalid":excludedRows.length?"completed-with-exclusions":"completed";
+  setMessage("message",`${sport} ${date}: ${detail.inputLines} nonblank lines; ${parsed.length} unique fixtures; ${convertedRows.length} matched; ${businessExcluded} excluded; ${detail.duplicates.length} duplicate source row(s); ${detail.invalidCount} invalid group(s).`+(otherDay?` ${otherDay} fixture(s) are dated another day.`:"")+(alerts.length?` ${alerts.length} playoff alert(s): see below.`:"")+(oneLine?" The pasted text has no line breaks or usable line structure. Copy directly from Flashscore with one item per line.":""),parsed.length?(alerts.length||businessExcluded||detail.invalidCount?"warn":"success"):"error");
+  setMessage("exportMessage","");persistLastParse();const history=readJSON(STORAGE.history,[]),list=Array.isArray(history)?history:[];list.unshift({at:new Date().toLocaleString(),sport,date,time:new Date().toLocaleTimeString(),input:parsed.length,inputLines:detail.inputLines,valid:parsed.length,matched:convertedRows.length,excluded:businessExcluded,invalid:detail.invalidCount,duplicate:detail.duplicates.length,status});persistValue(STORAGE.history,JSON.stringify(list.slice(0,30)));renderHistory();return {parsed:parsed.length,sport,dateISO,date,accounting:lastParseAccounting};
 }
 /* ---------- playoff-stage alerts (notify only; mappings are never changed automatically) ----------
    Raised when an EXCLUDED fixture's Flashscore league looks like a playoff / play-out / relegation stage AND
@@ -1051,14 +1442,13 @@ function renderPlayoffAlerts(alerts){
   const h=document.createElement("h3");h.textContent=`Playoff alerts (${alerts.length})`;box.appendChild(h);
   for(const a of alerts){const d=document.createElement("div");d.className="notice";d.textContent=playoffAlertText(a);box.appendChild(d);}
 }
-function renderHistory(){
-  const history=readJSON(STORAGE.history,[]),body=$("historyBody");body.replaceChildren();
-  if(!Array.isArray(history)||!history.length){emptyRow(body,5,"No import history yet.");return;}
-  for(const item of history){const tr=document.createElement("tr");for(const v of [item.at,item.sport||"",item.input,item.matched,item.excluded]){const td=document.createElement("td");td.textContent=v??"";tr.appendChild(td);}body.appendChild(tr);}
-}
+function renderHistory(){const history=readJSON(STORAGE.history,[]),body=$("historyBody");body.replaceChildren();if(!Array.isArray(history)||!history.length){emptyRow(body,11,"No import history yet.");return;}for(const item of history){const tr=document.createElement("tr");const valid=item.valid??item.input??0,input=item.input??valid,status=item.status||"completed";for(const v of [item.at,item.sport||"",input,item.matched??0,item.excluded??0,item.date||"",item.time||"",valid,item.invalid??0,item.duplicate??0,status]){const td=document.createElement("td");td.textContent=v??"";tr.appendChild(td);}body.appendChild(tr);}}
+
 
 /* ---------- 7-day collection (identity = sport + calendar date) ---------- */
-let comparisonStale=false;
+let comparisonStale=false,comparisonRunAt="";
+function updateComparisonFreshness(){const el=$("comparisonFreshness");if(!el)return;const draft=readJSON(STORAGE.workedDraft,null),updated=draft&&draft.updatedAt;if(!comparisonRunAt){el.dataset.state="not-run";el.textContent=`Comparison: not run. Worked draft updated: ${fmtOperationalTime(updated)}.`;}else if(comparisonStale){el.dataset.state="stale";el.textContent=`Comparison: stale. Last run ${fmtOperationalTime(comparisonRunAt)}; worked draft updated ${fmtOperationalTime(updated)}.`;}else{el.dataset.state="current";el.textContent=`Comparison: current. Last run ${fmtOperationalTime(comparisonRunAt)}; worked draft updated ${fmtOperationalTime(updated)}.`;}updateOperationalSummary();}
+function invalidateComparison(){if(comparisonRunAt)comparisonStale=true;updateComparisonFreshness();}
 function sortedDays(){return [...collectionDays].sort((a,b)=>String(a.dateISO).localeCompare(String(b.dateISO))||sportIndex(a.sport)-sportIndex(b.sport));}
 function distinctDates(days=collectionDays){return new Set(days.map(d=>d.dateISO).filter(Boolean));}
 function renderCollection(){
@@ -1072,7 +1462,7 @@ function renderCollection(){
     btn.addEventListener("click",()=>{
       if(confirm(`Remove ${day.sport} ${day.date} from the collection?\n\nOnly this sport + date entry is removed; other sports on this date stay.`)){
         collectionDays=collectionDays.filter(d=>!(d.dateISO===day.dateISO&&canonSport(d.sport)===canonSport(day.sport)&&d.dateISO!=="")&&d!==day);
-        saveCollection();comparisonStale=true;renderCollection();setMessage("collectionMessage",`${day.sport} ${day.date} removed from collection.`,"success");
+        saveCollection();invalidateComparison();renderCollection();setMessage("collectionMessage",`${day.sport} ${day.date} removed from collection.`,"success");
       }
     });
     td.appendChild(btn);tr.appendChild(td);body.appendChild(tr);
@@ -1093,16 +1483,16 @@ function addCurrentDayToCollection(){
   const res=processFixtures("message");
   if(!res)return;
   if(res.parsed===0){setMessage("collectionMessage","No parsed fixtures were found. Check the date and pasted Flashscore data before adding."+(old?` The existing ${sport} ${date} entry was kept unchanged.`:""),"error");return;}
-  const day={dateISO,date,sport,parsed:res.parsed,matched:convertedRows.map(r=>({...r})),excluded:excludedRows.map(r=>({...r})),savedAt:new Date().toLocaleString()};
+  const day={dateISO,date,sport,parsed:res.parsed,matched:convertedRows.map(r=>({...r})),excluded:excludedRows.filter(r=>r.Category!=="Duplicate").map(r=>({...r})),savedAt:new Date().toLocaleString()};
   collectionDays=collectionDays.filter(d=>!(d.dateISO===dateISO&&canonSport(d.sport)===sport));collectionDays.push(day);
-  saveCollection();comparisonStale=true;renderCollection();
+  saveCollection();invalidateComparison();renderCollection();
   setMessage("collectionMessage",`${old?"Replaced":"Saved"} ${sport} ${date}: ${day.parsed} parsed, ${day.matched.length} matched, ${day.excluded.length} excluded. ${distinctDates().size}/${MAX_DATES} dates collected. Other sports on this date were preserved.`,"success");
 }
 function exportCollection(kind){
   if(!collectionDays.length){setMessage("collectionMessage","Your collection is empty. Parse a day and click Add / Replace first.","error");return;}
   const days=sortedDays();let rows=[],filename="",headers=matchedExportColumns;
   if(kind==="matched"){rows=days.flatMap(d=>d.matched.map(r=>({...r,Sport:r.Sport||d.sport,Date:r.Date||d.date})));filename="priority_7day_matching_fixtures.csv";}
-  else if(kind==="excluded"){rows=days.flatMap(d=>d.excluded.map(r=>({Sport:r.Sport||d.sport,Date:r.Date||d.date,Time:r.Time||"",Country:r.Country,"Detected League":r.DetectedLeague,Home:r.Home,Away:r.Away,Reason:r.Reason})));filename="priority_7day_excluded_fixtures.csv";headers=excludedColumns;}
+  else if(kind==="excluded"){rows=days.flatMap(d=>d.excluded.map(r=>({Sport:r.Sport||d.sport,Date:r.Date||d.date,Time:r.Time||"",Country:r.Country,"Detected League":r.DetectedLeague,Home:r.Home,Away:r.Away,Reason:r.Reason,Category:r.Category||exclusionCategory(r.Reason)})));filename="priority_7day_excluded_fixtures.csv";headers=excludedColumns;}
   else{rows=days.flatMap(d=>[...d.matched.map(r=>({...r,Sport:r.Sport||d.sport,Date:r.Date||d.date,"Match Status":"Matched","Exclusion Reason":""})),...d.excluded.map(r=>({Sport:r.Sport||d.sport,Date:r.Date||d.date,Time:r.Time||"",Country:r.Country,"Flashscore League Name":r.DetectedLeague,Home:r.Home,Away:r.Away,"Priority League":"","Match Status":"Excluded","Exclusion Reason":r.Reason}))]);filename="priority_7day_all_fixtures.csv";headers=[...matchedExportColumns,"Match Status","Exclusion Reason"];}
   if(!rows.length){setMessage("collectionMessage",`No ${kind==="all"?"":kind+" "}fixtures in the collection to export.`,"error");return;}
   downloadCSV(filename,headers,rows);
@@ -1342,6 +1732,7 @@ function classifyFixtures(fixtures,workedRows){
 
 /* ---------- comparison UI ---------- */
 let comparisonResults={newMatches:[],alreadyWorked:[],possible:[],timeChanged:[],conflicts:[]};
+function measureRepresentativePerformance(raw,sport,date,fixtures,worked){const p0=performance.now(),parsed=parseFixturesDetailed(raw,sport,date),p1=performance.now(),compared=classifyFixtures(fixtures,worked),p2=performance.now();return {parseMs:+(p1-p0).toFixed(3),compareMs:+(p2-p1).toFixed(3),parsed:parsed.rows.length,compared:compared.totalCompared};}
 function collectedFixtures(){
   return sortedDays().flatMap(d=>(d.matched||[]).map(r=>({...r,Sport:r.Sport||d.sport,Date:r.Date||d.date})));
 }
@@ -1352,24 +1743,80 @@ function renderCompareTable(id,items,cols,rowFn,emptyText){
   for(const item of items.slice(0,MAX_RENDER_ROWS)){const tr=document.createElement("tr");rowFn(tr,item);body.appendChild(tr);}
   if(items.length>MAX_RENDER_ROWS)emptyRow(body,cols,`Showing the first ${MAX_RENDER_ROWS} of ${items.length} rows. Use the CSV export for the full list.`);
 }
-function applyResultFilter(){
-  const q=normalize($("resultFilter").value);
-  for(const id of ["newMatchesBody","alreadyWorkedBody","timeChangedBody","possibleDuplicatesBody","conflictsBody"]){
-    for(const tr of $(id).rows){tr.classList.toggle("hidden",Boolean(q)&&!normalize(tr.textContent).includes(q));}
+function sortedNewMatches(items){const key=$("newResultSort")?.value||"runtime",get={sport:f=>sportIndex(f.Sport),date:f=>dateKey(f.Date),time:f=>timeKey(f.Time),country:f=>countryKey(f.Country),league:f=>leagueKey(f["Flashscore League Name"]),home:f=>teamKey(f.Home),away:f=>teamKey(f.Away)}[key];return get?[...items].sort((a,b)=>String(get(a)).localeCompare(String(get(b)))):items;}
+function applyResultFilter(){const q=normalize($("resultFilter").value),group=$("resultGroupFilter")?.value||"all",groups={new:["newMatchesBody"],worked:["alreadyWorkedBody"],review:["timeChangedBody","possibleDuplicatesBody"],conflicts:["conflictsBody"]};for(const id of ["newMatchesBody","alreadyWorkedBody","timeChangedBody","possibleDuplicatesBody","conflictsBody"]){const body=$(id),showGroup=group==="all"||(groups[group]||[]).includes(id);body.closest(".table-wrap").classList.toggle("hidden",!showGroup);for(const tr of body.rows)tr.classList.toggle("hidden",Boolean(q)&&!normalize(tr.textContent).includes(q));}}
+/* ---------- one-click BCM copy (New Matches) ----------
+   Copies the EXACT stored BCM name. Uses the async Clipboard API when available
+   (secure context), with a synchronous execCommand fallback for file:// / HTTP.
+   Never copies the Flashscore name; disabled when there is no approved mapping. */
+async function copyTextToClipboard(text){
+  const s=String(text==null?"":text);
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText&&(window.isSecureContext!==false)){
+      await navigator.clipboard.writeText(s);return true;
+    }
+  }catch(e){/* fall through to the legacy path */}
+  try{
+    const ta=document.createElement("textarea");ta.value=s;ta.setAttribute("readonly","");
+    ta.style.position="fixed";ta.style.top="-1000px";ta.style.opacity="0";
+    document.body.appendChild(ta);ta.focus();ta.select();
+    const ok=document.execCommand&&document.execCommand("copy");
+    ta.remove();
+    return !!ok;
+  }catch(e){return false;}
+}
+/* Flash a transient label on a button, then restore it. Guards against overlapping clicks. */
+function flashButton(btn,okLabel,errLabel,success){
+  if(btn.dataset.busy==="1")return;
+  const original=btn.dataset.label||btn.textContent;btn.dataset.label=original;
+  btn.dataset.busy="1";btn.classList.remove("copied","copy-error");
+  btn.classList.add(success?"copied":"copy-error");btn.textContent=success?okLabel:errLabel;
+  setTimeout(()=>{btn.textContent=btn.dataset.label;btn.classList.remove("copied","copy-error");btn.dataset.busy="";},1400);
+}
+/* A BCM cell: shows the exact BCM name (or "Not mapped") and, when mapped, a small Copy button
+   that copies ONLY that BCM name. label is "home"/"away" for accessible text. */
+function addStackedTeamCell(tr,fsName,bcmName,mapped){
+  const td=document.createElement("td");
+  const fs=document.createElement("span");fs.className="fs-name";fs.textContent=fsName==null?"":String(fsName);td.appendChild(fs);
+  const bcm=document.createElement("span");bcm.className="bcm-name"+(mapped?"":" none");bcm.textContent=mapped?bcmName:"Not mapped";td.appendChild(bcm);
+  tr.appendChild(td);
+}function bcmCopyCell(bcmName,mapped,label){
+  const td=document.createElement("td");td.className="bcm-cell";
+  const name=document.createElement("span");name.className="bcm-name"+(mapped?"":" none");name.textContent=mapped?bcmName:"Not mapped";
+  td.appendChild(name);
+  const rowDiv=document.createElement("div");rowDiv.className="copy-row";
+  const btn=document.createElement("button");btn.type="button";btn.className="copy-btn";btn.textContent="Copy";btn.dataset.label="Copy";
+  if(mapped){
+    btn.setAttribute("aria-label",`Copy BCM ${label} team name ${bcmName}`);
+    btn.addEventListener("click",async()=>{if(btn.dataset.busy==="1")return;const ok=await copyTextToClipboard(bcmName);flashButton(btn,"Copied!",ok?"":"Copy failed",ok);});
+  }else{
+    btn.disabled=true;btn.title=`No approved BCM mapping for this ${label} team - add one in the Team Mappings tab.`;btn.setAttribute("aria-label",`No BCM mapping for the ${label} team; copy disabled`);
   }
+  rowDiv.appendChild(btn);td.appendChild(rowDiv);
+  return td;
 }
-function renderComparison(r){
-  const none="No results.";
-  renderCompareTable("newMatchesBody",r.newMatches,8,(tr,f)=>{[f.Sport,f.Date,f.Time,f.Country,f["Flashscore League Name"]||"",f.Home,f.Away,f["Event ID"]||""].forEach(v=>addCell(tr,v));},none);
-  renderCompareTable("alreadyWorkedBody",r.alreadyWorked,3,(tr,x)=>{addCell(tr,fmtFixture(x.fixture));addCell(tr,fmtWorked({raw:x.worked,rowNo:x.rowNo}));addCell(tr,x.type,true);},none);
-  renderCompareTable("timeChangedBody",r.timeChanged,3,(tr,x)=>{addCell(tr,fmtFixture(x.fixture));addCell(tr,fmtWorked({raw:x.worked,rowNo:x.rowNo}));addCell(tr,x.reason,true);},none);
-  renderCompareTable("possibleDuplicatesBody",r.possible,3,(tr,x)=>{addCell(tr,fmtFixture(x.fixture));addCell(tr,fmtWorked({raw:x.worked,rowNo:x.rowNo}));addCell(tr,x.reason,true);},none);
-  renderCompareTable("conflictsBody",r.conflicts,3,(tr,g)=>{addCell(tr,g.eventId);addCell(tr,g.fields.join(", "),true);addCell(tr,g.rows.map(w=>fmtWorked({raw:w,rowNo:w.rowNo})));},"No Event ID conflicts found in the worked history.");
-  $("collectedFixtureCount").textContent=String(r.totalCompared||0);
-  $("newMatchCount").textContent=String(r.newMatches.length);$("alreadyWorkedCount").textContent=String(r.alreadyWorked.length);
-  $("possibleDuplicateCount").textContent=String(r.possible.length);$("timeChangedCount").textContent=String(r.timeChanged.length);$("conflictCount").textContent=String(r.conflicts.length);
-  applyResultFilter();
+/* The Mapping Status cell: status badge + an optional "Copy Both Teams" button, enabled only when
+   BOTH teams have an approved BCM mapping. Output format is exactly:
+     Home: <BCM Home>\nAway: <BCM Away>   (no metadata, no Flashscore names). */
+function mappingStatusCell(mp){
+  const td=document.createElement("td");
+  const badge=document.createElement("span");badge.className="badge "+(mp.status==="Mapped"?"":mp.status==="Partially Mapped"?"warn":"bad");badge.textContent=mp.status;td.appendChild(badge);
+  const rowDiv=document.createElement("div");rowDiv.className="copy-row";
+  const both=document.createElement("button");both.type="button";both.className="copy-both-btn";both.textContent="Copy Both Teams";both.dataset.label="Copy Both Teams";
+  if(mp.homeMapped&&mp.awayMapped){
+    const combined="Home: "+mp.bcmHome+"\nAway: "+mp.bcmAway;
+    both.setAttribute("aria-label","Copy both BCM team names");
+    both.addEventListener("click",async()=>{if(both.dataset.busy==="1")return;const ok=await copyTextToClipboard(combined);flashButton(both,"Copied!",ok?"":"Copy failed",ok);});
+  }else{
+    both.disabled=true;both.title="Both teams need an approved BCM mapping before you can copy them together.";both.setAttribute("aria-label","Copy both teams disabled until both teams are mapped");
+  }
+  rowDiv.appendChild(both);td.appendChild(rowDiv);
+  return td;
 }
+function renderComparison(r){const none="No results.";let newRows=sortedNewMatches(r.newMatches);const unmappedOnly=$("unmappedOnlyFilter")&&$("unmappedOnlyFilter").checked;if(unmappedOnly)newRows=newRows.filter(fixtureHasUnmapped);renderCompareTable("newMatchesBody",newRows,11,(tr,f)=>{const mp=resolveFixtureMapping(f);[f.Sport,f.Date,f.Time,f.Country,f["Flashscore League Name"]||""].forEach(v=>addCell(tr,v));addStackedTeamCell(tr,f.Home,mp.homeMapped?mp.bcmHome:"",mp.homeMapped);addStackedTeamCell(tr,f.Away,mp.awayMapped?mp.bcmAway:"",mp.awayMapped);addCell(tr,f["Event ID"]||"");tr.appendChild(bcmCopyCell(mp.bcmHome,mp.homeMapped,"home"));tr.appendChild(bcmCopyCell(mp.bcmAway,mp.awayMapped,"away"));tr.appendChild(mappingStatusCell(mp));},none);renderCompareTable("alreadyWorkedBody",r.alreadyWorked,3,(tr,x)=>{addCell(tr,fmtFixture(x.fixture));addCell(tr,fmtWorked({raw:x.worked,rowNo:x.rowNo}));addCell(tr,x.type,true);},none);renderCompareTable("timeChangedBody",r.timeChanged,3,(tr,x)=>{addCell(tr,fmtFixture(x.fixture));addCell(tr,fmtWorked({raw:x.worked,rowNo:x.rowNo}));addCell(tr,x.reason,true);},none);renderCompareTable("possibleDuplicatesBody",r.possible,3,(tr,x)=>{addCell(tr,fmtFixture(x.fixture));addCell(tr,fmtWorked({raw:x.worked,rowNo:x.rowNo}));addCell(tr,x.reason,true);},none);renderCompareTable("conflictsBody",r.conflicts,3,(tr,g)=>{addCell(tr,g.eventId);addCell(tr,g.fields.join(", "),true);addCell(tr,g.rows.map(w=>fmtWorked({raw:w,rowNo:w.rowNo})));},"No Event ID conflicts found in the worked history.");
+  $("collectedFixtureCount").textContent=String(r.totalCompared||0);$("newMatchCount").textContent=String(r.newMatches.length);$("alreadyWorkedCount").textContent=String(r.alreadyWorked.length);$("possibleDuplicateCount").textContent=String(r.possible.length);$("timeChangedCount").textContent=String(r.timeChanged.length);$("conflictCount").textContent=String(r.conflicts.length);$("compactNewCount").textContent=String(r.newMatches.length);$("compactWorkedCount").textContent=String(r.alreadyWorked.length);$("compactReviewCount").textContent=String(r.possible.length+r.timeChanged.length+r.conflicts.length);updateNewMatchesMappingSummary(r.newMatches);applyResultFilter();updateComparisonFreshness();}
+function updateNewMatchesMappingSummary(newMatches){const el=$("newMatchesMappingStatus");if(!el)return;if(!newMatches||!newMatches.length){el.textContent="";return;}let mapped=0,partial=0,unmapped=0;for(const f of newMatches){const s=resolveFixtureMapping(f).status;if(s==="Mapped")mapped++;else if(s==="Partially Mapped")partial++;else unmapped++;}el.textContent=`${mapped} mapped, ${partial} partially, ${unmapped} unmapped`;}
+
 function compareWorkedMatches(){
   const {rows:worked,skipped}=parseWorkedPaste($("workedInput").value);
   if(!collectionDays.length){setMessage("compareMessage","Collect at least one sport + date first.","error");return;}
@@ -1377,7 +1824,7 @@ function compareWorkedMatches(){
   const fixtures=collectedFixtures();
   if(!fixtures.length){setMessage("compareMessage","The collection contains no priority (matching) fixtures to compare.","error");return;}
   const r=classifyFixtures(fixtures,worked);
-  comparisonResults=r;comparisonStale=false;renderComparison(r);
+  comparisonResults=r;comparisonStale=false;comparisonRunAt=new Date().toISOString();renderComparison(r);
   const notes=[];
   if(r.duplicatesIgnored)notes.push(`${r.duplicatesIgnored} identical collected fixture(s) counted once`);
   if(r.conflicts.length)notes.push(`${r.conflicts.length} Event ID(s) in the worked history have inconsistent rows — see Worked-History Conflicts`);
@@ -1411,10 +1858,13 @@ function exportComparison(kind){
 /* ---------- event binding ---------- */
 function bindEvents(){
   bindMappingEvents();
-  $("sport").addEventListener("change",()=>{updateSportHint();$("mapSport").value=$("sport").value;});
+  $("sport").addEventListener("change",()=>{updateSportHint();$("mapSport").value=$("sport").value;scheduleDraftSave("raw");});
+  $("fixtureDate").addEventListener("change",()=>scheduleDraftSave("raw"));
+  $("rawInput").addEventListener("input",()=>scheduleDraftSave("raw"));
+  $("workedInput").addEventListener("input",()=>{scheduleDraftSave("worked");invalidateComparison();});
   $("filterBtn").addEventListener("click",()=>processFixtures());
-  $("sampleBtn").addEventListener("click",()=>{$("rawInput").value=sampleText;$("sport").value="Basketball";updateSportHint();setMessage("message","Example fixture data loaded. Select a date and click Parse & Filter.");});
-  $("clearBtn").addEventListener("click",()=>{$("rawInput").value="";setMessage("message","");});
+  $("sampleBtn").addEventListener("click",()=>{$("rawInput").value=sampleText;$("sport").value="Basketball";updateSportHint();saveDraft("raw");setMessage("message","Example fixture data loaded. Select a date and click Parse & Filter.");});
+  $("clearBtn").addEventListener("click",()=>{$("rawInput").value="";saveDraft("raw");setMessage("message","");});
   $("copyBtn").addEventListener("click",async()=>{
     if(!convertedRows.length){setMessage("exportMessage","No matching fixtures to copy.","error");return;}
     const tsv=[columns.join("\t"),...convertedRows.map(r=>columns.map(c=>String(r[c]??"").replace(/[\t\r\n]+/g," ")).join("\t"))].join("\n");
@@ -1422,68 +1872,362 @@ function bindEvents(){
     catch{const area=document.createElement("textarea");area.value=tsv;document.body.appendChild(area);area.select();let ok=false;try{ok=document.execCommand("copy");}catch{}area.remove();setMessage("exportMessage",ok?"Matching table copied. Paste it into Excel.":"Clipboard access was blocked. Download the CSV instead.",ok?"success":"error");}
   });
   $("csvBtn").addEventListener("click",()=>{if(!convertedRows.length){setMessage("exportMessage","No matching fixtures to download.","error");return;}downloadCSV("priority_fixtures.csv",matchedExportColumns,convertedRows);setMessage("exportMessage","Matching fixtures CSV downloaded.","success");});
-  $("excludedCsvBtn").addEventListener("click",()=>{if(!excludedRows.length){setMessage("exportMessage","No excluded fixtures to download.","error");return;}downloadCSV("excluded_fixtures.csv",excludedColumns,excludedRows.map(r=>({"Sport":r.Sport,"Date":r.Date,"Time":r.Time,"Country":r.Country,"Detected League":r.DetectedLeague,"Home":r.Home,"Away":r.Away,"Reason":r.Reason})));setMessage("exportMessage","Excluded fixtures CSV downloaded.","success");});
+  $("excludedCsvBtn").addEventListener("click",()=>{if(!excludedRows.length){setMessage("exportMessage","No excluded fixtures to download.","error");return;}downloadCSV("excluded_fixtures.csv",excludedColumns,excludedRows.map(r=>({"Sport":r.Sport,"Date":r.Date,"Time":r.Time,"Country":r.Country,"Detected League":r.DetectedLeague,"Home":r.Home,"Away":r.Away,"Reason":r.Reason,"Category":r.Category||exclusionCategory(r.Reason)})));setMessage("exportMessage","Excluded fixtures CSV downloaded.","success");});
   $("addDayBtn").addEventListener("click",addCurrentDayToCollection);
   $("exportCollectionBtn").addEventListener("click",()=>exportCollection("matched"));
   $("exportAllCollectionBtn").addEventListener("click",()=>exportCollection("all"));
   $("exportExcludedCollectionBtn").addEventListener("click",()=>exportCollection("excluded"));
   $("clearCollectionBtn").addEventListener("click",()=>{
     if(!collectionDays.length){setMessage("collectionMessage","The collection is already empty.");return;}
-    if(confirm(`Clear ALL ${collectionDays.length} collected sport-date entries (every sport, every date)? This does not clear your league mappings.`)){collectionDays=[];saveCollection();comparisonStale=true;renderCollection();setMessage("collectionMessage","Collection cleared.","success");}
+    if(confirm(`Clear ALL ${collectionDays.length} collected sport-date entries (every sport, every date)? This does not clear your league mappings.`)){collectionDays=[];saveCollection();invalidateComparison();renderCollection();setMessage("collectionMessage","Collection cleared.","success");}
   });
-  $("clearHistoryBtn").addEventListener("click",()=>{if(confirm("Clear local import history?")){removeKey(STORAGE.history);renderHistory();}});
-  $("compareWorkedBtn").addEventListener("click",compareWorkedMatches);
+  $("clearHistoryBtn").addEventListener("click",()=>{if(confirm("Clear local import history?")){persistRemove(STORAGE.history);renderHistory();}});
+  $("compareWorkedBtn").addEventListener("click",()=>{saveDraft("worked");compareWorkedMatches();});
   $("clearWorkedBtn").addEventListener("click",()=>{
     if($("workedInput").value.trim()&&!confirm("Clear the pasted worked-match history and the comparison results?"))return;
-    $("workedInput").value="";comparisonResults={newMatches:[],alreadyWorked:[],possible:[],timeChanged:[],conflicts:[]};
+    $("workedInput").value="";saveDraft("worked");comparisonResults={newMatches:[],alreadyWorked:[],possible:[],timeChanged:[],conflicts:[]};comparisonRunAt="";comparisonStale=false;
     renderComparison({...comparisonResults,totalCompared:0});setMessage("compareMessage","");
     for(const [id,t] of [["newMatchesBody","Compare your collection to see new matches."],["alreadyWorkedBody","No comparison run yet."],["timeChangedBody","No comparison run yet."],["possibleDuplicatesBody","No comparison run yet."],["conflictsBody","No comparison run yet."]]){const b=$(id);b.replaceChildren();emptyRow(b,id==="newMatchesBody"?8:3,t);}
   });
-  $("resultFilter").addEventListener("input",applyResultFilter);
+  $("resultFilter").addEventListener("input",applyResultFilter);$("resultGroupFilter").addEventListener("change",applyResultFilter);$("newResultSort").addEventListener("change",()=>renderComparison(comparisonResults));$("excludedFilter").addEventListener("input",renderResults);$("excludedCategoryFilter").addEventListener("change",renderResults);
   $("exportNewBtn").addEventListener("click",()=>exportComparison("new"));
   $("exportNewHistoryBtn").addEventListener("click",()=>exportComparison("newHistory"));
   $("exportWorkedBtn").addEventListener("click",()=>exportComparison("worked"));
   $("exportTimeChangedBtn").addEventListener("click",()=>exportComparison("time"));
   $("exportReviewBtn").addEventListener("click",()=>exportComparison("possible"));
   $("exportConflictsBtn").addEventListener("click",()=>exportComparison("conflicts"));
+  $("reloadNewerDataBtn").addEventListener("click",()=>location.reload());
 }
 
 function init(){
-  fillSportSelect($("sport"));fillSportSelect($("mapSport"));
+  fillSportSelect($("sport"));fillSportSelect($("mapSport"));fillSportSelect($("mappingSportFilter"));$("mappingSportFilter").insertBefore(new Option("All sports","all"),$("mappingSportFilter").firstChild);$("mappingSportFilter").value="all";
   buildMappingSections();
   migrateStoredData();
   bindEvents();
-  renderMappings();updateSportHint();renderHistory();renderCollection();
+  loadTeamMappings();bindTeamMappingEvents();renderTeamMappings();
+  renderMappings();updateSportHint();renderHistory();renderCollection();updateComparisonFreshness();
   const last=readJSON(STORAGE.lastParse,null);
-  if(last&&Array.isArray(last.matched)){convertedRows=last.matched;excludedRows=Array.isArray(last.excluded)?last.excluded:[];
+  if(last&&Array.isArray(last.matched)){convertedRows=last.matched;excludedRows=Array.isArray(last.excluded)?last.excluded.map(r=>({...r,Category:r.Category||exclusionCategory(r.Reason)})):[];lastParseAccounting=last.accounting||{inputLines:0,unique:convertedRows.length+excludedRows.length,matched:convertedRows.length,excluded:excludedRows.length,invalid:0,duplicate:0,invalidRecords:[]};
     if(canonSport(last.sport)){$("sport").value=canonSport(last.sport);$("mapSport").value=canonSport(last.sport);updateSportHint();}
     if(parseISODate(last.dateISO))$("fixtureDate").value=last.dateISO;
     renderResults();}
   else{const saved=readJSON(STORAGE.fixtures,null);if(Array.isArray(saved)&&saved.length){convertedRows=saved.map(r=>({...r,Sport:canonSport(r.Sport)||"Basketball"}));renderResults();}}
+  const rawDraft=readJSON(STORAGE.rawDraft,null);
+  if(rawDraft&&typeof rawDraft.raw==="string"){
+    $("rawInput").value=rawDraft.raw;
+    if(canonSport(rawDraft.sport)){$("sport").value=canonSport(rawDraft.sport);$("mapSport").value=canonSport(rawDraft.sport);updateSportHint();}
+    if(parseISODate(rawDraft.dateISO))$("fixtureDate").value=rawDraft.dateISO;
+  }
+  const workedDraft=readJSON(STORAGE.workedDraft,null);
+  if(workedDraft&&typeof workedDraft.text==="string")$("workedInput").value=workedDraft.text;
+  setupCrossTab();
   if(!STORE)noticeState.storage="Browser storage is unavailable in this browser mode. Nothing will be saved after a refresh; export your mappings and collection as CSV.";
-  renderNotices();
+  renderNotices();updateOperationalSummary();
   sharedState.promise=syncSharedMappings();   // runs in the background; the page is usable with the local copy meanwhile
 }
-// Small, read-only hook used by the automated tests; harmless in normal use.
-window.__MSFM={classifyFixtures,parseWorkedPaste,teamRelation,teamKey,makeMatcher,matchFixture,parseFixtures,buildCSV,escapeCSV,dateKey,timeKey,countryKey,canonSport,migrateStoredData,addDaysISO,STORAGE,SPORTS,
-  buildMappingSQL,playoffAlerts,historyCols,syncSharedMappings,sharedReady:()=>sharedState.promise,
-  state:()=>({mappings,collectionDays,convertedRows,excludedRows,comparisonResults})};
-init();
+/* ============================= TEAM MAPPING MANAGER =============================
+   Add-on feature. Maps a Flashscore team -> BCM team, scoped by Sport + Country +
+   Flashscore League. Stored locally (STORAGE.teamMappings); a shared copy is READ
+   from Supabase only. The browser never writes to Supabase; to share, export SQL
+   and run it in the Supabase SQL Editor. Nothing here changes priority league
+   mappings, backup/restore or the fixture comparison logic. */
+let teamMappings = [];
+let editingTeamId = null;
+/* Shared TEAM mapping table in Supabase - READ-ONLY, same key/conventions as the priority list. */
+const SHARED_TEAMS = { url: SHARED.url, key: SHARED.key, table: "msfm_team_mappings", pageSize: 1000 };
+let teamSharedLoadedAt = "";
 
+/* Exact, normalised matching key. Reuses teamKey() (accent/case/space/punct folding). */
+function teamMapKey(sport,country,league,team){
+  return [canonSport(sport)||String(sport??"").trim(),countryKey(country),leagueKey(league),teamKey(team)].join("\u0001");
+}
+function cleanField(v){return String(v??"").replace(/\s+/g," ").trim();}
+
+/* ---- local persistence ---- */
+function loadTeamMappings(){
+  const raw=readJSON(STORAGE.teamMappings,[]);
+  teamMappings=Array.isArray(raw)?raw.filter(m=>m&&typeof m==="object").map(m=>({
+    id:(typeof m.id==="string"&&m.id)?m.id:uid(),
+    sport:canonSport(m.sport)||(m.sport?String(m.sport).trim():"Basketball"),
+    country:String(m.country??""),flashscoreLeague:String(m.flashscoreLeague??""),
+    flashscoreTeam:String(m.flashscoreTeam??""),bcmTeam:String(m.bcmTeam??""),
+    active:m.active!==false
+  })):[];
+}
+function saveTeamMappings(){const ok=persistValue(STORAGE.teamMappings,JSON.stringify(teamMappings));updateTeamSharedStatus();return ok;}
+
+/* ---- parsing a mapping file (CSV/TSV/TXT via parseCSV; Excel via SheetJS when available) ---- */
+function excelAvailable(){try{return typeof XLSX!=="undefined"&&XLSX&&XLSX.read;}catch{return false;}}
+function teamRowsFromMatrix(matrix){
+  // matrix: array of arrays, first row = header. Returns {rows, error}.
+  if(!matrix||matrix.length<2)return {rows:[],headers:[],error:"The file has no data rows."};
+  const headers=matrix[0].map(h=>cleanField(h));
+  const idx=aliases=>headers.findIndex(h=>aliases.includes(normalize(h).replace(/[_-]/g," ").replace(/\s+/g," ")));
+  const si=idx(["sport","sport name"]),ci=idx(["country","region","country region"]),
+        li=idx(["flashscore league","flashscore league name","league","fs league"]),
+        fi=idx(["flashscore team","fs team","flashscore","team"]),
+        bi=idx(["bcm team","bcm","bcm name","bcm team name"]);
+  if(si<0||ci<0||li<0||fi<0||bi<0)return {rows:[],headers,error:"Required columns: Sport, Country, FlashScore League, FlashScore Team, BCM Team."};
+  const rows=[];
+  for(let i=1;i<matrix.length;i++){
+    const r=matrix[i]||[];
+    rows.push({rowNo:i+1,sportRaw:cleanField(r[si]),country:cleanField(r[ci]),flashscoreLeague:cleanField(r[li]),flashscoreTeam:cleanField(r[fi]),bcmTeam:cleanField(r[bi])});
+  }
+  return {rows,headers,error:""};
+}
+async function readTeamMappingFile(file){
+  const name=(file.name||"").toLowerCase();
+  if(/\.(xlsx|xls)$/.test(name)){
+    if(!excelAvailable())throw new Error("Excel import is unavailable because the local SheetJS library did not load. Save the file as CSV UTF-8 and import that instead.");
+    const buf=await file.arrayBuffer();const wb=XLSX.read(buf,{type:"array"});const sheet=wb.Sheets[wb.SheetNames[0]];
+    const matrix=XLSX.utils.sheet_to_json(sheet,{header:1,defval:"",raw:false});
+    return teamRowsFromMatrix(matrix.filter(r=>Array.isArray(r)&&r.some(c=>String(c).trim()!=="")));
+  }
+  const matrix=parseCSV(await file.text());
+  return teamRowsFromMatrix(matrix);
+}
+
+/* ---- validate + classify imported rows against the current local list ---- */
+function analyzeTeamImport(parsedRows){
+  const valid=[],skipped=[],seen=new Map(),dupInFile=[];
+  for(const r of parsedRows){
+    const sport=canonSport(r.sportRaw);
+    const reasons=[];
+    if(!r.sportRaw)reasons.push("Sport is blank");else if(!sport)reasons.push(`Sport "${r.sportRaw}" is not supported`);
+    if(!r.country)reasons.push("Country is blank");
+    if(!r.flashscoreLeague)reasons.push("FlashScore League is blank");
+    if(!r.flashscoreTeam)reasons.push("FlashScore Team is blank");
+    if(!r.bcmTeam)reasons.push("BCM Team is blank");
+    if(reasons.length){skipped.push({row:r.rowNo,reason:reasons.join("; ")});continue;}
+    const item={sport,country:r.country,flashscoreLeague:r.flashscoreLeague,flashscoreTeam:r.flashscoreTeam,bcmTeam:r.bcmTeam,rowNo:r.rowNo};
+    const key=teamMapKey(item.sport,item.country,item.flashscoreLeague,item.flashscoreTeam);
+    if(seen.has(key)){dupInFile.push({row:r.rowNo,firstRow:seen.get(key).rowNo,item});continue;}
+    seen.set(key,item);valid.push(item);
+  }
+  // Compare valid rows against the current local list.
+  const localByKey=new Map(teamMappings.map(m=>[teamMapKey(m.sport,m.country,m.flashscoreLeague,m.flashscoreTeam),m]));
+  const toAdd=[],toUpdateSame=[],conflicts=[];
+  for(const item of valid){
+    const key=teamMapKey(item.sport,item.country,item.flashscoreLeague,item.flashscoreTeam),ex=localByKey.get(key);
+    if(!ex){toAdd.push(item);continue;}
+    if(teamKey(ex.bcmTeam)===teamKey(item.bcmTeam)&&(ex.active!==false)===true)toUpdateSame.push(item);
+    else conflicts.push({item,local:ex});     // same scope+FS team, different BCM team (or reactivation) => needs confirmation
+  }
+  return {valid,skipped,dupInFile,toAdd,toUpdateSame,conflicts,total:parsedRows.length};
+}
+/* ---- apply an analysed import. conflictPolicy: "use-import" | "keep-local" ---- */
+function applyTeamImport(analysis,conflictPolicy){
+  let added=0,updated=0,keptLocal=0;
+  const byKey=new Map(teamMappings.map(m=>[teamMapKey(m.sport,m.country,m.flashscoreLeague,m.flashscoreTeam),m]));
+  for(const item of analysis.toAdd){
+    const row={id:uid(),sport:item.sport,country:item.country,flashscoreLeague:item.flashscoreLeague,flashscoreTeam:item.flashscoreTeam,bcmTeam:item.bcmTeam,active:true};
+    teamMappings.push(row);byKey.set(teamMapKey(row.sport,row.country,row.flashscoreLeague,row.flashscoreTeam),row);added++;
+  }
+  for(const c of analysis.conflicts){
+    if(conflictPolicy==="keep-local"){keptLocal++;continue;}
+    const ex=byKey.get(teamMapKey(c.item.sport,c.item.country,c.item.flashscoreLeague,c.item.flashscoreTeam));
+    if(ex){ex.bcmTeam=c.item.bcmTeam;ex.active=true;updated++;}
+  }
+  // toUpdateSame are identical BCM values: no change needed, but count active reactivation if inactive.
+  for(const item of analysis.toUpdateSame){
+    const ex=byKey.get(teamMapKey(item.sport,item.country,item.flashscoreLeague,item.flashscoreTeam));
+    if(ex&&ex.active===false){ex.active=true;updated++;}
+  }
+  return {added,updated,keptLocal};
+}
+
+/* ---- resolution for the New Matches table (exact, normalised; never fuzzy) ---- */
+function resolveBcmTeam(sport,country,league,team){
+  if(!team)return null;
+  const key=teamMapKey(sport,country,league,team);
+  const hit=teamMappings.find(m=>m.active!==false&&teamMapKey(m.sport,m.country,m.flashscoreLeague,m.flashscoreTeam)===key);
+  return hit?hit.bcmTeam:null;
+}
+function resolveFixtureMapping(f){
+  const sport=f.Sport,country=f.Country,league=f["Flashscore League Name"]||f.League||"";
+  const home=resolveBcmTeam(sport,country,league,f.Home),away=resolveBcmTeam(sport,country,league,f.Away);
+  let status="Unmapped";if(home&&away)status="Mapped";else if(home||away)status="Partially Mapped";
+  return {bcmHome:home||"Unmapped",bcmAway:away||"Unmapped",status,homeMapped:!!home,awayMapped:!!away};
+}
+function fixtureHasUnmapped(f){const r=resolveFixtureMapping(f);return !r.homeMapped||!r.awayMapped;}
+
+/* ---- SQL export (safe for apostrophes, Unicode, duplicate keys) ---- */
+function sqlStr(v){return "'"+String(v??"").replace(/'/g,"''")+"'";}
+function buildTeamMappingSQL(list){
+  const lines=[];
+  lines.push("-- Team mappings export from the Multi-Sport Fixtures Manager (review before running).");
+  lines.push("-- Target table: public.msfm_team_mappings (see msfm_team_mappings_setup.sql). Run that setup first.");
+  lines.push("-- Idempotent upsert on the unique key (sport, country, flashscore_league, flashscore_team).");
+  lines.push("begin;");
+  for(const m of list){
+    const vals=[sqlStr(m.sport),sqlStr(m.country),sqlStr(m.flashscoreLeague),sqlStr(m.flashscoreTeam),sqlStr(m.bcmTeam),(m.active!==false?"true":"false")].join(",");
+    lines.push("insert into public.msfm_team_mappings (sport,country,flashscore_league,flashscore_team,bcm_team,active) values ("+vals+")");
+    lines.push("  on conflict (sport,country,flashscore_league,flashscore_team) do update set bcm_team=excluded.bcm_team, active=excluded.active;");
+  }
+  lines.push("commit;");
+  return lines.join("\n")+"\n";
+}
+
+/* ---- shared (read-only) load from Supabase ---- */
+async function fetchSharedTeamMappings(){
+  if(!REMOTE_FETCH)return {ok:false,disabled:true,reason:"Shared team mappings are not available in this browser."};
+  const rows=[];
+  try{
+    for(let offset=0;;offset+=SHARED_TEAMS.pageSize){
+      const url=`${SHARED_TEAMS.url}/rest/v1/${SHARED_TEAMS.table}?select=sport,country,flashscore_league,flashscore_team,bcm_team,active&order=sport.asc,country.asc&limit=${SHARED_TEAMS.pageSize}&offset=${offset}`;
+      const res=await REMOTE_FETCH(url,{method:"GET",headers:{apikey:SHARED_TEAMS.key,Authorization:"Bearer "+SHARED_TEAMS.key,Accept:"application/json"}});
+      if(!res.ok){let body="";try{body=await res.text();}catch{}return {ok:false,status:res.status,reason:(typeof describeRemoteError==="function"?describeRemoteError(res.status,body):("Supabase returned status "+res.status))};}
+      const data=await res.json();if(!Array.isArray(data))return {ok:false,reason:"Unexpected response from Supabase."};
+      for(const r of data)rows.push({id:uid(),sport:canonSport(r.sport)||String(r.sport??""),country:String(r.country??""),flashscoreLeague:String(r.flashscore_league??""),flashscoreTeam:String(r.flashscore_team??""),bcmTeam:String(r.bcm_team??""),active:r.active!==false});
+      if(data.length<SHARED_TEAMS.pageSize)break;
+    }
+  }catch(e){return {ok:false,reason:"Could not reach Supabase: "+(e&&e.message||e)};}
+  return {ok:true,list:rows};
+}
+
+/* ---- rendering ---- */
+function teamSelectValues(getList,current){const vals=[...new Set(getList)].sort((a,b)=>String(a).localeCompare(String(b)));return vals;}
+function populateTeamFilters(){
+  const cSel=$("teamCountryFilter"),lSel=$("teamLeagueFilter");if(!cSel||!lSel)return;
+  const cv=cSel.value||"all",lv=lSel.value||"all";
+  const countries=[...new Set(teamMappings.map(m=>m.country).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const leagues=[...new Set(teamMappings.map(m=>m.flashscoreLeague).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  cSel.replaceChildren(new Option("All countries","all"),...countries.map(c=>new Option(c,c)));cSel.value=countries.includes(cv)?cv:"all";
+  lSel.replaceChildren(new Option("All leagues","all"),...leagues.map(l=>new Option(l,l)));lSel.value=leagues.includes(lv)?lv:"all";
+}
+function teamMappingView(){
+  const q=normalize($("teamSearch")?.value||""),sp=$("teamSportFilter")?.value||"all",co=$("teamCountryFilter")?.value||"all",lg=$("teamLeagueFilter")?.value||"all",stt=$("teamStatusFilter")?.value||"all";
+  return teamMappings.filter(m=>{
+    if(sp!=="all"&&canonSport(m.sport)!==sp)return false;
+    if(co!=="all"&&m.country!==co)return false;
+    if(lg!=="all"&&m.flashscoreLeague!==lg)return false;
+    if(stt==="active"&&m.active===false)return false;
+    if(stt==="inactive"&&m.active!==false)return false;
+    if(q&&![m.sport,m.country,m.flashscoreLeague,m.flashscoreTeam,m.bcmTeam].some(v=>normalize(v).includes(q)))return false;
+    return true;
+  });
+}
+function renderTeamMappings(){
+  if(!$("teamMappingBody"))return;
+  populateTeamFilters();
+  const rows=teamMappingView(),body=$("teamMappingBody");body.replaceChildren();
+  if(!rows.length){emptyRow(body,7,teamMappings.length?"No team mappings match the filters.":"No team mappings yet. Add one above or import a CSV / Excel file.");}
+  for(const m of rows.slice(0,MAX_RENDER_ROWS)){
+    const tr=document.createElement("tr");tr.dataset.teamId=m.id;
+    for(const v of [m.sport,m.country,m.flashscoreLeague,m.flashscoreTeam,m.bcmTeam]){const td=document.createElement("td");td.textContent=v;tr.appendChild(td);}
+    const activeTd=document.createElement("td"),chk=document.createElement("input");chk.type="checkbox";chk.checked=m.active!==false;chk.setAttribute("aria-label","Team mapping active");
+    chk.addEventListener("change",()=>{m.active=chk.checked;saveTeamMappings();renderTeamMappings();if(comparisonRunAt)renderComparison(comparisonResults);setTeamMessage(`"${m.flashscoreTeam}" set to ${m.active?"active":"inactive"}.`,"success");});
+    activeTd.appendChild(chk);tr.appendChild(activeTd);
+    const actions=document.createElement("td"),edit=document.createElement("button"),del=document.createElement("button");
+    edit.type="button";edit.className="secondary small";edit.textContent="Edit";edit.addEventListener("click",()=>startTeamEdit(m.id));
+    del.type="button";del.className="danger small";del.style.marginLeft="5px";del.textContent="Delete";
+    del.addEventListener("click",()=>{if(confirm(`Delete team mapping "${m.flashscoreTeam}" -> "${m.bcmTeam}" (${m.sport} / ${m.country} / ${m.flashscoreLeague})? Only this mapping is removed.`)){teamMappings=teamMappings.filter(x=>x.id!==m.id);saveTeamMappings();renderTeamMappings();if(comparisonRunAt)renderComparison(comparisonResults);setTeamMessage("Team mapping deleted.","success");}});
+    actions.append(edit,del);tr.appendChild(actions);
+    body.appendChild(tr);
+  }
+  if(rows.length>MAX_RENDER_ROWS)emptyRow(body,7,`Showing the first ${MAX_RENDER_ROWS} of ${rows.length}. Use the CSV export for the full list.`);
+  $("teamMappingCount").textContent=`${teamMappings.length} team mapping${teamMappings.length===1?"":"s"} (${teamMappings.filter(m=>m.active!==false).length} active)`;
+  updateTeamSharedStatus();
+}
+function setTeamMessage(text,type){setMessage("teamMappingMessage",text,type);}
+function updateTeamSharedStatus(){
+  const b=$("teamSharedStatus");if(b){b.textContent=teamSharedLoadedAt?("Showing shared Supabase list loaded "+new Date(teamSharedLoadedAt).toLocaleTimeString()):"Local only - not yet shared to Supabase";b.className="badge "+(teamSharedLoadedAt?"":"off");}
+  const s=$("teamLocalSaveStatus");if(s)s.textContent=teamMappings.length?`${teamMappings.length} mapping(s) saved in this browser.`:"";
+  const x=$("teamExcelStatus");if(x)x.textContent=excelAvailable()?"Excel (.xlsx) import ready.":"Excel import unavailable - CSV only (see vendor/README.txt).";
+}
+function startTeamEdit(id){
+  const m=teamMappings.find(x=>x.id===id);if(!m)return;editingTeamId=id;
+  $("tmSport").value=canonSport(m.sport)||"Basketball";$("tmCountry").value=m.country;$("tmLeague").value=m.flashscoreLeague;$("tmFsTeam").value=m.flashscoreTeam;$("tmBcmTeam").value=m.bcmTeam;
+  $("saveTeamMappingBtn").textContent="Save Changes";$("cancelTeamEditBtn").classList.remove("hidden");$("tmCountry").focus();
+  setTeamMessage("Editing one team mapping. Save changes or cancel.");
+}
+function resetTeamForm(){editingTeamId=null;$("teamMappingForm").reset();$("saveTeamMappingBtn").textContent="Add Mapping";$("cancelTeamEditBtn").classList.add("hidden");}
+
+function bindTeamMappingEvents(){
+  if(!$("teamMappingForm"))return;
+  fillSportSelect($("tmSport"));
+  const sf=$("teamSportFilter");if(sf){fillSportSelect(sf);sf.insertBefore(new Option("All sports","all"),sf.firstChild);sf.value="all";}
+  $("teamMappingForm").addEventListener("submit",e=>{
+    e.preventDefault();
+    const sport=$("tmSport").value,country=cleanField($("tmCountry").value),league=cleanField($("tmLeague").value),fsTeam=cleanField($("tmFsTeam").value),bcm=cleanField($("tmBcmTeam").value);
+    if(!country||!league||!fsTeam||!bcm){setTeamMessage("All five fields are required.","error");return;}
+    const key=teamMapKey(sport,country,league,fsTeam);
+    const dup=teamMappings.find(m=>m.id!==editingTeamId&&teamMapKey(m.sport,m.country,m.flashscoreLeague,m.flashscoreTeam)===key);
+    if(dup&&teamKey(dup.bcmTeam)!==teamKey(bcm)){setTeamMessage(`A mapping for "${fsTeam}" in ${sport} / ${country} / ${league} already maps to "${dup.bcmTeam}". Edit that mapping to change the BCM team instead of adding a conflicting one.`,"error");return;}
+    if(dup&&!editingTeamId){setTeamMessage(`That mapping already exists ("${fsTeam}" -> "${dup.bcmTeam}").`,"warn");return;}
+    const wasEditing=Boolean(editingTeamId);
+    if(editingTeamId){const m=teamMappings.find(x=>x.id===editingTeamId);if(m){m.sport=sport;m.country=country;m.flashscoreLeague=league;m.flashscoreTeam=fsTeam;m.bcmTeam=bcm;}}
+    else teamMappings.push({id:uid(),sport,country,flashscoreLeague:league,flashscoreTeam:fsTeam,bcmTeam:bcm,active:true});
+    saveTeamMappings();renderTeamMappings();resetTeamForm();if(comparisonRunAt)renderComparison(comparisonResults);
+    setTeamMessage(`Team mapping ${wasEditing?"updated":"added"} (local only - not yet shared to Supabase).`,"success");
+  });
+  $("cancelTeamEditBtn").addEventListener("click",()=>{resetTeamForm();setTeamMessage("Edit cancelled.");});
+  const reRender=()=>renderTeamMappings();
+  for(const id of ["teamSearch","teamSportFilter","teamCountryFilter","teamLeagueFilter","teamStatusFilter"])$(id)&&$(id).addEventListener(id==="teamSearch"?"input":"change",reRender);
+  $("importTeamMappingsBtn").addEventListener("click",async()=>{
+    const file=$("teamMappingFile").files[0];if(!file){setTeamMessage("Choose a CSV or Excel file first.","error");return;}
+    try{
+      const parsed=await readTeamMappingFile(file);
+      if(parsed.error){setTeamMessage(parsed.error,"error");return;}
+      const a=analyzeTeamImport(parsed.rows);
+      if(!a.valid.length&&!a.skipped.length){setTeamMessage("No data rows found in the file.","error");return;}
+      const detail=a.skipped.slice(0,6).map(s=>`Row ${s.row}: ${s.reason}`).join("\n");
+      const confList=a.conflicts.slice(0,6).map(c=>`Row ${c.item.rowNo}: "${c.item.flashscoreTeam}" -> "${c.item.bcmTeam}" (currently "${c.local.bcmTeam}")`).join("\n");
+      const choice=await askChoice(
+        `Preview ${a.total} row(s): ${a.toAdd.length} new, ${a.conflicts.length} conflicting (different BCM team), ${a.dupInFile.length} duplicate in file, ${a.skipped.length} invalid.`+
+        (detail?`\n\nInvalid:\n${detail}`:"")+(confList?`\n\nConflicts:\n${confList}`:"")+
+        `\n\nNothing is saved to Supabase - importing updates your LOCAL list only.`,
+        [{label:"Import",value:"import",cls:"primary"},{label:"Cancel",value:null,cls:"neutral"}]);
+      if(!choice){setTeamMessage("Import cancelled. Nothing was changed.");return;}
+      let policy="use-import";
+      if(a.conflicts.length){
+        policy=await askChoice(`${a.conflicts.length} row(s) map an existing Flashscore team to a DIFFERENT BCM team. Choose one policy for all of them.`,
+          [{label:"Keep my current BCM teams",value:"keep-local",cls:"neutral"},{label:"Use the file's BCM teams",value:"use-import",cls:"primary"},{label:"Cancel import",value:null,cls:"danger"}]);
+        if(!policy){setTeamMessage("Import cancelled. Nothing was changed.");return;}
+      }
+      const r=applyTeamImport(a,policy);saveTeamMappings();renderTeamMappings();$("teamMappingFile").value="";if(comparisonRunAt)renderComparison(comparisonResults);
+      setTeamMessage(`Imported from ${file.name}: ${r.added} added, ${r.updated} updated, ${r.keptLocal} conflict(s) kept local, ${a.dupInFile.length} duplicate row(s) in file ignored, ${a.skipped.length} invalid row(s) skipped. Saved locally only - not yet shared to Supabase.`,a.skipped.length||a.conflicts.length?"warn":"success");
+    }catch(err){setTeamMessage(err.message||"Could not import the file.","error");}
+  });
+  $("exportTeamMappingsCsvBtn").addEventListener("click",()=>{
+    if(!teamMappings.length){setTeamMessage("There are no team mappings to export.","error");return;}
+    downloadCSV("team_mappings.csv",["Sport","Country","FlashScore League","FlashScore Team","BCM Team","Active"],teamMappings.map(m=>({"Sport":m.sport,"Country":m.country,"FlashScore League":m.flashscoreLeague,"FlashScore Team":m.flashscoreTeam,"BCM Team":m.bcmTeam,"Active":m.active!==false?"TRUE":"FALSE"})));
+    setTeamMessage(`Exported ${teamMappings.length} team mapping(s) to CSV.`,"success");
+  });
+  $("exportTeamMappingsSqlBtn").addEventListener("click",()=>{
+    if(!teamMappings.length){setTeamMessage("There are no team mappings to export.","error");return;}
+    downloadText("msfm_team_mappings_update.sql",buildTeamMappingSQL(teamMappings),"application/sql;charset=utf-8;");
+    setTeamMessage(`Exported ${teamMappings.length} team mapping(s) as Supabase SQL. Run it in the Supabase SQL Editor to share the list; it is NOT applied automatically.`,"success");
+  });
+  $("reloadSharedTeamMappingsBtn").addEventListener("click",async()=>{
+    setTeamMessage("Loading the shared team mapping list from Supabase...");
+    const res=await fetchSharedTeamMappings();
+    if(!res.ok){setTeamMessage((res.reason||"Could not load the shared team mappings.")+" Your local team mappings were kept.","error");return;}
+    if(!res.list.length){setTeamMessage("The shared team mapping table is empty or not readable with this key. Local team mappings were kept.","warn");return;}
+    if(!confirm(`Replace the ${teamMappings.length} team mapping(s) in this browser with ${res.list.length} shared mapping(s) from Supabase? Your local list will be overwritten.`))return;
+    teamMappings=res.list;teamSharedLoadedAt=new Date().toISOString();saveTeamMappings();renderTeamMappings();if(comparisonRunAt)renderComparison(comparisonResults);
+    setTeamMessage(`Loaded ${res.list.length} shared team mapping(s) from Supabase into this browser.`,"success");
+  });
+}
+// Small test surface for deterministic persistence and business-rule checks; harmless in normal use.
+window.__MSFM={classifyFixtures,parseWorkedPaste,teamRelation,teamKey,makeMatcher,matchFixture,parseFixtures,parseFixturesDetailed,fixtureIdentity,exclusionCategory,importMappingCSV,applyImport,measureRepresentativePerformance,buildCSV,escapeCSV,dateKey,timeKey,countryKey,canonSport,migrateStoredData,addDaysISO,STORAGE,SPORTS,
+  buildMappingSQL,playoffAlerts,historyCols,syncSharedMappings,sharedReady:()=>sharedState.promise,
+  persistence:{ready:()=>persistenceReady,flushDraftSaves,reconcileRecords,validStoredValue,idbConfig:IDB_CONFIG,simulateExternalRevision:showNewerData,status:()=>({revision:currentRevision,dirty:persistenceDirty,text:$("persistenceStatus").textContent})},
+  backup:{buildBackup,serializeBackup,parseBackupText,backupDuplicateKeys,backupMergePreview,restoreFromBackup,reloadFromStorage,formatVersion:BACKUP_FORMAT_VERSION},
+  copy:{copyTextToClipboard},
+  teamMappings:{loadTeamMappings,saveTeamMappings,teamRowsFromMatrix,analyzeTeamImport,applyTeamImport,resolveBcmTeam,resolveFixtureMapping,fixtureHasUnmapped,buildTeamMappingSQL,teamMapKey,excelAvailable,list:()=>teamMappings,setList:l=>{teamMappings=Array.isArray(l)?l:[];renderTeamMappings();},
+    importMatrix:(matrix,conflictPolicy)=>{const parsed=teamRowsFromMatrix(matrix);if(parsed.error)return {error:parsed.error};const a=analyzeTeamImport(parsed.rows);const r=applyTeamImport(a,conflictPolicy||"use-import");saveTeamMappings();renderTeamMappings();if(comparisonRunAt)renderComparison(comparisonResults);return {analysis:a,result:r};}},
+  state:()=>({mappings,collectionDays,convertedRows,excludedRows,comparisonResults,lastParseAccounting,comparisonStale,comparisonRunAt})};
+if(TEST_MODE){currentRevision=parseRevision(readRaw(STORAGE.revision));init();persistenceReady=Promise.resolve({testMode:true});}
+else persistenceReady=preparePersistence().then(result=>{init();return result;});
 /* Page tabs: Mappings | Fixtures | Compare. Display only - every section stays in
    the page, so all controls, saved data and tests behave exactly as before. */
 (function setupTabs(){
-  const btns = Array.from(document.querySelectorAll('.tabbar [data-tab]'));
-  const panels = Array.from(document.querySelectorAll('section.panel[data-tab]'));
-  function show(name){
-    btns.forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
-    panels.forEach(p => p.classList.toggle('tab-hidden', p.dataset.tab !== name));
-    if (name === 'mappings'){ const d = document.querySelector('section.mapping-panel > details'); if (d) d.open = true; }
-  }
-  btns.forEach(b => b.addEventListener('click', () => show(b.dataset.tab)));
-  window.msfmShowTab = show;
-  show('fixtures');
-})();
+  const btns=Array.from(document.querySelectorAll('.tabbar [role="tab"]')),panels=Array.from(document.querySelectorAll('section.panel[data-tab]')),firstByTab={};
+  panels.forEach((p,i)=>{p.id=p.id||`tabPanel-${p.dataset.tab}-${i+1}`;p.setAttribute("role","tabpanel");p.setAttribute("aria-labelledby",`tabBtn-${p.dataset.tab}`);if(!firstByTab[p.dataset.tab])firstByTab[p.dataset.tab]=p.id;});btns.forEach(b=>b.setAttribute("aria-controls",firstByTab[b.dataset.tab]));
+  function show(name,focus=false){btns.forEach(b=>{const on=b.dataset.tab===name;b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1;if(on&&focus)b.focus();});panels.forEach(p=>{const hide=p.dataset.tab!==name;p.classList.toggle('tab-hidden',hide);p.hidden=hide;});if(name==='mappings'){const d=document.querySelector('section.mapping-panel > details');if(d)d.open=true;}}
+  btns.forEach((b,i)=>{b.addEventListener('click',()=>show(b.dataset.tab));b.addEventListener('keydown',e=>{let n=null;if(e.key==='ArrowRight')n=(i+1)%btns.length;if(e.key==='ArrowLeft')n=(i-1+btns.length)%btns.length;if(e.key==='Home')n=0;if(e.key==='End')n=btns.length-1;if(n!==null){e.preventDefault();show(btns[n].dataset.tab,true);}});});window.msfmShowTab=show;show('fixtures');
+})();;
 </script>
 </body>
 </html>

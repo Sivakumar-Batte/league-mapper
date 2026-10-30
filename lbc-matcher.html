@@ -4,7 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LBC Event ID Matcher</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- SheetJS upgraded 0.18.5 -> 0.20.3 (patches CVE-2023-30533, CVE-2024-22363).
+     SECURITY TODO (AppSec #5): self-host on approved Entain infra + add SRI. -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <style>
 :root{/* Tech Teal & Navy (Clean & Corporate) */--primary:#0284C7;--primary-hover:#0369A1;--secondary:#0D9488;--secondary-hover:#0F766E;--active:#E0F2FE;--success:#0D9488;--success-light:#CCFBF1;--success-border:#5EEAD4;--danger:#DC2626;--danger-light:#fee2e2;--danger-border:#fca5a5;--gray-50:#F8FAFC;--gray-100:#F1F5F9;--gray-200:#E2E8F0;--gray-300:#CBD5E1;--gray-400:#94A3B8;--gray-500:#64748B;--gray-600:#475569;--gray-700:#334155;--gray-800:#1E293B;--gray-900:#0F172A;--radius:12px;--radius-sm:8px;--shadow-sm:0 1px 2px rgba(15,23,42,.05);--shadow:0 4px 6px -1px rgba(15,23,42,.07),0 2px 4px -2px rgba(15,23,42,.05);--shadow-lg:0 10px 15px -3px rgba(15,23,42,.08),0 4px 6px -4px rgba(15,23,42,.05);--transition:.2s cubic-bezier(.4,0,.2,1)}
 *{box-sizing:border-box;margin:0;padding:0}

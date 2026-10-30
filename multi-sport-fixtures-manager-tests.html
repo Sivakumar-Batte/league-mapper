@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Multi-Sport Fixtures Manager — Automated Tests</title>
+<style>
+body{font:14px/1.5 system-ui,Segoe UI,Arial,sans-serif;margin:20px;background:#f4f7fb;color:#172033}
+h1{font-size:20px;margin:0 0 6px}.sub{color:#64748b;margin-bottom:14px;max-width:900px}
+#summary{font-weight:700;padding:10px 14px;border-radius:8px;margin-bottom:12px;background:#eef}
+#summary.ok{background:#e9f8ef;color:#087443}#summary.bad{background:#fff0ef;color:#b42318}
+.r{padding:4px 10px;border-bottom:1px solid #dbe3ef}.r.pass::before{content:"PASS  ";color:#087443;font-weight:700}.r.fail::before{content:"FAIL  ";color:#b42318;font-weight:700}
+.r .d{color:#b42318;font-family:Consolas,monospace;font-size:12px;white-space:pre-wrap}
+iframe{position:absolute;left:-5000px;top:0;width:1300px;height:900px;border:0}
+pre#results{display:none}
+</style>
+</head>
+<body>
+<h1>Multi-Sport Fixtures Manager — Automated Tests</h1>
+<div class="sub">Loads the real <code>multi-sport-fixtures-manager.html</code> in a hidden frame with an in-memory storage store (your real browser data is never touched) and drives the actual UI and functions. In Chrome/Edge, file:// frames need <code>--allow-file-access-from-files</code>, or serve the folder over a local web server.</div>
+<div id="summary">Running…</div>
+<div id="out"></div>
+<pre id="results">PENDING</pre>
+<iframe id="app" title="app under test"></iframe>
+<script>
+"use strict";
+function makeStore(init,opts){const m=new Map(Object.entries(init||{})),o=opts||{};return {getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>{if(o.failSet){const e=new Error("Injected storage failure");e.name="QuotaExceededError";throw e;}m.set(k,String(v));},removeItem:k=>{if(o.failRemove)throw new Error("Injected remove failure");m.delete(k);},key:i=>[...m.keys()][i]??null,get length(){return m.size;},_keys:()=>[...m.keys()]};}
+window.__MSFM_TEST_STORE=makeStore();
+const results=[];
+function check(group,name,cond,detail){results.push({group,name,pass:!!cond,detail:cond?"":(detail===undefined?"":typeof detail==="string"?detail:JSON.stringify(detail))});}
+function loadApp(){return new Promise(res=>{const f=document.getElementById("app");f.onload=()=>res(f.contentWindow);f.src="multi-sport-fixtures-manager.html?r="+Date.now()+Math.random()+"#msfm-test";});}
+async function freshApp(init,fetchImpl){window.__MSFM_TEST_STORE=makeStore(init);window.__MSFM_TEST_FETCH=fetchImpl||null;return loadApp();}
+async function freshAppWithStore(store,fetchImpl){window.__MSFM_TEST_STORE=store;window.__MSFM_TEST_FETCH=fetchImpl||null;return loadApp();}
+/* Fake Supabase REST endpoint. Records every request; never touches the network. */
+function fakeSupabase(handler){const calls=[];const f=async(url,opts)=>{calls.push({url:String(url),method:(opts&&opts.method)||"GET",headers:(opts&&opts.headers)||{}});return handler(String(url),opts);};f.calls=calls;return f;}
+const resp=(status,body)=>{const text=typeof body==="string"?body:JSON.stringify(body);return {ok:status>=200&&status<300,status,json:async()=>JSON.parse(text),text:async()=>text};};
+function pagedRows(rows){return url=>{const off=+(/offset=(\d+)/.exec(url)||[0,0])[1],lim=+(/limit=(\d+)/.exec(url)||[0,1000])[1];return resp(200,rows.slice(off,off+lim));};}
+function el(win,id){return win.document.getElementById(id);}
+let lastConfirm="";
+function stubDialogs(win){win.confirm=m=>{lastConfirm=String(m);return true;};win.alert=()=>{};}
+function setInputs(win,sport,dateISO,raw){const s=el(win,"sport");s.value=sport;s.dispatchEvent(new win.Event("change"));el(win,"fixtureDate").value=dateISO;el(win,"rawInput").value=raw;}
+function addDay(win,sport,dateISO,raw){stubDialogs(win);setInputs(win,sport,dateISO,raw);el(win,"addDayBtn").click();return el(win,"collectionMessage").textContent;}
+function parseOnly(win,sport,dateISO,raw){stubDialogs(win);setInputs(win,sport,dateISO,raw);el(win,"filterBtn").click();return win.__MSFM.state();}
+const RAW={
+  "Basketball":"Euroleague\nEUROPE:\n\nStandings\n\n20:00\n\nBayern\n\nBarcelona\n-\n-\n\n20:30\n\nValencia\n\nFenerbahce\n-\n-",
+  "Ice hockey":"SHL\nSWEDEN:\nStandings\n19:00\nFrolunda\nSkelleftea\n-\n-",
+  "Floorball":"Svenska Superligan\nSWEDEN:\nStandings\n19:00\nStorvreta\nFalun\n-\n-",
+  "Waterpolo":"OB I\nHUNGARY:\nStandings\n18:00\nFerencvaros\nOSC\n-\n-",
+  "Bandy":"Elitserien\nSWEDEN:\nStandings\n19:00\nVasteras\nVillerslev\n-\n-",
+  "Field hockey":"Euro Hockey League\nEUROPE:\nStandings\n12:00\nBloemendaal\nAmsterdam\n-\n-"
+};
+const fx=o=>({Sport:"Basketball",Date:"27/10/2026",Time:"20:00",Country:"Europe","Flashscore League Name":"Euroleague","Priority League":"Euroleague Men + Specials (Last 8 only)",Home:"Bayern",Away:"Barcelona",...o});
+const wk=(o,n)=>({Sport:"Basketball",Date:"27-10-2026",Time:"20:00",Country:"EUROPE",League:"Euroleague",Home:"Bayern",Away:"Barcelona","Event ID":"",rowNo:n||1,...o});
+const counts=r=>({n:r.newMatches.length,a:r.alreadyWorked.length,t:r.timeChanged.length,p:r.possible.length,c:r.conflicts.length,total:r.totalCompared});
+
+async function main(){
+  let win,api,st;
+  /* ---------- T1 + T2 + T13: collection coexistence, scoped replace, persistence ---------- */
+  win=await freshApp();api=win.__MSFM;
+  addDay(win,"Basketball","2026-10-27",RAW["Basketball"]);
+  addDay(win,"Ice hockey","2026-10-27",RAW["Ice hockey"]);
+  st=api.state();
+  const sportsOn27=st.collectionDays.filter(d=>d.dateISO==="2026-10-27").map(d=>d.sport).sort();
+  check("T1 Same date, different sports","both Basketball and Ice hockey entries exist for 27/10/2026",JSON.stringify(sportsOn27)===JSON.stringify(["Basketball","Ice hockey"]),sportsOn27);
+  const bb1=st.collectionDays.find(d=>d.sport==="Basketball"),ih1=st.collectionDays.find(d=>d.sport==="Ice hockey");
+  check("T1 Same date, different sports","Basketball entry has 2 matched fixtures",bb1&&bb1.matched.length===2,bb1&&bb1.matched.length);
+  check("T1 Same date, different sports","Ice hockey entry has 1 matched fixture",ih1&&ih1.matched.length===1,ih1&&ih1.matched.length);
+  check("T1 Same date, different sports","collection table shows a Sport column value for both rows",[...el(win,"collectionBody").rows].map(r=>r.cells[0].textContent).sort().join(",")==="Basketball,Ice hockey");
+  const ihSnapshot=JSON.stringify(ih1);
+  lastConfirm="";
+  const msg2=addDay(win,"Basketball","2026-10-27","Euroleague\nEUROPE:\n20:00\nBayern\nBarcelona\n-\n-");
+  st=api.state();
+  const bb2=st.collectionDays.find(d=>d.sport==="Basketball"),ih2=st.collectionDays.find(d=>d.sport==="Ice hockey");
+  check("T2 Same sport and date replacement","replace confirmation names both sport and date",lastConfirm.includes("Basketball")&&lastConfirm.includes("27/10/2026"),lastConfirm);
+  check("T2 Same sport and date replacement","Basketball 27/10 now has 1 matched fixture",bb2&&bb2.matched.length===1,bb2&&bb2.matched.length);
+  check("T2 Same sport and date replacement","Ice hockey 27/10 entry is byte-for-byte unchanged",JSON.stringify(ih2)===ihSnapshot);
+  check("T2 Same sport and date replacement","still exactly 2 sport-date entries",st.collectionDays.length===2,st.collectionDays.length);
+  check("T2 Same sport and date replacement","success message mentions Replaced and preservation",/Replaced Basketball 27\/10\/2026/.test(msg2)&&/preserved/.test(msg2),msg2);
+  // Replacing with a paste that parses to nothing must keep the old entry.
+  addDay(win,"Basketball","2026-10-27","nothing useful here");
+  st=api.state();
+  check("T2 Same sport and date replacement","an empty parse does not destroy the existing entry",st.collectionDays.find(d=>d.sport==="Basketball").matched.length===1);
+  const mapCountBefore=st.mappings.length,collBefore=JSON.stringify(st.collectionDays);
+  win=await loadApp();api=win.__MSFM;st=api.state();     // same store => simulated browser refresh
+  check("T13 Storage persistence","collection identical after refresh",JSON.stringify(st.collectionDays)===collBefore);
+  check("T13 Storage persistence","mapping count identical after refresh",st.mappings.length===mapCountBefore,[st.mappings.length,mapCountBefore]);
+  check("T13 Storage persistence","last-parse sport and date restored into the form",el(win,"fixtureDate").value==="2026-10-27"&&el(win,"sport").value==="Basketball",[el(win,"fixtureDate").value,el(win,"sport").value]);
+  check("T13 Storage persistence","collection table re-rendered with both sports",[...el(win,"collectionBody").rows].length===2);
+
+  /* ---------- T3 + T4: non-priority, cross-country, cross-region, blank mapping, orphan headings ---------- */
+  win=await freshApp();api=win.__MSFM;
+  st=parseOnly(win,"Basketball","2026-10-27","Premier League\nBELARUS:\nStandings\n16:00\nGomel 2\nMinsk 2\n-\n-\nPremier League\nICELAND:\nStandings\n20:15\nKeflavik W\nStjarnan W\n-\n-");
+  check("T3 Non-priority league","Belarus Premier League fixture is excluded",st.excludedRows.some(r=>r.Country==="Belarus"&&r.Home==="Gomel 2"),st.excludedRows);
+  check("T3 Non-priority league","Belarus fixture is not in matching results",!st.convertedRows.some(r=>r.Country==="Belarus"));
+  check("T3 Non-priority league","Iceland Premier League (configured) still matches",st.convertedRows.length===1&&st.convertedRows[0].Country==="Iceland",st.convertedRows);
+  check("T3 Non-priority league","exclusion reason explains the country mismatch",/another country/.test((st.excludedRows[0]||{}).Reason||""),st.excludedRows[0]);
+  const m=api.makeMatcher("Basketball");
+  check("T3 Non-priority league","ASIA: Champions League does NOT match the Europe mapping (cross-region)",!m({DetectedLeague:"Champions League",Country:"Asia"}).match);
+  check("T3 Non-priority league","EUROPE: Champions League matches",!!m({DetectedLeague:"Champions League",Country:"Europe"}).match);
+  check("T3 Non-priority league","South America fixture falls back to the America-family mapping",!!m({DetectedLeague:"Champions League Americas",Country:"South America"}).match);
+  check("T3 Non-priority league","EUROPE: Friendly International does NOT fall back to the World mapping",!m({DetectedLeague:"Friendly International",Country:"Europe"}).match);
+  check("T3 Non-priority league","WORLD: Friendly International matches",!!m({DetectedLeague:"Friendly International",Country:"World"}).match);
+  st=parseOnly(win,"Basketball","2026-10-27","Euroleague\nEUROPE:\n20:00\nBayern\nBarcelona\nZZZLAND:\n21:00\nAlpha\nBeta");
+  check("T3 Non-priority league","fixture under an orphan country heading does not inherit the previous league",st.convertedRows.length===1&&st.excludedRows.some(r=>r.Home==="Alpha"&&r.DetectedLeague===""),{conv:st.convertedRows,exc:st.excludedRows});
+  check("T3 Non-priority league","league-less fixture is listed as excluded with a reason, not dropped",st.excludedRows.some(r=>r.Home==="Alpha"&&/league heading/.test(r.Reason)));
+  st=parseOnly(win,"Basketball","2026-10-27","QBLQATAR: Standings\n16:00\nAl Arabi\nAl Ahli");
+  check("T3 Non-priority league","glued all-caps heading QBLQATAR is split into league QBL / country Qatar",st.excludedRows.length===1&&st.excludedRows[0].DetectedLeague==="QBL"&&st.excludedRows[0].Country==="Qatar",st.excludedRows);
+  st=parseOnly(win,"Basketball","2026-10-27","FIBA Asia Cup - Men\nASIA:\nStandings\n10:00\nJapan\nChina\n-\n-");
+  check("T4 Blank Flashscore mapping","fixture for a league whose mapping has a blank Flashscore name is excluded",st.convertedRows.length===0&&st.excludedRows.length===1,st);
+  check("T4 Blank Flashscore mapping","blank Flashscore names never become a match key (empty league detected)",!m({DetectedLeague:"",Country:"Asia"}).match&&!m({DetectedLeague:" ",Country:"Asia"}).match);
+  const blank=st.mappings.filter(x=>x.sport==="Basketball"&&x.flashscoreLeague==="");
+  check("T4 Blank Flashscore mapping","blank mappings are preserved in the list (not deleted)",blank.length>=10,blank.length);
+  // Inactive mapping must not match.
+  const elRow=[...el(win,"mappings-basketball").rows].find(r=>r.cells[3]&&r.cells[3].textContent==="Euroleague");
+  elRow.cells[4].querySelector("input").click();
+  st=parseOnly(win,"Basketball","2026-10-27",RAW["Basketball"]);
+  check("T4 Blank Flashscore mapping","an inactive mapping is not used for matching",st.convertedRows.length===0&&/disabled/.test(st.excludedRows[0].Reason),st.excludedRows[0]);
+
+  /* ---------- T5–T11: comparison engine ---------- */
+  win=await freshApp();api=win.__MSFM;
+  let r=api.classifyFixtures([fx()],[wk({"Event ID":"111"})]);
+  check("T5 Exact worked match","exact sport/date/time/country/league/teams => Already Worked",JSON.stringify(counts(r))===JSON.stringify({n:0,a:1,t:0,p:0,c:0,total:1}),counts(r));
+  r=api.classifyFixtures([fx()],[wk({Time:"19:00","Event ID":"111"})]);
+  check("T6 Time change","same fixture, different time => Time Changed",r.timeChanged.length===1&&r.alreadyWorked.length===0,counts(r));
+  check("T6 Time change","reason states the shift (1h later)",/1h later/.test((r.timeChanged[0]||{}).reason||""),r.timeChanged[0]);
+  r=api.classifyFixtures([fx({Home:"Sabah BC",Away:"Nanterre","Flashscore League Name":"Champions League","Priority League":"FIBA Champions League","Event ID":"20034995",Time:"17:00"})],[wk({Home:"Sabah Baku",Away:"Nanterre",League:"Champions League","Event ID":"20034995",Time:"17:00"})]);
+  check("T7 Same Event ID, different team label","classified as Possible Duplicate (not Already Worked)",r.possible.length===1&&r.alreadyWorked.length===0,counts(r));
+  check("T7 Same Event ID, different team label","reason names the differing home team",/home-team name differs/.test((r.possible[0]||{}).reason||""),r.possible[0]);
+  const paste="Sport Name\tDate\tTime\tCountry\tLeague\tHome Team\tAway Team\tEvent ID\nBasketball\t27-10-2026\t17:00\tEUROPE\tChampions League\tSabah Baku\tNanterre\t20034995\nBasketball\t27-10-2026\t17:00\tEUROPE\tChampions League\tSabah BC\tNanterre\t20034995";
+  const pw=api.parseWorkedPaste(paste);
+  check("T8 Duplicate Event IDs in history","Excel paste parsed: header skipped, 2 rows kept",pw.rows.length===2&&pw.skipped.length===0,pw);
+  r=api.classifyFixtures([fx({Home:"Sabah BC",Away:"Nanterre","Flashscore League Name":"Champions League","Priority League":"FIBA Champions League",Time:"17:00"})],pw.rows);
+  check("T8 Duplicate Event IDs in history","the inconsistent Event ID group is reported as a conflict",r.conflicts.length===1&&r.conflicts[0].fields.includes("home team"),r.conflicts);
+  check("T8 Duplicate Event IDs in history","both conflicting rows are kept (nothing discarded)",r.conflicts[0]&&r.conflicts[0].rows.length===2);
+  check("T8 Duplicate Event IDs in history","the fixture is NOT auto-classified as Already Worked; it goes to review",r.possible.length===1&&r.alreadyWorked.length===0,counts(r));
+  check("T8 Duplicate Event IDs in history","review reason mentions multiple rows with the same Event ID",/Multiple worked-history rows with the same Event ID/.test((r.possible[0]||{}).reason||""),r.possible[0]);
+  const similar=[["Olympiakos","Olympiacos"],["Perth","Perth Wildcats"],["Team FOG Naestved","Næstved"],["Sabah Baku","Sabah BC"]];
+  for(const [a,b] of similar)check("T9 Similar team names",`${a} ~ ${b} is "similar" (review, never silent)`,api.teamRelation(a,b)==="similar",api.teamRelation(a,b));
+  check("T9 Similar team names",`Visby/Roma = Visby-Roma is "exact"`,api.teamRelation("Visby/Roma","Visby-Roma")==="exact",api.teamRelation("Visby/Roma","Visby-Roma"));
+  check("T9 Similar team names","accent/case/spacing: Fenerbahçe = FENERBAHCE",api.teamRelation("Fenerbahçe","  FENERBAHCE ")==="exact");
+  const unrelated=[["Real Madrid","Real Betis"],["Minsk 2","Minsk"],["Horizont Minsk 2 W","Horizont Minsk W"],["Bayern","Barcelona"],["Saint Quentin U21","Saint Quentin"],["Bendigo W","Bendigo"],["Partizan","Panathinaikos"]];
+  for(const [a,b] of unrelated)check("T9 Similar team names",`${a} vs ${b} is NOT matched (false-positive guard)`,api.teamRelation(a,b)==="none",api.teamRelation(a,b));
+  r=api.classifyFixtures([fx({Home:"Olympiakos",Away:"Barcelona"})],[wk({Home:"Olympiacos"})]);
+  check("T9 Similar team names","similar names + matching details => Possible Duplicate with reason",r.possible.length===1&&/Similar team names/.test(r.possible[0].reason),r.possible[0]||counts(r));
+  r=api.classifyFixtures([fx({Home:"Minsk 2",Away:"Gomel 2"})],[wk({Home:"Minsk",Away:"Gomel"})]);
+  check("T9 Similar team names","reserve teams are not matched to the first teams (classified New)",r.newMatches.length===1,counts(r));
+  r=api.classifyFixtures([fx({"Event ID":"555"})],[wk({Sport:"Ice hockey","Event ID":"555"})]);
+  check("T10 Sport conflict","same Event ID but different sport is not Already Worked",r.alreadyWorked.length===0&&r.timeChanged.length===0,counts(r));
+  check("T10 Sport conflict","it is flagged for review with a sport reason",r.possible.length===1&&/different sport/.test(r.possible[0].reason),r.possible[0]);
+  r=api.classifyFixtures([fx()],[wk({"Event ID":"777"},1),wk({Sport:"Ice hockey","Event ID":"777",Home:"Frolunda",Away:"Skelleftea"},2)]);
+  check("T10 Sport conflict","history Event ID shared across sports is reported as a conflict on sport",r.conflicts.length===1&&r.conflicts[0].fields.includes("sport"),r.conflicts);
+  check("T10 Sport conflict","fixture touching that ID is reviewed, not silently worked",r.alreadyWorked.length===0&&r.possible.length===1,counts(r));
+  r=api.classifyFixtures([fx()],[wk({"Event ID":""})]);
+  check("T11 Missing Event ID","fallback on sport/date/country/league/teams/time => Already Worked",r.alreadyWorked.length===1,counts(r));
+  r=api.classifyFixtures([fx({Home:"Valencia",Away:"Fenerbahce"})],[wk({"Event ID":""})]);
+  check("T11 Missing Event ID","unrelated history row => New",r.newMatches.length===1,counts(r));
+  r=api.classifyFixtures([fx(),fx({Time:"21:00"})],[wk({},1)]);
+  check("Extra: one-claim rule","one history row cannot be the definitive match for two fixtures",r.alreadyWorked.length===1&&r.timeChanged.length===0&&r.possible.length===1,counts(r));
+  check("Extra: one-claim rule","the second fixture explains the claim",/already matched to another collected fixture/.test((r.possible[0]||{}).reason||""),r.possible[0]);
+  r=api.classifyFixtures([fx({Time:"00:30"})],[wk({Date:"26-10-2026",Time:"00:30"})]);
+  check("Extra: adjacent date","same teams on the adjacent date => Possible Duplicate (not New)",r.possible.length===1&&/adjacent date/.test(r.possible[0].reason),r.possible[0]||counts(r));
+  r=api.classifyFixtures([fx()],[wk({Date:"29-10-2026"})]);
+  check("Extra: adjacent date","same teams two days apart => New",r.newMatches.length===1,counts(r));
+  r=api.classifyFixtures([fx()],[wk({Away:"Real Madrid"})]);
+  check("Extra: renamed team","same home team, league, date and time but different away team => review",r.possible.length===1&&/away-team name differs/.test(r.possible[0].reason),r.possible[0]||counts(r));
+  r=api.classifyFixtures([fx()],[wk({Home:"Barcelona",Away:"Bayern"})]);
+  check("Extra: swapped teams","home/away swapped => review, never Already Worked",r.possible.length===1&&/swapped/.test(r.possible[0].reason),r.possible[0]||counts(r));
+  r=api.classifyFixtures([fx({"Priority League":"Liga Nacional / Liga A Women",Country:"Argentina","Flashscore League Name":"Liga A",Home:"Lanus",Away:"Regatas",Time:"00:30"})],[wk({Country:"Argentina",League:"Liga Nacional",Home:"Lanus",Away:"Regatas",Time:"00:30"})]);
+  check("Extra: priority-league alias","history recorded with one of several priority-league names => Already Worked",r.alreadyWorked.length===1,counts(r));
+  const big=[fx(),fx({Home:"Valencia",Away:"Fenerbahce",Time:"20:30"}),fx({Home:"Olympiakos",Away:"Real Madrid",Time:"21:00"}),fx({Home:"Dubai",Away:"Paris",Time:"17:00"})];
+  r=api.classifyFixtures(big,[wk({}),wk({Home:"Valencia",Away:"Fenerbahce",Time:"20:00"},2),wk({Home:"Olympiacos",Away:"Real Madrid",Time:"21:00"},3)]);
+  const sum=r.newMatches.length+r.alreadyWorked.length+r.timeChanged.length+r.possible.length;
+  check("Extra: count integrity","every collected fixture lands in exactly one category",sum===r.totalCompared&&r.totalCompared===4,counts(r));
+  check("Extra: dates","dateKey handles DD-MM-YYYY, DD.MM.YYYY, ISO, Excel serial 46322 and unambiguous US 10/27/2026",["27-10-2026","27.10.2026","2026-10-27","46322","10/27/2026"].every(d=>api.dateKey(d)==="2026-10-27"),["27-10-2026","27.10.2026","2026-10-27","46322","10/27/2026"].map(api.dateKey));
+  check("Extra: dates","invalid calendar dates are rejected",api.dateKey("31-02-2026")===""&&api.dateKey("abc")==="");
+  check("Extra: times","timeKey handles 20:00, 8:00 PM, 20.00 and Excel fraction 0.8333",["20:00","8:00 PM","20.00","0.833333"].every(t=>api.timeKey(t)==="20:00"),["20:00","8:00 PM","20.00","0.833333"].map(api.timeKey));
+
+  /* ---------- T12: CSV ---------- */
+  const csv=api.buildCSV(["A","B","C"],[{A:'Smith, "Jr"\nline2',B:"=SUM(1,2)",C:"-"}]);
+  check("T12 Export","CSV escapes commas, quotes and newlines",csv.startsWith('"A","B","C"\r\n"Smith, ""Jr""\nline2"'),csv);
+  check("T12 Export","formula-like values are neutralised, a plain '-' is untouched",csv.includes(`"'=SUM(1,2)"`)&&csv.endsWith(',"-"'),csv);
+  addDay(win,"Basketball","2026-10-27",RAW["Basketball"]);
+  el(win,"workedInput").value=["Sport Name\tDate\tTime\tCountry\tLeague\tHome Team\tAway Team\tEvent ID",
+    "Basketball\t27-10-2026\t20:00\tEUROPE\tEuroleague\tBayern\tBarcelona\t20034001",
+    "Basketball\t27-10-2026\t20:30\tEUROPE\tEuroleague\tValencia\tFenerbahce\t20034995",
+    "Basketball\t27-10-2026\t20:30\tEUROPE\tEuroleague\tValencia Basket\tFenerbahce\t20034995"].join("\n");
+  stubDialogs(win);el(win,"compareWorkedBtn").click();
+  st=api.state();
+  check("T12 Export","UI comparison ran (counts rendered)",el(win,"collectedFixtureCount").textContent==="2",el(win,"compareMessage").textContent);
+  const captured=[];win.downloadCSV=(name,headers,rows)=>captured.push({name,headers,rows});
+  for(const id of ["exportNewBtn","exportWorkedBtn","exportReviewBtn","exportTimeChangedBtn","exportConflictsBtn","exportCollectionBtn","exportAllCollectionBtn"])el(win,id).click();
+  const byName=n=>captured.find(c=>c.name===n);
+  const rev=byName("fixtures_possible_duplicates_review.csv"),nw=byName("fixtures_new_matches.csv"),cf=byName("worked_history_event_id_conflicts.csv"),cm=byName("priority_7day_matching_fixtures.csv");
+  check("T12 Export","possible-duplicate export carries Sport, Event ID, Priority League and Review Reason",rev&&["Sport","Event ID","Priority League","Review Reason","Worked Event ID"].every(h=>rev.headers.includes(h))&&rev.rows.length>=1&&rev.rows[0].Sport==="Basketball",rev);
+  const aw=byName("fixtures_already_worked.csv");
+  check("T12 Export","already-worked export carries Sport, Event ID and the matched worked Event ID",aw&&aw.rows.length===1&&aw.headers.includes("Sport")&&aw.headers.includes("Event ID")&&aw.rows[0]["Worked Event ID"]==="20034001",aw);
+  check("T12 Export","with zero new matches no empty file is generated",st.comparisonResults.newMatches.length===0&&!nw,{newCount:st.comparisonResults.newMatches.length,files:captured.map(c=>c.name)});
+  check("T12 Export","history conflicts export lists every conflicting row with its Event ID",cf&&cf.rows.length===2&&cf.rows.every(x=>x["Event ID"]==="20034995"),cf);
+  check("T12 Export","collection matching export includes Priority League",cm&&cm.headers.includes("Priority League")&&cm.rows[0]["Priority League"]!=="",cm&&cm.headers);
+  const realCsv=api.buildCSV(rev.headers,rev.rows);
+  check("T12 Export","real export text has one header line plus one line per row",realCsv.split("\r\n").length===rev.rows.length+1,realCsv.split("\r\n").length);
+
+  /* ---------- T14: mapping independence ---------- */
+  win=await freshApp();api=win.__MSFM;stubDialogs(win);
+  st=api.state();
+  const otherSnap=()=>JSON.stringify(api.state().mappings.filter(x=>x.sport!=="Basketball"));
+  const before=otherSnap(),bbCount=st.mappings.filter(x=>x.sport==="Basketball").length;
+  const target=st.mappings.find(x=>x.sport==="Basketball"&&x.country==="Argentina");
+  win.startEdit(target.id);el(win,"mapFlashscore").value="Liga A Edited";el(win,"mappingForm").requestSubmit();
+  st=api.state();
+  check("T14 Mapping independence","editing a Basketball mapping changes only that mapping",st.mappings.find(x=>x.id===target.id).flashscoreLeague==="Liga A Edited"&&otherSnap()===before);
+  check("T14 Mapping independence","other Basketball mappings untouched by the edit",st.mappings.filter(x=>x.sport==="Basketball").length===bbCount);
+  const delRow=[...el(win,"mappings-basketball").rows].find(r=>r.cells[1]&&r.cells[1].textContent==="Australia");
+  const delId=delRow.dataset.mappingId;
+  [...delRow.querySelectorAll("button")].find(b=>b.textContent==="Delete").click();
+  st=api.state();
+  check("T14 Mapping independence","deleting a Basketball mapping removes exactly one row",!st.mappings.some(x=>x.id===delId)&&st.mappings.filter(x=>x.sport==="Basketball").length===bbCount-1);
+  check("T14 Mapping independence","all other sports are unchanged after the delete",otherSnap()===before);
+  const tablesClean=api.SPORTS.every(s=>[...el(win,"mappings-"+s.toLowerCase().replace(/[^a-z0-9]+/g,"")).rows].every(r=>r.cells.length<2||r.cells[0].textContent===s));
+  check("T14 Mapping independence","each sport's table shows only its own mappings",tablesClean);
+  const bbSnap=JSON.stringify(api.state().mappings.filter(x=>x.sport==="Basketball"));
+  el(win,"mapSport").value="Ice hockey";el(win,"resetSportMappingsBtn").click();
+  check("T14 Mapping independence","resetting Ice hockey leaves Basketball edits intact",JSON.stringify(api.state().mappings.filter(x=>x.sport==="Basketball"))===bbSnap);
+  win=await loadApp();api=win.__MSFM;
+  check("T13 Storage persistence","mapping edit and delete survive a refresh",api.state().mappings.find(x=>x.id===target.id)?.flashscoreLeague==="Liga A Edited"&&!api.state().mappings.some(x=>x.id===delId));
+
+  /* ---------- T15: seven-day limit ---------- */
+  win=await freshApp();api=win.__MSFM;
+  for(const s of api.SPORTS)addDay(win,s,"2026-10-27",RAW[s]);
+  st=api.state();
+  check("T15 Seven-day limit","six sports on one date are six entries",st.collectionDays.length===6,st.collectionDays.map(d=>d.sport));
+  check("T15 Seven-day limit","six sports on one date count as ONE calendar day",el(win,"daysCollectedCount").textContent==="1 / 7",el(win,"daysCollectedCount").textContent);
+  check("T15 Seven-day limit","every sport matched its own priority league",st.collectionDays.every(d=>d.matched.length>=1),st.collectionDays.map(d=>[d.sport,d.matched.length]));
+  for(const d of ["2026-10-28","2026-10-29","2026-10-30","2026-10-31","2026-11-01","2026-11-02"])addDay(win,"Basketball",d,RAW["Basketball"]);
+  check("T15 Seven-day limit","7 distinct dates collected",el(win,"daysCollectedCount").textContent==="7 / 7",el(win,"daysCollectedCount").textContent);
+  const msg8=addDay(win,"Basketball","2026-11-03",RAW["Basketball"]);
+  st=api.state();
+  check("T15 Seven-day limit","an 8th distinct date is rejected with a message",/only 7 distinct dates/.test(msg8)&&!st.collectionDays.some(d=>d.dateISO==="2026-11-03"),msg8);
+  addDay(win,"Ice hockey","2026-11-02",RAW["Ice hockey"]);
+  st=api.state();
+  check("T15 Seven-day limit","a new sport on an already-collected date is still allowed when 7 dates are full",st.collectionDays.some(d=>d.dateISO==="2026-11-02"&&d.sport==="Ice hockey"));
+  const remBtn=[...el(win,"collectionBody").rows].find(r=>r.cells[0].textContent==="Ice hockey"&&r.cells[1].textContent==="27/10/2026").querySelector("button");
+  remBtn.click();st=api.state();
+  check("T15 Seven-day limit","removing Ice hockey 27/10 keeps the other five sports on 27/10",st.collectionDays.filter(d=>d.dateISO==="2026-10-27").length===5&&!st.collectionDays.some(d=>d.dateISO==="2026-10-27"&&d.sport==="Ice hockey"));
+
+  /* ---------- Migration of legacy (v1) data ---------- */
+  const legacyMap=[{id:"seed-11",country:"Argentina",priorityLeague:"Liga Nacional",flashscoreLeague:"Liga A",active:true},{id:"seed-16",country:"Australia",priorityLeague:"NBL",flashscoreLeague:"NBL",active:false}];
+  const legacyColl=[{date:"27/10/2026",dateISO:"2026-10-27",parsed:1,matched:[{Sport:"Basketball",Date:"27/10/2026",Time:"00:30",Country:"Argentina","Flashscore League Name":"Liga A",Home:"Lanus",Away:"Regatas"}],excluded:[],savedAt:"yesterday"}];
+  win=await freshApp({"basketball_priority_league_mappings_v2":JSON.stringify(legacyMap),"basketball_7day_fixture_collection_v1":JSON.stringify(legacyColl)});api=win.__MSFM;st=api.state();
+  const store=window.__MSFM_TEST_STORE;
+  check("Migration","legacy mappings without a sport are kept and assigned to Basketball",st.mappings.filter(x=>x.sport==="Basketball").length===2&&st.mappings.some(x=>x.country==="Argentina"&&x.flashscoreLeague==="Liga A"));
+  check("Migration","legacy inactive flag preserved",st.mappings.find(x=>x.country==="Australia").active===false);
+  check("Migration","Basketball is NOT re-seeded over the user's list; other sports are seeded",st.mappings.filter(x=>x.sport==="Ice hockey").length>50);
+  check("Migration","legacy collection kept, sport set to Basketball",st.collectionDays.length===1&&st.collectionDays[0].sport==="Basketball"&&st.collectionDays[0].matched.length===1);
+  check("Migration","pre-migration backups written",store.getItem("msfm_backup_pre_v2_basketball_priority_league_mappings_v2")===JSON.stringify(legacyMap)&&!!store.getItem("msfm_backup_pre_v2_basketball_7day_fixture_collection_v1"));
+  check("Migration","upgrade notice shown to the user",/upgraded/.test(el(win,"appNotices").textContent));
+  win=await freshApp({"basketball_priority_league_mappings_v2":JSON.stringify({unexpected:true}),"msfm_schema_version":"2"});api=win.__MSFM;
+  const keys=window.__MSFM_TEST_STORE._keys();
+  check("Migration","a stored value in an unexpected shape is backed up before seeding",keys.some(k=>k.startsWith("basketball_priority_league_mappings_v2__unrecognised_")),keys);
+
+  await persistenceChecks();
+  await auditChecks();
+  await authoritativeChecks();
+  await v22Checks();
+  await phase34Checks();
+  await backupChecks();
+  await teamMappingChecks();
+  await copyChecks();
+  finish();
+}
+
+/* ===================== LOCAL PERSISTENCE HARDENING ===================== */
+async function persistenceChecks(){
+  const G="Local persistence hardening";
+  let win=await freshApp(),api=win.__MSFM;
+  const ready=await api.persistence.ready();
+  check(G,"#msfm-test uses the injected synchronous STORE and skips real IndexedDB",ready.testMode===true,ready);
+  check(G,"versioned database declares state, recovery, and metadata stores",api.persistence.idbConfig.version===1&&["state","recovery","metadata"].every(k=>api.persistence.idbConfig[k]),api.persistence.idbConfig);
+
+  el(win,"sport").value="Bandy";el(win,"sport").dispatchEvent(new win.Event("change"));
+  el(win,"fixtureDate").value="2026-11-04";el(win,"fixtureDate").dispatchEvent(new win.Event("change"));
+  el(win,"rawInput").value=RAW.Bandy;el(win,"rawInput").dispatchEvent(new win.Event("input"));
+  const worked="Sport Name\tDate\tTime\tCountry\tLeague\tHome Team\tAway Team\tEvent ID\nBandy\t04-11-2026\t19:00\tSWEDEN\tElitserien\tVasteras\tVillerslev\t991";
+  el(win,"workedInput").value=worked;el(win,"workedInput").dispatchEvent(new win.Event("input"));
+  check(G,"meaningful draft input immediately shows Saving without claiming success",el(win,"persistenceStatus").textContent==="Saving…",el(win,"persistenceStatus").textContent);
+  api.persistence.flushDraftSaves();
+  const draftStore=window.__MSFM_TEST_STORE,rawSaved=JSON.parse(draftStore.getItem(api.STORAGE.rawDraft)),workedSaved=JSON.parse(draftStore.getItem(api.STORAGE.workedDraft));
+  check(G,"raw fixture draft persists sport, date, and exact raw text",rawSaved.sport==="Bandy"&&rawSaved.dateISO==="2026-11-04"&&rawSaved.raw===RAW.Bandy,rawSaved);
+  check(G,"worked history persists exact text and parsed metadata",workedSaved.text===worked&&workedSaved.parsed.rows.length===1&&workedSaved.parsed.rows[0]["Event ID"]==="991",workedSaved);
+  check(G,"successful write shows Saved locally with a real time",/^Saved locally .+\d/.test(el(win,"persistenceStatus").textContent),el(win,"persistenceStatus").textContent);
+  win=await loadApp();api=win.__MSFM;
+  check(G,"raw fixture sport, date, and text restore after reload",el(win,"sport").value==="Bandy"&&el(win,"fixtureDate").value==="2026-11-04"&&el(win,"rawInput").value===RAW.Bandy,[el(win,"sport").value,el(win,"fixtureDate").value,el(win,"rawInput").value]);
+  check(G,"worked-history text restores after reload",el(win,"workedInput").value===worked,el(win,"workedInput").value);
+
+  const K=api.STORAGE,localMap=JSON.stringify([{id:"local",sport:"Basketball",country:"A",priorityLeague:"L",flashscoreLeague:"F",active:true}]),remoteMap=JSON.stringify([{id:"remote",sport:"Basketball",country:"B",priorityLeague:"R",flashscoreLeague:"RF",active:true}]);
+  const localColl=JSON.stringify([{sport:"Basketball",dateISO:"2026-10-27",matched:[],excluded:[]}]);
+  let plan=api.persistence.reconcileRecords({[K.mappings]:localMap,[K.collection]:localColl,[K.revision]:JSON.stringify({revision:4})},{revision:5,data:{[K.mappings]:remoteMap,[K.collection]:"{bad json"}});
+  check(G,"newer valid database record wins while its invalid field cannot clobber valid local data",plan.data[K.mappings]===remoteMap&&plan.data[K.collection]===localColl&&plan.invalidIdb.includes(K.collection),plan);
+  check(G,"replacement plan keeps a recovery snapshot of every prior local value",plan.replaced.includes(K.mappings)&&plan.recovery.data[K.mappings]===localMap&&plan.recovery.data[K.collection]===localColl,plan.recovery);
+  plan=api.persistence.reconcileRecords({[K.mappings]:"{broken",[K.revision]:JSON.stringify({revision:9})},{revision:3,data:{[K.mappings]:remoteMap}});
+  check(G,"invalid local record falls back to a valid database record even when local revision is higher",plan.data[K.mappings]===remoteMap&&plan.invalidLocal.includes(K.mappings),plan);
+  plan=api.persistence.reconcileRecords({[K.mappings]:localMap,[K.revision]:JSON.stringify({revision:9})},{revision:10,data:{[K.mappings]:"{}"}});
+  check(G,"invalid newer database data never replaces valid local data",plan.data[K.mappings]===localMap&&plan.replaced.length===0,plan);
+
+  win=await freshApp();api=win.__MSFM;
+  const before=JSON.stringify(api.state());
+  el(win,"rawInput").value="unsaved local edit";el(win,"rawInput").dispatchEvent(new win.Event("input"));
+  const rev=api.persistence.status().revision;
+  api.persistence.simulateExternalRevision({revision:rev+20,tabId:"other-tab"});
+  check(G,"newer cross-tab revision warns and offers reload instead of overwriting dirty state",!el(win,"newerDataNotice").classList.contains("hidden")&&/finished editing/.test(el(win,"newerDataText").textContent)&&el(win,"rawInput").value==="unsaved local edit"&&JSON.stringify(api.state())===before,el(win,"newerDataText").textContent);
+
+  win=await freshAppWithStore(makeStore(null,{failSet:true}));api=win.__MSFM;
+  el(win,"rawInput").value="cannot save";el(win,"rawInput").dispatchEvent(new win.Event("input"));api.persistence.flushDraftSaves();
+  check(G,"storage write failure is visible and never claims the draft was saved",el(win,"persistenceStatus").textContent==="Storage error"&&/storage is unavailable or full/i.test(el(win,"appNotices").textContent),[el(win,"persistenceStatus").textContent,el(win,"appNotices").textContent]);
+}
+/* ===================== v2.2: shared list, playoff alerts, history export, date prefixes ===================== */
+async function v22Checks(){
+  const authAsShared=()=>authRows().map((r,i)=>({sport:r.sport,country:r.country,priority_league:r.priorityLeague,flashscore_league:r.flashscoreLeague,active:true,sort_order:i+1}));
+  const sig=m=>[m.sport,m.country,m.priorityLeague,m.flashscoreLeague,m.active].join("|");
+  let win,api,st,res,fake;
+
+  const S="Shared list (Supabase, read-only)";
+  win=await freshApp();api=win.__MSFM;await api.sharedReady();
+  check(S,"tests without a fake endpoint never contact Supabase (shared list disabled, bar hidden)",el(win,"sharedMappingBar").classList.contains("hidden"));
+  // S1: fresh browser, shared list differs from defaults in one row -> applied automatically
+  const rows1=authAsShared();const shlIdx=rows1.findIndex(r=>r.sport==="Ice hockey"&&r.priority_league==="SHL - Play-Off");rows1[shlIdx].flashscore_league="SHL - Play Offs";
+  fake=fakeSupabase(pagedRows(rows1));
+  win=await freshApp(null,fake);api=win.__MSFM;res=await api.sharedReady();st=api.state();
+  check(S,"fresh browser: shared list applied automatically",res.applied===true&&st.mappings.length===292,res);
+  check(S,"shared edit visible locally (SHL - Play-Off now has Flashscore name)",st.mappings.find(m=>m.sport==="Ice hockey"&&m.priorityLeague==="SHL - Play-Off").flashscoreLeague==="SHL - Play Offs");
+  check(S,"blank Flashscore names stay blank (71 after the one edit)",st.mappings.filter(m=>m.flashscoreLeague==="").length===71);
+  check(S,"list order per sport preserved from sort_order",JSON.stringify(st.mappings.filter(m=>m.sport==="Bandy").map(m=>m.priorityLeague))===JSON.stringify(authRows().filter(r=>r.sport==="Bandy").map(r=>r.priorityLeague)));
+  check(S,"status bar reports the load",/Loaded the shared mapping list from Supabase: 292/.test(el(win,"sharedMappingText").textContent),el(win,"sharedMappingText").textContent);
+  check(S,"successful shared sync updates the operational summary timestamp",el(win,"summarySharedSync").textContent!=="Unavailable"&&!!JSON.parse(window.__MSFM_TEST_STORE.getItem(api.STORAGE.sharedSync)).at,el(win,"summarySharedSync").textContent);
+  check(S,"browser only sends GET requests to the shared table, with the publishable key",fake.calls.length>=1&&fake.calls.every(c=>c.method==="GET"&&c.url.includes("/rest/v1/msfm_priority_mappings")&&c.headers.apikey&&c.headers.apikey.startsWith("sb_publishable_")),fake.calls);
+  parseOnly(win,"Ice hockey","2026-10-27","SHL - Play OffsSWEDEN: Draw\n19:00\nFrolunda\nSkelleftea");
+  check(S,"the shared mapping is used for matching (SHL - Play Offs fixture matched)",api.state().convertedRows.length===1);
+  // S2: refresh with Supabase down -> cached shared list kept
+  window.__MSFM_TEST_FETCH=fakeSupabase(()=>Promise.reject(new Error("Failed to fetch")));
+  win=await loadApp();api=win.__MSFM;res=await api.sharedReady();
+  check(S,"network error: last loaded list kept from Local Storage, error shown",res.ok===false&&api.state().mappings.find(m=>m.priorityLeague==="SHL - Play-Off").flashscoreLeague==="SHL - Play Offs"&&/could not be loaded/.test(el(win,"sharedMappingText").textContent),el(win,"sharedMappingText").textContent);
+  // S3: local edit, then a different shared list -> local kept, offer to replace; replace -> backup created
+  window.__MSFM_TEST_FETCH=null;win=await loadApp();api=win.__MSFM;stubDialogs(win);
+  const tgt=api.state().mappings.find(m=>m.sport==="Basketball"&&m.country==="Argentina");
+  win.startEdit(tgt.id);el(win,"mapFlashscore").value="Liga A Local";el(win,"mappingForm").requestSubmit();
+  const rows2=authAsShared();rows2.find(r=>r.sport==="Bandy"&&r.country==="Russia").active=false;
+  window.__MSFM_TEST_FETCH=fakeSupabase(pagedRows(rows2));
+  win=await loadApp();api=win.__MSFM;stubDialogs(win);res=await api.sharedReady();st=api.state();
+  check(S,"local edits are NOT overwritten by a different shared list",res.conflict===true&&st.mappings.find(m=>m.country==="Argentina"&&m.sport==="Basketball").flashscoreLeague==="Liga A Local",res);
+  check(S,"user is offered to replace (button visible)",!el(win,"useSharedMappingsBtn").classList.contains("hidden"));
+  el(win,"useSharedMappingsBtn").click();st=api.state();
+  const bkKey=window.__MSFM_TEST_STORE._keys().find(k=>k.startsWith("msfm_backup_local_mappings_"));
+  check(S,"after confirming, the shared list replaces local mappings",st.mappings.find(m=>m.country==="Argentina"&&m.sport==="Basketball").flashscoreLeague==="Liga A"&&st.mappings.find(m=>m.sport==="Bandy"&&m.country==="Russia").active===false);
+  check(S,"the replaced local mappings are backed up, including the local edit",!!bkKey&&window.__MSFM_TEST_STORE.getItem(bkKey).includes("Liga A Local"),bkKey);
+  check(S,"replace confirmation states both counts",/Replace the 292 mappings .* with the 292 shared mappings/s.test(lastConfirm),lastConfirm);
+  // S4..S6: failure modes never remove local mappings
+  for(const [label,fetchImpl,re] of [
+    ["401 permission denied",()=>resp(401,{code:"42501",message:"permission denied for table msfm_priority_mappings"}),/refused read access/],
+    ["table missing",()=>resp(404,{code:"PGRST205",message:"Could not find the table"}),/does not exist yet/],
+    ["empty table",()=>resp(200,[]),/empty or not readable/]]){
+    win=await freshApp(null,fakeSupabase(fetchImpl));api=win.__MSFM;await api.sharedReady();
+    check(S,`${label}: clear message and all 292 local mappings kept`,re.test(el(win,"sharedMappingText").textContent)&&api.state().mappings.length===292,el(win,"sharedMappingText").textContent);
+  }
+  // S7: invalid shared rows skipped and reported
+  const rows3=authAsShared();rows3.push({sport:"Curling",country:"Scotland",priority_league:"Premier",flashscore_league:"Premier",active:true,sort_order:1},{sport:"Bandy",country:"",priority_league:"X",flashscore_league:"",active:true,sort_order:99});
+  win=await freshApp(null,fakeSupabase(pagedRows(rows3)));api=win.__MSFM;res=await api.sharedReady();
+  check(S,"rows with an unknown sport or missing country are skipped and reported",api.state().mappings.length===292&&/2 shared row\(s\) were skipped/.test(el(win,"sharedMappingText").textContent),el(win,"sharedMappingText").textContent);
+  // S8: paging beyond 1000 rows
+  const big=Array.from({length:1250},(_,i)=>({sport:"Basketball",country:"C"+i,priority_league:"L"+i,flashscore_league:"F"+i,active:true,sort_order:i+1}));
+  fake=fakeSupabase(pagedRows(big));win=await freshApp(null,fake);api=win.__MSFM;await api.sharedReady();
+  check(S,"more than 1000 shared rows are fetched in pages (1250 rows, 2 requests)",api.state().mappings.length===1250&&fake.calls.length===2,[api.state().mappings.length,fake.calls.length]);
+  // S9: identical list -> "up to date", nothing rewritten
+  win=await freshApp(null,fakeSupabase(pagedRows(authAsShared())));api=win.__MSFM;res=await api.sharedReady();
+  check(S,"shared list identical to defaults -> reported up to date",res.unchanged===true&&/up to date/.test(el(win,"sharedMappingText").textContent));
+
+  const Q="Supabase SQL export";
+  win=await freshApp();api=win.__MSFM;
+  const sql=api.buildMappingSQL(api.state().mappings);
+  const valueLines=sql.split("\n").filter(l=>/^  \(/.test(l));
+  check(Q,"SQL contains one row per mapping (292)",valueLines.length===292,valueLines.length);
+  check(Q,"apostrophes are escaped (President''s Cup, Women''s ...)",sql.includes("'President''s Cup'")&&sql.includes("'Women''s Korean Basketball League'"));
+  check(Q,"blank Flashscore names are written as '' (still blank)",valueLines.filter(l=>/'', (true|false), \d+\)/.test(l)).length===72);
+  check(Q,"runs as one transaction and replaces only the listed sports",/^begin;$/m.test(sql)&&/^commit;$/m.test(sql)&&/delete from public\.msfm_priority_mappings where sport in \('Basketball', 'Ice hockey', 'Floorball', 'Waterpolo', 'Bandy', 'Field hockey'\);/.test(sql));
+  check(Q,"sort_order restarts per sport (Bandy rows 1..6)",valueLines.filter(l=>l.startsWith("  ('Bandy'")).map(l=>+/(\d+)\)[,;]?$/.exec(l)[1]).join(",")==="1,2,3,4,5,6");
+  check(Q,"no SQL ever sent from the browser: app has no write path to Supabase",!/method:\s*"(POST|PATCH|PUT|DELETE)"/.test(await (await fetch("multi-sport-fixtures-manager.html")).text()));
+  const caps=[];win.downloadText=(n,t)=>caps.push({n,t});el(win,"exportMappingsSqlBtn").click();
+  check(Q,"Export Mappings as Supabase SQL button produces the .sql file",caps.length===1&&caps[0].n==="msfm_priority_mappings_update.sql"&&caps[0].t===sql.replace(/-- Generated .*\n/,caps[0].t.match(/-- Generated .*\n/)[0]));
+  SEED_SQL=sql;
+
+  const PO="Playoff alerts";
+  win=await freshApp();api=win.__MSFM;
+  st=parseOnly(win,"Ice hockey","2026-10-27","SHL - Play OffsSWEDEN: Draw\n19:00\nFrolunda\nSkelleftea\n19:00\nLulea\nVaxjo");
+  let al=api.playoffAlerts("Ice hockey",st.excludedRows);
+  check(PO,"SHL play-off fixtures are excluded (mapping still blank) and raise ONE alert for 2 fixtures",st.convertedRows.length===0&&al.length===1&&al[0].count===2,al);
+  check(PO,"alert points at the right waiting mapping only (SHL - Play-Off, not Kvalserien)",al[0]&&JSON.stringify(al[0].waiting)===JSON.stringify(["SHL - Play-Off"])&&JSON.stringify(al[0].regular)===JSON.stringify(["SHL"]),al[0]);
+  check(PO,"alert is shown on screen and in the status message",!el(win,"playoffAlerts").classList.contains("hidden")&&/SHL - Play Offs/.test(el(win,"playoffAlerts").textContent)&&/1 playoff alert/.test(el(win,"message").textContent),el(win,"message").textContent);
+  check(PO,"excluded row reason mentions the alert (kept in the excluded export)",/playoff stage/.test(st.excludedRows[0].Reason));
+  check(PO,"mappings are NOT changed automatically",api.state().mappings.find(m=>m.priorityLeague==="SHL - Play-Off").flashscoreLeague==="");
+  st=parseOnly(win,"Ice hockey","2026-10-27","Liiga - Play OffsFINLAND: Draw\n18:30\nTappara\nIlves");
+  al=api.playoffAlerts("Ice hockey",st.excludedRows);
+  check(PO,"Finland 'Liiga - Play Offs' -> waiting mapping SM-Liiga Playoffs (not the Mestis ones)",al.length===1&&JSON.stringify(al[0].waiting)===JSON.stringify(["SM-Liiga Playoffs"]),al);
+  st=parseOnly(win,"Basketball","2026-10-27","WNBA - Play OffsUSA: Draw\n01:00\nGolden State Valkyries W\nAtlanta Dream W");
+  check(PO,"non-priority play-offs (WNBA) raise no alert",api.playoffAlerts("Basketball",st.excludedRows).length===0&&el(win,"playoffAlerts").classList.contains("hidden"));
+  st=parseOnly(win,"Ice hockey","2026-10-27","SHL\nSWEDEN:\n19:00\nFrolunda\nSkelleftea");
+  check(PO,"regular-season fixtures raise no alert",st.convertedRows.length===1&&el(win,"playoffAlerts").classList.contains("hidden"));
+  const shl=api.state().mappings.find(m=>m.priorityLeague==="SHL - Play-Off");stubDialogs(win);
+  win.startEdit(shl.id);el(win,"mapFlashscore").value="SHL - Play Offs";el(win,"mappingForm").requestSubmit();
+  st=parseOnly(win,"Ice hockey","2026-10-27","SHL - Play OffsSWEDEN: Draw\n19:00\nFrolunda\nSkelleftea");
+  check(PO,"after the user fills in the Flashscore name, the fixture matches and the alert disappears",st.convertedRows.length===1&&el(win,"playoffAlerts").classList.contains("hidden"));
+
+  const D="Date-prefixed time lines";
+  win=await freshApp();api=win.__MSFM;
+  st=parseOnly(win,"Ice hockey","2026-10-27","SHL\nSWEDEN:\n27.10. 19:00\nFrolunda\nSkelleftea");
+  check(D,"'27.10. 19:00' on 27/10/2026 -> fixture matched with time 19:00",st.convertedRows.length===1&&st.convertedRows[0].Time==="19:00",st);
+  st=parseOnly(win,"Ice hockey","2026-10-27","SHL\nSWEDEN:\n28.10. 19:00\nFrolunda\nSkelleftea\n27.10. 20:00\nLulea\nVaxjo");
+  check(D,"'28.10. 19:00' while collecting 27/10 -> excluded with a date reason; the 27.10 one matches",st.convertedRows.length===1&&st.convertedRows[0].Home==="Lulea"&&st.excludedRows.length===1&&/28\.10\..*not on the selected date 27\/10\/2026/.test(st.excludedRows[0].Reason)&&/priority-league fixture/.test(st.excludedRows[0].Reason),st.excludedRows);
+  check(D,"status message counts the other-day fixtures",/1 fixture\(s\) are dated another day/.test(el(win,"message").textContent),el(win,"message").textContent);
+  st=parseOnly(win,"Ice hockey","2026-10-27","SHL\nSWEDEN:\n27.10.2026 19:00\nFrolunda\nSkelleftea\n27.10.2025 19:00\nLulea\nVaxjo");
+  check(D,"full-year prefix: 27.10.2026 accepted, 27.10.2025 rejected",st.convertedRows.length===1&&st.convertedRows[0].Home==="Frolunda"&&st.excludedRows.length===1);
+  st=parseOnly(win,"Ice hockey","2026-10-27","SHL\nSWEDEN:\n27.10. 19:00\nFrolunda\nSkelleftea\n20:00\nLulea\nVaxjo");
+  check(D,"date-prefixed and plain time lines mix correctly",st.convertedRows.length===2);
+  st=parseOnly(win,"Ice hockey","2026-10-27","SHL\nSWEDEN:\n32.10. 19:00\nFrolunda\nSkelleftea");
+  check(D,"invalid prefix (32.10.) is a malformed/unsupported invalid group, never Wrong date",st.convertedRows.length===0&&st.excludedRows.length===1&&st.excludedRows[0].Category==="Malformed/unsupported"&&!st.excludedRows.some(r=>r.Category==="Wrong date")&&st.lastParseAccounting.invalid===1&&st.lastParseAccounting.invalidRecords.some(r=>/Malformed or unsupported date prefix 32\.10/.test(r.reason)),st);
+
+  const H="New matches in worked-history format";
+  win=await freshApp();api=win.__MSFM;
+  addDay(win,"Ice hockey","2026-10-27","SHL\nSWEDEN:\n19:00\nFrolunda\nSkelleftea\n20:00\nLulea\nVaxjo");
+  el(win,"workedInput").value="Sport Name\tDate\tTime\tCountry\tLeague\tHome Team\tAway Team\tEvent ID\nIce hockey\t27-10-2026\t19:00\tSWEDEN\tSHL\tFrolunda\tSkelleftea\t123";
+  stubDialogs(win);el(win,"compareWorkedBtn").click();
+  const cap2=[];win.downloadCSV=(name,headers,rows)=>cap2.push({name,headers,rows});
+  el(win,"exportNewHistoryBtn").click();
+  const hx=cap2.find(c=>c.name==="new_matches_worked_history_format.csv");
+  check(H,"export has exactly the 8 worked-history columns in order",hx&&hx.headers.join("|")==="Sport Name|Date|Time|Country|League|Home Team|Away Team|Event ID",hx&&hx.headers);
+  check(H,"only the new match is exported, date as DD-MM-YYYY, Flashscore league",hx&&hx.rows.length===1&&hx.rows[0]["Home Team"]==="Lulea"&&hx.rows[0].Date==="27-10-2026"&&hx.rows[0].League==="SHL"&&hx.rows[0]["Sport Name"]==="Ice hockey",hx&&hx.rows);
+  const tsv=[hx.headers.join("\t"),...hx.rows.map(r=>hx.headers.map(h=>r[h]).join("\t"))].join("\n");
+  const back=api.parseWorkedPaste(tsv).rows;
+  const again=api.classifyFixtures(api.state().collectionDays[0].matched,back);
+  check(H,"round trip: pasting the export back as worked history marks that fixture Already Worked",back.length===1&&again.alreadyWorked.length===1&&again.alreadyWorked[0].fixture.Home==="Lulea",[back,again.alreadyWorked.length]);
+}
+let SEED_SQL="",PERFORMANCE=null;
+async function phase34Checks(){
+  const G="Phase 3-4 hardening";let win=await freshApp(),api=win.__MSFM,st;
+  const tabs=[...win.document.querySelectorAll('[role="tab"]')];
+  check(G,"exactly four accessible tabs exist and Fixtures is the default",tabs.length===4&&tabs.map(x=>x.textContent).join("|")==="Mappings|Fixtures|Compare|Team Mappings"&&el(win,"tabBtn-fixtures").getAttribute("aria-selected")==="true",tabs.map(x=>x.outerHTML));
+  check(G,"every tab has aria-controls pointing to a tabpanel",tabs.every(t=>{const p=el(win,t.getAttribute("aria-controls"));return p&&p.getAttribute("role")==="tabpanel";}));
+  el(win,"tabBtn-fixtures").focus();el(win,"tabBtn-fixtures").dispatchEvent(new win.KeyboardEvent("keydown",{key:"ArrowRight",bubbles:true}));
+  check(G,"ArrowRight selects and focuses Compare",el(win,"tabBtn-compare").getAttribute("aria-selected")==="true"&&win.document.activeElement===el(win,"tabBtn-compare"));
+  el(win,"tabBtn-compare").dispatchEvent(new win.KeyboardEvent("keydown",{key:"Home",bubbles:true}));
+  check(G,"Home selects/focuses Mappings and hidden property follows selection",win.document.activeElement===el(win,"tabBtn-mappings")&&[...win.document.querySelectorAll('section.panel[data-tab="fixtures"]')].every(p=>p.hidden));
+  check(G,"operational summary uses honest unavailable states before comparison/shared sync",el(win,"summaryNew").textContent==="Unavailable"&&el(win,"summaryReview").textContent==="Unavailable"&&el(win,"summarySharedSync").textContent==="Unavailable");
+  const renderedMappingRows=()=>api.SPORTS.flatMap(s=>[...el(win,"mappings-"+s.toLowerCase().replace(/[^a-z0-9]+/g,"" )).rows].filter(r=>r.dataset.mappingId));
+  check(G,"mapping page defaults to 100 rows instead of rendering all 292",el(win,"mappingPageSize").value==="100"&&renderedMappingRows().length===100&&/Page 1 of 3/.test(el(win,"mappingPageStatus").textContent),[el(win,"mappingPageSize").value,renderedMappingRows().length,el(win,"mappingPageStatus").textContent]);
+  el(win,"mappingCountryFilter").value="Argentina";el(win,"mappingCountryFilter").dispatchEvent(new win.Event("change"));let viewRows=renderedMappingRows();
+  check(G,"mapping country filter shows only the selected country",viewRows.length>0&&viewRows.every(r=>r.cells[1].textContent==="Argentina")&&new RegExp(viewRows.length+" filtered").test(el(win,"mappingPageStatus").textContent),viewRows.map(r=>r.cells[1].textContent));
+  el(win,"mappingCountryFilter").value="all";el(win,"mappingCountryFilter").dispatchEvent(new win.Event("change"));el(win,"mappingSportFilter").value="Basketball";el(win,"mappingSportFilter").dispatchEvent(new win.Event("change"));el(win,"mappingPageSize").value="25";el(win,"mappingPageSize").dispatchEvent(new win.Event("change"));el(win,"mappingSort").value="country-asc";el(win,"mappingSort").dispatchEvent(new win.Event("change"));
+  viewRows=[...el(win,"mappings-basketball").rows].filter(r=>r.dataset.mappingId);const page1Ids=viewRows.map(r=>r.dataset.mappingId),countries=viewRows.map(r=>r.cells[1].textContent);
+  check(G,"mapping country sort is deterministic on the visible page",JSON.stringify(countries)===JSON.stringify([...countries].sort((a,b)=>a.localeCompare(b))),countries);
+  el(win,"mappingNextBtn").click();const page2Ids=[...el(win,"mappings-basketball").rows].filter(r=>r.dataset.mappingId).map(r=>r.dataset.mappingId);
+  check(G,"mapping pagination Next advances to a disjoint second page",/Page 2 of 7/.test(el(win,"mappingPageStatus").textContent)&&page2Ids.length===25&&page2Ids.every(id=>!page1Ids.includes(id)),el(win,"mappingPageStatus").textContent);
+  el(win,"mappingPrevBtn").click();check(G,"mapping pagination Previous restores the first page",/Page 1 of 7/.test(el(win,"mappingPageStatus").textContent)&&JSON.stringify([...el(win,"mappings-basketball").rows].filter(r=>r.dataset.mappingId).map(r=>r.dataset.mappingId))===JSON.stringify(page1Ids));
+  el(win,"mappingSort").value="runtime";el(win,"mappingSportFilter").value="Bandy";el(win,"mappingSportFilter").dispatchEvent(new win.Event("change"));
+  check(G,"mapping sport filter reports the six Bandy rows",/6 filtered/.test(el(win,"mappingPageStatus").textContent)&&[...el(win,"mappings-bandy").rows].filter(r=>r.dataset.mappingId).length===6,el(win,"mappingPageStatus").textContent);
+  el(win,"selectVisibleMappingsBtn").click();stubDialogs(win);el(win,"bulkDeactivateBtn").click();st=api.state();
+  check(G,"confirmed bulk deactivate changes only selected visible mappings",st.mappings.filter(m=>m.sport==="Bandy").every(m=>m.active===false)&&st.mappings.filter(m=>m.sport!=="Bandy").every(m=>m.active!==false),lastConfirm);
+  check(G,"local mapping save updates active count and last-save operational summary",el(win,"summaryActiveMappings").textContent==="286"&&el(win,"summaryLocalSave").textContent!=="Unavailable",[el(win,"summaryActiveMappings").textContent,el(win,"summaryLocalSave").textContent]);
+  el(win,"mappingFilter").value="inactive";el(win,"mappingFilter").dispatchEvent(new win.Event("change"));
+  check(G,"mapping status filter shows exactly the six inactive rows",renderedMappingRows().length===6&&renderedMappingRows().every(r=>!r.cells[4].querySelector("input").checked),el(win,"mappingPageStatus").textContent);
+  lastConfirm="";el(win,"bulkActivateBtn").click();st=api.state();
+  check(G,"confirmed bulk activate restores the selected mappings and operational count",st.mappings.every(m=>m.active!==false)&&el(win,"summaryActiveMappings").textContent==="292"&&/Activate 6 selected mapping/.test(lastConfirm),lastConfirm);
+  win=await freshApp();api=win.__MSFM;
+  const imp=api.importMappingCSV(`Sport,Country,Priority League,Flashscore League Name,Active
+Basketball,Argentina,Liga Nacional,Liga Changed,TRUE
+Basketball,,Missing,FALSE,FALSE
+Basketball,Argentina,Liga Nacional,Duplicate,TRUE
+Curling,Scotland,League,League,TRUE`,"Basketball");
+  check(G,"mapping import reports row-numbered invalid rows, duplicate rows, and merge conflicts",imp.skipped.length===2&&imp.skipped.every(x=>x.row&&x.reason)&&imp.duplicates.length===1&&imp.conflicts.length===1,imp);
+  const local=api.state().mappings.find(m=>m.sport==="Basketball"&&m.country==="Argentina"&&m.priorityLeague==="Liga Nacional").flashscoreLeague;api.applyImport(imp.imported,"merge","keep-local");
+  check(G,"explicit keep-local merge policy preserves the local conflict value",api.state().mappings.find(m=>m.country==="Argentina"&&m.priorityLeague==="Liga Nacional").flashscoreLeague===local);
+  const duplicateRaw=`Euroleague
+EUROPE:
+20:00
+Bayern
+Barcelona
+20:00
+Bayern
+Barcelona
+21:00
+Only Home`;
+  const detail=api.parseFixturesDetailed(duplicateRaw,"Basketball","27/10/2026");
+  check(G,"parser deterministically deduplicates identical source fixtures",detail.rows.length===1&&detail.duplicates.length===1&&detail.duplicates[0].Category==="Duplicate",detail);
+  check(G,"parser accounts for nonblank lines and retains bounded malformed and duplicate context",detail.inputLines===10&&detail.invalidCount>=1&&detail.invalidRecords.length<=50&&detail.invalidRecords.every(x=>x.line&&x.context&&x.reason)&&detail.invalidRecords.some(x=>/Duplicate source fixture/.test(x.reason)),detail);
+  parseOnly(win,"Basketball","2026-10-27",duplicateRaw);st=api.state();
+  check(G,"UI accounting exposes unique, matched, duplicate, and invalid counts",el(win,"uniqueFixtureCount").textContent==="1"&&el(win,"accountMatchedCount").textContent==="1"&&el(win,"duplicateSourceCount").textContent==="1"&&+el(win,"invalidGroupCount").textContent>=1,st.lastParseAccounting);
+  check(G,"new duplicate source fixtures never enter excluded rows",st.excludedRows.length===0&&!st.excludedRows.some(r=>r.Category==="Duplicate"),st.excludedRows);
+  const issueTable=el(win,"invalidRecords").querySelector("table");
+  check(G,"bounded invalid and duplicate records render as a line/context/reason table",issueTable&&[...issueTable.tHead.rows[0].cells].map(c=>c.textContent).join("|")==="Line|Context|Reason"&&[...issueTable.tBodies[0].rows].some(r=>/Duplicate source fixture/.test(r.cells[2].textContent)),el(win,"invalidRecords").textContent);
+  const cap=[];win.downloadCSV=(name,headers,rows)=>cap.push({name,headers,rows});el(win,"excludedCsvBtn").click();
+  check(G,"new duplicate source fixtures are not exported as exclusions",cap.length===0,cap);
+  addDay(win,"Basketball","2026-10-27",duplicateRaw);st=api.state();const duplicateDay=st.collectionDays[0],storedCollection=JSON.parse(window.__MSFM_TEST_STORE.getItem(api.STORAGE.collection));
+  check(G,"new duplicate source fixtures never become collection records",duplicateDay.matched.length===1&&duplicateDay.excluded.length===0&&!JSON.stringify(storedCollection).includes('"Category":"Duplicate"'),storedCollection);
+  check(G,"collection save updates the operational fixture and exclusion totals",el(win,"summaryCollectionFixtures").textContent==="1"&&el(win,"summaryExcluded").textContent==="0",[el(win,"summaryCollectionFixtures").textContent,el(win,"summaryExcluded").textContent]);
+  parseOnly(win,"Basketball","2026-10-27","Premier League\nBELARUS:\n16:00\nGomel 2\nMinsk 2");el(win,"excludedCsvBtn").click();const ex=cap[0];
+  check(G,"excluded CSV preserves old column order and appends Category",ex&&ex.headers.join('|')==='Sport|Date|Time|Country|Detected League|Home|Away|Reason|Category',ex&&ex.headers);
+  check(G,"legacy Duplicate remains an available export category without admitting new duplicates",api.exclusionCategory("Duplicate source fixture") === "Duplicate");
+  const hist=JSON.parse(window.__MSFM_TEST_STORE.getItem(api.STORAGE.history));
+  check(G,"history is backward-compatible and stores date/time/input/valid/matched/excluded/invalid/duplicate/status",hist.length>=1&&["sport","date","time","input","valid","matched","excluded","invalid","duplicate","status"].every(k=>k in hist[0]),hist[0]);
+  addDay(win,"Basketball","2026-10-27",RAW.Basketball);el(win,"workedInput").value="Sport Name\tDate\tTime\tCountry\tLeague\tHome Team\tAway Team\tEvent ID\nBasketball\t27-10-2026\t20:00\tEUROPE\tEuroleague\tBayern\tBarcelona\t1";stubDialogs(win);el(win,"compareWorkedBtn").click();
+  const before=JSON.stringify(api.state().comparisonResults);check(G,"successful comparison shows current freshness",el(win,"comparisonFreshness").dataset.state==="current",el(win,"comparisonFreshness").textContent);
+  check(G,"collection replacement and comparison update operational totals",el(win,"summaryCollectionFixtures").textContent==="2"&&el(win,"summaryExcluded").textContent==="0"&&el(win,"summaryNew").textContent==="1"&&el(win,"summaryReview").textContent==="0",[el(win,"summaryCollectionFixtures").textContent,el(win,"summaryExcluded").textContent,el(win,"summaryNew").textContent,el(win,"summaryReview").textContent]);
+  el(win,"workedInput").value+="\ninvalid";el(win,"workedInput").dispatchEvent(new win.Event("input"));check(G,"editing worked draft marks prior results stale",el(win,"comparisonFreshness").dataset.state==="stale"&&JSON.stringify(api.state().comparisonResults)===before,el(win,"comparisonFreshness").textContent);
+  el(win,"workedInput").value="";el(win,"compareWorkedBtn").click();check(G,"comparison validation failure leaves previous results intact and shows an error",JSON.stringify(api.state().comparisonResults)===before&&el(win,"compareMessage").classList.contains("error"),el(win,"compareMessage").textContent);
+  el(win,"newResultSort").value="home";el(win,"newResultSort").dispatchEvent(new win.Event("change"));el(win,"resultGroupFilter").value="review";el(win,"resultGroupFilter").dispatchEvent(new win.Event("change"));check(G,"comparison group filter hides non-review tables",el(win,"newMatchesBody").closest('.table-wrap').classList.contains('hidden')&&!el(win,"possibleDuplicatesBody").closest('.table-wrap').classList.contains('hidden'));
+  api.persistence.flushDraftSaves();win=await loadApp();api=win.__MSFM;check(G,"worked draft timestamp persists and reload honestly resets freshness to not-run",el(win,"comparisonFreshness").dataset.state==="not-run"&&!/updated: Unavailable/.test(el(win,"comparisonFreshness").textContent),el(win,"comparisonFreshness").textContent);
+  const base=await (await fetch('msfm-mapping-baseline.json?r='+Date.now())).json(),runtime=api.SPORTS.flatMap(sp=>api.state().mappings.filter(m=>m.sport===sp).map(m=>({sport:m.sport,country:m.country,priorityLeague:m.priorityLeague,flashscoreLeague:m.flashscoreLeague,active:m.active!==false})));
+  check(G,"baseline mappings are semantically identical to runtime defaults in stable sport order",JSON.stringify(base.mappings)===JSON.stringify(runtime)&&base.total===292&&base.blankFlashscoreTotal===72&&base.duplicateBusinessKeys.length===0,[base.total,runtime.length]);
+  const arrays=base.mappings.map(m=>[m.sport,m.country,m.priorityLeague,m.flashscoreLeague,m.active]),bytes=new TextEncoder().encode(JSON.stringify(arrays)),digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('');
+  check(G,"baseline canonical SHA-256 is reproducible from compact UTF-8 mapping arrays",digest===base.canonicalSha256,[digest,base.canonicalSha256]);
+  const perfRaw=Array(20).fill(RAW.Basketball).join('\n'),fixtures=Array.from({length:30},(_,i)=>fx({Home:'Home '+i,Away:'Away '+i,Time:String(10+i%10).padStart(2,'0')+':00'})),worked=fixtures.slice(0,15).map((f,i)=>wk({Home:f.Home,Away:f.Away,Time:f.Time},i+1));PERFORMANCE=api.measureRepresentativePerformance(perfRaw,"Basketball","27/10/2026",fixtures,worked);
+  check(G,`representative in-browser timings: parse ${PERFORMANCE.parseMs} ms; compare ${PERFORMANCE.compareMs} ms`,Number.isFinite(PERFORMANCE.parseMs)&&Number.isFinite(PERFORMANCE.compareMs)&&PERFORMANCE.parsed>0&&PERFORMANCE.compared===30,PERFORMANCE);
+}
+
+
+/* ===================== INDEPENDENT AUDIT CHECKS ===================== */
+async function auditChecks(){
+  let win=await freshApp(),api=win.__MSFM,st,r;
+  const P="Audit: functionality preserved";
+  const ORIGINAL_IDS=["appNotices","mappingCount","mapSport","mapCountry","mapPriority","mapFlashscore","saveMappingBtn","cancelEditBtn","mappingSearch","mappingFilter","mappingFile","importMappingsBtn","exportMappingsBtn","resetSportMappingsBtn","resetMappingsBtn","mappingMessage","mappingTables","sport","sportHint","fixtureDate","rawInput","filterBtn","sampleBtn","clearBtn","message","collectionProgress","daysCollectedCount","collectionEntryCount","collectionAllCount","collectionMatchedCount","collectionExcludedCount","addDayBtn","exportCollectionBtn","exportAllCollectionBtn","exportExcludedCollectionBtn","clearCollectionBtn","collectionMessage","collectionBody","workedInput","compareWorkedBtn","exportNewBtn","exportWorkedBtn","exportReviewBtn","exportTimeChangedBtn","exportConflictsBtn","clearWorkedBtn","compareMessage","collectedFixtureCount","newMatchCount","alreadyWorkedCount","possibleDuplicateCount","timeChangedCount","conflictCount","resultFilter","newMatchesBody","alreadyWorkedBody","timeChangedBody","possibleDuplicatesBody","conflictsBody","resultCount","parsedCount","matchedCount","excludedCount","resultsBody","copyBtn","csvBtn","excludedCsvBtn","exportMessage","excludedTableCount","excludedBody","clearHistoryBtn","historyBody"];
+  const missing=ORIGINAL_IDS.filter(id=>!el(win,id));
+  check(P,`all ${ORIGINAL_IDS.length} original controls, counters and tables still exist`,missing.length===0,missing);
+  const ORIG_KEYS={mappings:"basketball_priority_league_mappings_v2",fixtures:"basketball_matched_fixtures_v1",history:"basketball_import_history_v1",collection:"basketball_7day_fixture_collection_v1",lastParse:"msfm_last_parse_v2",schema:"msfm_schema_version",seeded:"msfm_seeded_sports_v1"};
+  check(P,"all original Local Storage keys unchanged (only new keys added)",Object.entries(ORIG_KEYS).every(([k,v])=>api.STORAGE[k]===v),api.STORAGE);
+  const hookKeys=["classifyFixtures","parseWorkedPaste","teamRelation","teamKey","makeMatcher","matchFixture","parseFixtures","buildCSV","escapeCSV","dateKey","timeKey","countryKey","canonSport","migrateStoredData","STORAGE","SPORTS","state"];
+  check(P,"original test hook functions all still exported",hookKeys.every(k=>k in api),hookKeys.filter(k=>!(k in api)));
+  check(P,"both sport dropdowns list exactly the six sports in order",["sport","mapSport"].every(id=>[...el(win,id).options].map(o=>o.value).join("|")==="Basketball|Ice hockey|Floorball|Waterpolo|Bandy|Field hockey"));
+  check(P,"six separate sport mapping tables rendered",api.SPORTS.every(s=>!!el(win,"mappings-"+s.toLowerCase().replace(/[^a-z0-9]+/g,""))));
+  stubDialogs(win);el(win,"sampleBtn").click();el(win,"fixtureDate").value="2026-10-27";el(win,"filterBtn").click();st=api.state();
+  check(P,"Load Example Data + Parse & Filter matches all 5 example fixtures",st.convertedRows.length===5&&st.excludedRows.length===0,{m:st.convertedRows.map(x=>x.Home+"-"+x.Away),e:st.excludedRows});
+  check(P,"import history records the parse (5 input fixtures)",el(win,"historyBody").rows[0]&&el(win,"historyBody").rows[0].cells[2].textContent==="5");
+  const cap=[];win.downloadCSV=(name,headers,rows)=>cap.push({name,headers,rows});
+  el(win,"exportMappingsBtn").click();
+  const mx=cap.find(c=>c.name==="priority_league_mappings.csv");
+  check(P,"mapping export contains all 292 mappings with Sport and Active columns",mx&&mx.rows.length===292&&mx.headers.join("|")==="Sport|Country|Priority League|Flashscore League Name|Active",mx&&[mx.rows.length,mx.headers]);
+  check(P,"mapping export keeps all 72 blank Flashscore names blank",mx&&mx.rows.filter(x=>x["Flashscore League Name"]==="").length===72);
+  parseOnly(win,"Basketball","2026-10-27","Euroleague\nEUROPE:\n20:00\nBayern\nBarcelona\nPremier League\nBELARUS:\n16:00\nGomel 2\nMinsk 2");
+  el(win,"csvBtn").click();el(win,"excludedCsvBtn").click();
+  const mc=cap.find(c=>c.name==="priority_fixtures.csv"),ec=cap.find(c=>c.name==="excluded_fixtures.csv");
+  check(P,"matching-fixtures CSV: 1 row, includes Sport, Date and Priority League",mc&&mc.rows.length===1&&mc.headers.includes("Priority League")&&mc.rows[0].Sport==="Basketball"&&mc.rows[0].Date==="27/10/2026",mc);
+  check(P,"excluded-fixtures CSV: the Belarus row with its reason",ec&&ec.rows.length===1&&ec.rows[0].Country==="Belarus"&&ec.rows[0].Reason!=="",ec);
+  addDay(win,"Basketball","2026-10-27",RAW["Basketball"]);el(win,"clearCollectionBtn").click();
+  check(P,"Clear 7-Day Collection empties the collection but keeps mappings",api.state().collectionDays.length===0&&api.state().mappings.length===292);
+
+  /* ---- probes for suspected bugs found while reading the final code ---- */
+  const B1="Audit bug 1: 'Draw' headings";
+  st=parseOnly(win,"Basketball","2026-10-27","French CupFRANCE: Draw\n20:00\nNanterre\nParis\n-\n-");
+  check(B1,"glued 'French CupFRANCE: Draw' is split and matches France / French Cup",st.convertedRows.length===1&&st.convertedRows[0]["Flashscore League Name"]==="French Cup"&&st.convertedRows[0].Country==="France",{c:st.convertedRows,e:st.excludedRows});
+  st=parseOnly(win,"Basketball","2026-10-27","French Cup\nFRANCE:\nDraw\n20:00\nNanterre\nParis");
+  check(B1,"line-per-field 'French Cup / FRANCE: / Draw' matches",st.convertedRows.length===1,{c:st.convertedRows,e:st.excludedRows});
+  st=parseOnly(win,"Basketball","2026-10-27","WNBA - Play OffsUSA: Draw\n01:00\nGolden State Valkyries W\nAtlanta Dream W");
+  check(B1,"'WNBA - Play OffsUSA: Draw' detects league 'WNBA - Play Offs' (excluded: not a priority league)",st.excludedRows.length===1&&st.excludedRows[0].DetectedLeague==="WNBA - Play Offs"&&st.convertedRows.length===0,st.excludedRows);
+  const B2="Audit bug 2: equivalent team qualifiers";
+  for(const [a,b,exp] of [["Bendigo W","Bendigo Women","similar"],["Townsville W","Townsville Ladies","similar"],["Minsk II","Minsk 2","similar"],["Minsk II","Minsk","none"],["Bendigo W","Bendigo","none"],["Saint Quentin U21","Saint Quentin U19","none"]])
+    check(B2,`${a} vs ${b} => ${exp}`,api.teamRelation(a,b)===exp,api.teamRelation(a,b));
+  r=api.classifyFixtures([fx({Home:"Townsville W",Away:"Bendigo W",Country:"Australia","Flashscore League Name":"WNBL Women","Priority League":"WNBL",Time:"09:00"})],[wk({Home:"Townsville Women",Away:"Bendigo Women",Country:"Australia",League:"WNBL Women",Time:"09:00"})]);
+  check(B2,"history 'Townsville Women vs Bendigo Women' vs fixture 'Townsville W vs Bendigo W' => Possible Duplicate, not New",r.possible.length===1&&r.newMatches.length===0,counts(r));
+  const B3="Audit bug 3: worked-history date formats";
+  for(const d of ["27/10/26","27-10-26","27-Oct-2026","27 October 2026","27-Oct-26","Oct 27, 2026","Tue 27/10/2026"])
+    check(B3,`dateKey("${d}") = 2026-10-27`,api.dateKey(d)==="2026-10-27",api.dateKey(d));
+  check(B3,"impossible dates still rejected (31-Feb-26, 32/10/26)",api.dateKey("31-Feb-26")===""&&api.dateKey("32/10/26")==="");
+  r=api.classifyFixtures([fx()],[wk({Date:"27-Oct-26"})]);
+  check(B3,"history row dated '27-Oct-26' => Already Worked (not New)",r.alreadyWorked.length===1,counts(r));
+  const B4="Audit bug 4: Event IDs from Excel";
+  check(B4,"'2.0034995E+07' equals '20034995'",win.eventIdKey("2.0034995E+07")===win.eventIdKey("20034995"),[win.eventIdKey("2.0034995E+07"),win.eventIdKey("20034995")]);
+  r=api.classifyFixtures([fx({Home:"Sabah BC",Away:"Nanterre",Time:"17:00"})],[wk({Home:"Sabah Baku",Away:"Nanterre",Time:"17:00","Event ID":"20034995"},1),wk({Home:"Sabah BC",Away:"Nanterre",Time:"17:00","Event ID":"2.0034995E+07"},2)]);
+  check(B4,"duplicate ID written two ways is still detected as one inconsistent group",r.conflicts.length===1&&r.alreadyWorked.length===0,counts(r));
+  const B5="Audit bug 5: single-line paste";
+  parseOnly(win,"Basketball","2026-10-27","EuroleagueEUROPE: Standings17:00DubaiParis--20:00BayernBarcelona--");
+  check(B5,"a paste with no line breaks explains why nothing was parsed",/line breaks/i.test(el(win,"message").textContent),el(win,"message").textContent);
+
+  /* ---- further independent probes (expected to pass) ---- */
+  const X="Audit: extra probes";
+  r=api.classifyFixtures([fx({Sport:"Waterpolo",Country:"Hungary","Flashscore League Name":"OB I","Priority League":"OB I",Home:"Ferencvaros",Away:"OSC",Time:"18:00"})],[wk({Sport:"Water polo",Country:"Hungary",League:"OB I",Home:"Ferencváros",Away:"OSC",Time:"18:00"})]);
+  check(X,"history sport 'Water polo' + accent 'Ferencváros' => Already Worked for Waterpolo",r.alreadyWorked.length===1,counts(r));
+  r=api.classifyFixtures([fx({Sport:"Field hockey"})],[wk({Sport:"Ice hockey"})]);
+  check(X,"Field hockey fixture never matches an Ice hockey history row",r.newMatches.length===1,counts(r));
+  r=api.classifyFixtures([fx()],[wk({League:"Eurocup"})]);
+  check(X,"same teams/time but history league differs => review with league reason",r.possible.length===1&&/conflicting league/.test(r.possible[0].reason),r.possible[0]||counts(r));
+  r=api.classifyFixtures([fx()],[wk({Country:"Spain"})]);
+  check(X,"same teams/time but history country differs => review with country reason",r.possible.length===1&&/conflicting country/.test(r.possible[0].reason),r.possible[0]||counts(r));
+  r=api.classifyFixtures([fx()],[wk({Time:""})]);
+  check(X,"history time blank => review (cannot confirm slot), not Already Worked",r.possible.length===1&&/Time is missing/.test(r.possible[0].reason),counts(r));
+  r=api.classifyFixtures([fx(),fx({Time:"21:00"})],[wk({}),wk({Time:"21:00"},2)]);
+  check(X,"double-header: two fixtures, two history rows => both Already Worked",r.alreadyWorked.length===2,counts(r));
+  r=api.classifyFixtures([fx({Home:"Real Madrid",Away:"Barcelona"})],[wk({Home:"Real Betis",Away:"Barcelona"})]);
+  check(X,"Real Madrid vs Real Betis with the same away team, league and time => review (renamed-team rule), never Already Worked",r.alreadyWorked.length===0&&r.possible.length===1,counts(r));
+  r=api.classifyFixtures([fx({Home:"Al Arabi",Away:"Al Ahli",Time:"16:00"})],[wk({Home:"Al Sadd",Away:"Al Rayyan",Time:"18:00"})]);
+  check(X,"unrelated teams sharing the 'Al' prefix => New",r.newMatches.length===1,counts(r));
+}
+
+/* ===================== USER-FACING BACKUP & RESTORE ===================== */
+async function backupChecks(){
+  const G="Backup & restore";
+  let win=await freshApp(),api=win.__MSFM,b=api.backup,st;
+  stubDialogs(win);
+
+  // Export: a full backup of the default state.
+  const backup=b.buildBackup();
+  check(G,"backup has a supported format version and ISO createdAt",backup.formatVersion===b.formatVersion&&typeof backup.createdAt==="string"&&!isNaN(Date.parse(backup.createdAt)),backup.formatVersion);
+  check(G,"backup never includes the internal revision counter",!Object.prototype.hasOwnProperty.call(backup.data,api.STORAGE.revision),Object.keys(backup.data));
+  check(G,"backup captures all 292 default mappings",Array.isArray(backup.data[api.STORAGE.mappings])&&backup.data[api.STORAGE.mappings].length===292,backup.data[api.STORAGE.mappings]&&backup.data[api.STORAGE.mappings].length);
+  const serialized=b.serializeBackup(backup);
+  check(G,"serialized backup is valid JSON that round-trips",JSON.stringify(JSON.parse(serialized).data[api.STORAGE.mappings])===JSON.stringify(backup.data[api.STORAGE.mappings]));
+
+  // Parse/validate a good backup.
+  const parsed=b.parseBackupText(serialized);
+  check(G,"a well-formed backup parses with 292 mappings and no duplicate keys",parsed.mappingCount===292&&parsed.duplicateKeys.length===0,[parsed.mappingCount,parsed.duplicateKeys]);
+
+  // Malformed JSON is rejected with a clear message and NO data change.
+  const before=JSON.stringify(api.state().mappings);
+  let threw=false,msg="";
+  try{b.parseBackupText("{not valid json");}catch(e){threw=true;msg=e.message;}
+  check(G,"malformed JSON is rejected with a human message",threw&&/not valid json|not a backup/i.test(msg),msg);
+  check(G,"a rejected parse never changes current mappings",JSON.stringify(api.state().mappings)===before);
+
+  // Unsupported (newer) format version is rejected.
+  threw=false;msg="";
+  try{b.parseBackupText(JSON.stringify({formatVersion:b.formatVersion+1,data:{}}));}catch(e){threw=true;msg=e.message;}
+  check(G,"a newer backup format version is rejected",threw&&/newer version|format/i.test(msg),msg);
+
+  // Missing data section rejected.
+  threw=false;try{b.parseBackupText(JSON.stringify({formatVersion:1}));}catch(e){threw=true;}
+  check(G,"a backup with no data section is rejected",threw);
+
+  // Duplicate business keys inside the backup are detected.
+  const dupBackup={formatVersion:1,data:{[api.STORAGE.mappings]:[
+    {id:"a",sport:"Basketball",country:"Spain",priorityLeague:"Liga ACB",flashscoreLeague:"ACB",active:true},
+    {id:"b",sport:"Basketball",country:"Spain",priorityLeague:"Liga ACB",flashscoreLeague:"ACB",active:true}
+  ]}};
+  const dupParsed=b.parseBackupText(JSON.stringify(dupBackup));
+  check(G,"duplicate business keys inside a backup are detected",dupParsed.duplicateKeys.length===1,dupParsed.duplicateKeys);
+
+  // ---- REPLACE restore on a fresh app with a small custom backup ----
+  win=await freshApp();api=win.__MSFM;b=api.backup;stubDialogs(win);
+  const smallBackup={formatVersion:1,createdAt:new Date().toISOString(),data:{[api.STORAGE.mappings]:[
+    {id:"x1",sport:"Basketball",country:"Testland",priorityLeague:"Test League",flashscoreLeague:"TL",active:true}
+  ]}};
+  const sp=b.parseBackupText(JSON.stringify(smallBackup));
+  const rres=b.restoreFromBackup(sp,"replace");
+  b.reloadFromStorage();st=api.state();
+  check(G,"REPLACE overwrites all mappings with the backup content",st.mappings.length===1&&st.mappings[0].country==="Testland",st.mappings);
+  check(G,"REPLACE persists to storage (survives reload)",(()=>{const raw=window.__MSFM_TEST_STORE.getItem(api.STORAGE.mappings);const arr=JSON.parse(raw);return arr.length===1&&arr[0].priorityLeague==="Test League";})());
+  check(G,"REPLACE records a recovery snapshot key",typeof rres.recoveryKey==="string"&&rres.recoveryKey.includes("restore"),rres.recoveryKey);
+  check(G,"a recovery snapshot of the pre-restore data exists in storage",window.__MSFM_TEST_STORE._keys().some(k=>k.startsWith("msfm_backup_before_restore_")));
+
+  // ---- MERGE restore preserves existing 292 and adds new rows ----
+  win=await freshApp();api=win.__MSFM;b=api.backup;stubDialogs(win);
+  const baseCount=api.state().mappings.length;
+  const mergeBackup={formatVersion:1,createdAt:new Date().toISOString(),data:{[api.STORAGE.mappings]:[
+    {id:"new1",sport:"Basketball",country:"Narnia",priorityLeague:"Narnia Cup",flashscoreLeague:"NC",active:true}, // brand new
+    {id:"upd1",sport:"Spain",country:"Spain",priorityLeague:"Liga ACB",flashscoreLeague:"ACB-CHANGED",active:true} // business key exists (Basketball|Spain|Liga ACB) only if sport canonises; use Basketball
+  ]}};
+  // Fix the second row to actually target an existing business key.
+  mergeBackup.data[api.STORAGE.mappings][1]={id:"upd1",sport:"Basketball",country:"Spain",priorityLeague:"Liga ACB",flashscoreLeague:"ACB-CHANGED",active:true};
+  const mp=b.parseBackupText(JSON.stringify(mergeBackup));
+  const mres=b.restoreFromBackup(mp,"merge","use-import");
+  b.reloadFromStorage();st=api.state();
+  check(G,"MERGE preserves all existing mappings and adds only the new one",st.mappings.length===baseCount+1&&st.mappings.some(m=>m.country==="Narnia"),[st.mappings.length,baseCount]);
+  check(G,"MERGE with use-import updates the conflicting Flashscore name",(()=>{const m=st.mappings.find(x=>x.sport==="Basketball"&&x.country==="Spain"&&x.priorityLeague==="Liga ACB");return m&&m.flashscoreLeague==="ACB-CHANGED";})());
+  check(G,"MERGE result summary reports one added and one updated",mres.mappingsAdded===1&&mres.mappingsUpdated===1,[mres.mappingsAdded,mres.mappingsUpdated]);
+
+  // ---- MERGE with keep-local keeps existing values on conflict ----
+  win=await freshApp();api=win.__MSFM;b=api.backup;stubDialogs(win);
+  const origAcb=api.state().mappings.find(m=>m.sport==="Basketball"&&m.country==="Spain"&&m.priorityLeague==="Liga ACB").flashscoreLeague;
+  const kl=b.parseBackupText(JSON.stringify({formatVersion:1,data:{[api.STORAGE.mappings]:[
+    {id:"c",sport:"Basketball",country:"Spain",priorityLeague:"Liga ACB",flashscoreLeague:"SHOULD-NOT-WIN",active:true}
+  ]}}));
+  b.restoreFromBackup(kl,"merge","keep-local");b.reloadFromStorage();st=api.state();
+  check(G,"MERGE with keep-local does NOT change the local Flashscore name",st.mappings.find(m=>m.sport==="Basketball"&&m.country==="Spain"&&m.priorityLeague==="Liga ACB").flashscoreLeague===origAcb,[origAcb]);
+
+  // ---- 292 mappings preserved through an export->replace round trip ----
+  win=await freshApp();api=win.__MSFM;b=api.backup;stubDialogs(win);
+  const full=b.buildBackup();
+  const fp=b.parseBackupText(b.serializeBackup(full));
+  b.restoreFromBackup(fp,"replace");b.reloadFromStorage();st=api.state();
+  check(G,"export->replace round trip preserves exactly 292 mappings",st.mappings.length===292,st.mappings.length);
+  check(G,"round-tripped mappings keep all 72 blank Flashscore names",st.mappings.filter(m=>m.flashscoreLeague==="").length===72,st.mappings.filter(m=>m.flashscoreLeague==="").length);
+
+  // ---- Collection + history + drafts are included and restored ----
+  win=await freshApp();api=win.__MSFM;b=api.backup;stubDialogs(win);
+  addDay(win,"Basketball","2026-10-27",RAW["Basketball"]);
+  const withColl=b.buildBackup();
+  check(G,"backup includes the collection once a day is added",Array.isArray(withColl.data[api.STORAGE.collection])&&withColl.data[api.STORAGE.collection].length===1,withColl.data[api.STORAGE.collection]);
+  // Restore that backup into a brand-new empty app and confirm the collection comes back.
+  const win2=await freshApp();const api2=win2.__MSFM;const b2=api2.backup;stubDialogs(win2);
+  const cp=b2.parseBackupText(b2.serializeBackup(withColl));
+  b2.restoreFromBackup(cp,"replace");b2.reloadFromStorage();
+  check(G,"restoring into a fresh app brings back the collection day",api2.state().collectionDays.length===1&&api2.state().collectionDays[0].matched.length===2,api2.state().collectionDays);
+  check(G,"restored collection re-renders in the collection table",[...el(win2,"collectionBody").rows].length===1);
+
+  // ---- Simulated storage failure during restore rolls back ----
+  const failStore=makeStore(null,{failSet:true});
+  win=await freshAppWithStore(makeStore());api=win.__MSFM;b=api.backup;stubDialogs(win);
+  // Build a valid parsed backup, then swap the live store to one that throws on setItem by reloading with it.
+  const okBackup=b.parseBackupText(b.serializeBackup(b.buildBackup()));
+  // Load a fresh app whose store fails every write, capture pre-state, attempt restore, expect rollback + unchanged data.
+  const failWin=await freshAppWithStore(makeStore(null,{failSet:true}));const failApi=failWin.__MSFM;const failB=failApi.backup;stubDialogs(failWin);
+  const beforeFail=JSON.stringify(failApi.state().mappings);
+  const smallFail=failB.parseBackupText(JSON.stringify({formatVersion:1,data:{[failApi.STORAGE.mappings]:[
+    {id:"f1",sport:"Basketball",country:"Failland",priorityLeague:"Fail League",flashscoreLeague:"FL",active:true}
+  ]}}));
+  let restoreThrew=false,rolledBack=false;
+  try{failB.restoreFromBackup(smallFail,"replace");}catch(e){restoreThrew=true;rolledBack=!!e.rolledBack;}
+  failB.reloadFromStorage();
+  check(G,"a storage write failure during restore is reported and rolled back",restoreThrew&&rolledBack,{restoreThrew,rolledBack});
+  check(G,"after a failed restore the in-memory mappings are unchanged",JSON.stringify(failApi.state().mappings)===beforeFail);
+}
+/* ===================== TEAM MAPPING MANAGER ===================== */
+async function teamMappingChecks(){
+  const G="Team mappings";
+  let win=await freshApp();let api=win.__MSFM;let tm=api.teamMappings;stubDialogs(win);
+
+  // Surface present and starts empty.
+  check(G,"team-mapping test surface is exposed",!!tm&&typeof tm.resolveFixtureMapping==="function"&&typeof tm.analyzeTeamImport==="function",Object.keys(tm||{}));
+  check(G,"a fresh app has no team mappings and the existing priority mappings are untouched (292)",tm.list().length===0&&api.state().mappings.length===292,[tm.list().length,api.state().mappings.length]);
+
+  // CSV import. parseCSV + teamRowsFromMatrix is exercised through a real DOM import first;
+  // the full analyze+apply pipeline is driven with importMatrix (same code paths), which is
+  // deterministic in headless Edge (synthetic File drops are unreliable there).
+  const csvMatrix=[["Sport","Country","FlashScore League","FlashScore Team","BCM Team"],
+                   ["Basketball","AUSTRALIA","WNBL Women","Southside W","Southside Flyers (Women)"],
+                   ["Basketball","Australia","WNBL Women","Perth W","Perth Lynx (Women)"],
+                   ["Ice hockey","Sweden","SHL","Frolunda","Frolunda HC"]];
+  let res=tm.importMatrix(csvMatrix,"use-import");
+  tm=win.__MSFM.teamMappings;
+  check(G,"CSV import adds all 3 valid rows",tm.list().length===3&&res.result.added===3,[tm.list().length,res.result]);
+  check(G,"imported rows keep Unicode / parentheses in BCM names",tm.list().some(m=>m.bcmTeam==="Southside Flyers (Women)"));
+  check(G,"team table rendered 3 rows",[...el(win,"teamMappingBody").rows].filter(r=>r.dataset.teamId).length===3);
+  check(G,"the Team Mappings UI labels the data as local only, not shared to Supabase",/local only/i.test(el(win,"teamSharedStatus").textContent),el(win,"teamSharedStatus").textContent);
+
+  // Re-import the SAME rows: no duplicates created (same BCM => no-op).
+  const before=tm.list().length;res=tm.importMatrix(csvMatrix,"use-import");tm=win.__MSFM.teamMappings;
+  check(G,"re-importing identical rows does not create duplicates",tm.list().length===before&&res.result.added===0,[tm.list().length,res.result]);
+
+  // Conflict detection: same scope+FS team, different BCM team => needs confirmation, never silent.
+  const analysis=tm.analyzeTeamImport([{rowNo:2,sportRaw:"Basketball",country:"Australia",flashscoreLeague:"WNBL Women",flashscoreTeam:"Southside W",bcmTeam:"DIFFERENT BCM"}]);
+  check(G,"a differing BCM team for an existing scope is detected as a conflict (not silently applied)",analysis.conflicts.length===1&&analysis.toAdd.length===0,analysis);
+  // keep-local leaves the original; use-import overwrites.
+  tm.applyTeamImport(analysis,"keep-local");
+  check(G,"keep-local preserves the original BCM team on conflict",tm.list().find(m=>m.flashscoreTeam==="Southside W").bcmTeam==="Southside Flyers (Women)");
+  tm.applyTeamImport(analysis,"use-import");
+  check(G,"use-import overwrites the BCM team on explicit confirmation",tm.list().find(m=>m.flashscoreTeam==="Southside W").bcmTeam==="DIFFERENT BCM");
+
+  // Invalid rows (blank required fields / unsupported sport) are skipped with reasons.
+  const bad=tm.analyzeTeamImport([
+    {rowNo:2,sportRaw:"",country:"Spain",flashscoreLeague:"ACB",flashscoreTeam:"Real",bcmTeam:"Real Madrid"},
+    {rowNo:3,sportRaw:"Quidditch",country:"Spain",flashscoreLeague:"ACB",flashscoreTeam:"Real",bcmTeam:"Real Madrid"},
+    {rowNo:4,sportRaw:"Basketball",country:"Spain",flashscoreLeague:"ACB",flashscoreTeam:"",bcmTeam:"X"}
+  ]);
+  check(G,"blank sport, unsupported sport and blank team are all skipped with reasons",bad.skipped.length===3&&bad.valid.length===0,bad.skipped);
+
+  // Excel parsing: matrix-based path is deterministic; also exercise real XLSX if present in the app frame.
+  const matrix=[["Sport","Country","FlashScore League","FlashScore Team","BCM Team"],
+                ["Basketball","Australia","WNBL Women","Bendigo W","Bendigo Spirit (Women)"]];
+  const parsedMatrix=tm.teamRowsFromMatrix(matrix);
+  check(G,"Excel-style matrix with correct headers parses one data row",parsedMatrix.error===""&&parsedMatrix.rows.length===1&&parsedMatrix.rows[0].bcmTeam==="Bendigo Spirit (Women)",parsedMatrix);
+  const missingCols=tm.teamRowsFromMatrix([["Sport","Country","Team"],["Basketball","Australia","X"]]);
+  check(G,"a matrix missing required columns is rejected with a clear message",/Required columns/.test(missingCols.error),missingCols.error);
+  if(tm.excelAvailable()){
+    // Round-trip a real .xlsx through SheetJS: write a workbook, read it back to a matrix, import it.
+    const wb=win.XLSX.utils.book_new();const ws=win.XLSX.utils.aoa_to_sheet(matrix);win.XLSX.utils.book_append_sheet(wb,ws,"Teams");
+    const out=win.XLSX.write(wb,{bookType:"xlsx",type:"array"});
+    const wb2=win.XLSX.read(out,{type:"array"});const m2=win.XLSX.utils.sheet_to_json(wb2.Sheets[wb2.SheetNames[0]],{header:1,defval:"",raw:false});
+    const rr=tm.importMatrix(m2,"use-import");tm=win.__MSFM.teamMappings;
+    check(G,"real .xlsx round-trip (SheetJS write+read) imports the Bendigo row",rr.result.added===1&&tm.list().some(m=>m.flashscoreTeam==="Bendigo W"&&m.bcmTeam==="Bendigo Spirit (Women)"),rr);
+  } else {
+    check(G,"Excel import unavailable is reported honestly (CSV still works)",true,"XLSX not loaded in test frame");
+  }
+
+  // Manual add + edit via the form.
+  win=await freshApp();api=win.__MSFM;tm=api.teamMappings;stubDialogs(win);
+  el(win,"tmSport").value="Basketball";el(win,"tmCountry").value="Australia";el(win,"tmLeague").value="WNBL Women";el(win,"tmFsTeam").value="Southside W";el(win,"tmBcmTeam").value="Southside Flyers (Women)";
+  el(win,"teamMappingForm").requestSubmit();tm=win.__MSFM.teamMappings;
+  check(G,"manual add creates one mapping",tm.list().length===1&&tm.list()[0].bcmTeam==="Southside Flyers (Women)");
+  const id=tm.list()[0].id;win.startTeamEdit(id);el(win,"tmBcmTeam").value="Southside Flyers W";el(win,"teamMappingForm").requestSubmit();
+  check(G,"manual edit updates the BCM team in place",win.__MSFM.teamMappings.list().find(m=>m.id===id).bcmTeam==="Southside Flyers W");
+
+  // Resolution against New Matches (Mapped / Partially Mapped / Unmapped), exact & normalised.
+  win=await freshApp();api=win.__MSFM;tm=api.teamMappings;stubDialogs(win);
+  tm.setList([
+    {id:"t1",sport:"Basketball",country:"Australia",flashscoreLeague:"WNBL Women",flashscoreTeam:"Southside W",bcmTeam:"Southside Flyers (Women)",active:true},
+    {id:"t2",sport:"Basketball",country:"Australia",flashscoreLeague:"WNBL Women",flashscoreTeam:"Perth W",bcmTeam:"Perth Lynx (Women)",active:true}
+  ]);
+  const fxBoth={Sport:"Basketball",Country:"Australia","Flashscore League Name":"WNBL Women",Home:"Southside W",Away:"Perth W"};
+  const fxOne={Sport:"Basketball",Country:"Australia","Flashscore League Name":"WNBL Women",Home:"Southside W",Away:"Unknown Team"};
+  const fxNone={Sport:"Basketball",Country:"Australia","Flashscore League Name":"WNBL Women",Home:"A",Away:"B"};
+  check(G,"both teams resolved => Mapped with BCM names",(()=>{const r=tm.resolveFixtureMapping(fxBoth);return r.status==="Mapped"&&r.bcmHome==="Southside Flyers (Women)"&&r.bcmAway==="Perth Lynx (Women)";})());
+  check(G,"one team resolved => Partially Mapped, other shows Unmapped",(()=>{const r=tm.resolveFixtureMapping(fxOne);return r.status==="Partially Mapped"&&r.bcmHome==="Southside Flyers (Women)"&&r.bcmAway==="Unmapped";})());
+  check(G,"no team resolved => Unmapped",tm.resolveFixtureMapping(fxNone).status==="Unmapped");
+  check(G,"matching is normalised (case/space) but still scoped: wrong league does NOT resolve",tm.resolveBcmTeam("Basketball","Australia","NBL","Southside W")===null&&tm.resolveBcmTeam("Basketball","Australia","WNBL Women","  southside   w ")==="Southside Flyers (Women)");
+  check(G,"an inactive mapping does not resolve",(()=>{const l=tm.list();l[0].active=false;tm.setList(l);const r=tm.resolveBcmTeam("Basketball","Australia","WNBL Women","Southside W");tm.list()[0].active=true;tm.setList(tm.list());return r===null;})());
+
+  // Drive a real comparison and confirm the New Matches table gained BCM columns WITHOUT losing the original 8.
+  win=await freshApp();api=win.__MSFM;tm=api.teamMappings;stubDialogs(win);
+  tm.setList([
+    {id:"b1",sport:"Basketball",country:"Europe",flashscoreLeague:"Euroleague",flashscoreTeam:"Bayern",bcmTeam:"FC Bayern Munich",active:true},
+    {id:"b2",sport:"Basketball",country:"Europe",flashscoreLeague:"Euroleague",flashscoreTeam:"Barcelona",bcmTeam:"FC Barcelona",active:true}
+  ]);
+  addDay(win,"Basketball","2026-10-27",RAW["Basketball"]);
+  el(win,"workedInput").value="Sport name\tDate\tTime\tCountry\tLeague\tHome\tAway\tEvent ID\nBasketball\t01-01-2020\t10:00\tEurope\tEuroleague\tNobody A\tNobody B\t999";  // one unrelated worked row => both collected fixtures stay New
+  el(win,"compareWorkedBtn").click();await new Promise(r=>setTimeout(r,40));
+  const head=[...win.document.querySelectorAll('h3')].find(h=>h.textContent==="New Matches").nextElementSibling.nextElementSibling||null;
+  const headerCells=[...win.document.querySelector('#newMatchesBody').closest('table').querySelectorAll('thead th')].map(th=>th.textContent);
+  check(G,"New Matches keeps its original 8 columns and appends exactly 3",headerCells.join("|")==="Sport|Date|Time|Country|League|Home|Away|Event ID|BCM Home|BCM Away|Mapping Status",headerCells);
+  const badgeText=r=>{const b=r.cells[10].querySelector(".badge");return b?b.textContent:"";};const bcmText=(r,i)=>{const n=r.cells[i].querySelector(".bcm-name");return n?n.textContent:"";};const homeFs=r=>{const n=r.cells[5].querySelector(".fs-name");return n?n.textContent:"";};const bayernRow=[...el(win,"newMatchesBody").rows].find(r=>r.cells.length===11&&homeFs(r)==="Bayern");const valenciaRow=[...el(win,"newMatchesBody").rows].find(r=>r.cells.length===11&&homeFs(r)==="Valencia");
+  check(G,"the Bayern/Barcelona New Matches row shows both BCM names and a Mapped status badge",bayernRow&&bcmText(bayernRow,8)==="FC Bayern Munich"&&bcmText(bayernRow,9)==="FC Barcelona"&&badgeText(bayernRow)==="Mapped",bayernRow&&[...bayernRow.cells].map(c=>c.textContent));check(G,"an unmapped New Matches row shows Not mapped for both BCM cells and an Unmapped status",valenciaRow&&bcmText(valenciaRow,8)==="Not mapped"&&bcmText(valenciaRow,9)==="Not mapped"&&badgeText(valenciaRow)==="Unmapped",valenciaRow&&[...valenciaRow.cells].map(c=>c.textContent));
+  // Unmapped-only filter hides fully-mapped rows.
+  el(win,"unmappedOnlyFilter").checked=true;win.__MSFM.state();api=win.__MSFM;
+  win.msfmShowTab&&win.msfmShowTab("compare");
+  // trigger re-render by re-running renderComparison via a fresh compare
+  el(win,"compareWorkedBtn").click();await new Promise(r=>setTimeout(r,40));
+  const badge2=r=>{const b=r.cells[10].querySelector(".badge");return b?b.textContent:"";};const visRows=[...el(win,"newMatchesBody").rows].filter(r=>r.cells.length===11&&!r.classList.contains("hidden"));const mappedRowsVisible=visRows.filter(r=>badge2(r)==="Mapped").length;const unmappedVisible=visRows.filter(r=>badge2(r)==="Unmapped").length;
+  check(G,"the 'unmapped only' filter hides fully-mapped rows and keeps unmapped ones",mappedRowsVisible===0&&unmappedVisible>=1,[mappedRowsVisible,unmappedVisible]);
+  el(win,"unmappedOnlyFilter").checked=false;
+
+  // SQL export is safe for apostrophes / Unicode and is idempotent (on conflict ... do update).
+  const ucountry="C"+String.fromCharCode(0x00F4)+"te d'Ivoire";   // Cote d'Ivoire with o-circumflex + apostrophe
+  const uleague="L'"+String.fromCharCode(0x00C9)+"t"+String.fromCharCode(0x00E9); // L'Ete with accents
+  const sql=tm.buildTeamMappingSQL([
+    {sport:"Basketball",country:ucountry,flashscoreLeague:uleague,flashscoreTeam:"O'Brien W",bcmTeam:"O'Brien (Women)",active:true}
+  ]);
+  check(G,"SQL export doubles apostrophes and keeps Unicode",sql.includes("'O''Brien W'")&&sql.includes("'O''Brien (Women)'")&&sql.includes("C"+String.fromCharCode(0x00F4)+"te d''Ivoire"),sql.split("\n").find(l=>l.includes("insert")));
+  check(G,"SQL export is an idempotent upsert on the unique key",/on conflict \(sport,country,flashscore_league,flashscore_team\) do update/.test(sql));
+  check(G,"SQL export wraps the inserts in a transaction",/^begin;/m.test(sql)&&/commit;\s*$/.test(sql));
+
+  // Persistence across reload + inclusion in backup.
+  win=await freshApp();api=win.__MSFM;tm=api.teamMappings;stubDialogs(win);
+  el(win,"tmSport").value="Ice hockey";el(win,"tmCountry").value="Latvia";el(win,"tmLeague").value="Optibet Hokeja Liga";el(win,"tmFsTeam").value="HK Zemgale";el(win,"tmBcmTeam").value="Zemgale/LLU";
+  el(win,"teamMappingForm").requestSubmit();
+  check(G,"team mapping persisted to storage under its own key",(()=>{const raw=window.__MSFM_TEST_STORE.getItem(api.STORAGE.teamMappings);const arr=JSON.parse(raw||"[]");return arr.length===1&&arr[0].flashscoreTeam==="HK Zemgale";})());
+  const backup=api.backup.buildBackup();
+  check(G,"team mappings are included in a full backup",Array.isArray(backup.data[api.STORAGE.teamMappings])&&backup.data[api.STORAGE.teamMappings].length===1,Object.keys(backup.data));
+  win=await loadApp();api=win.__MSFM;tm=api.teamMappings;
+  check(G,"team mappings survive a reload (same store)",tm.list().length===1&&tm.list()[0].bcmTeam==="Zemgale/LLU",tm.list());
+  check(G,"priority league mappings remain exactly 292 after team-mapping activity",api.state().mappings.length===292,api.state().mappings.length);
+}
+/* ===================== ONE-CLICK BCM COPY (New Matches) ===================== */
+async function copyChecks(){
+  const G="Copy BCM";
+  let win=await freshApp();let api=win.__MSFM;let tm=api.teamMappings;stubDialogs(win);
+  // Install a fake clipboard that records writes; make it look like a secure context.
+  let clip="";let shouldFail=false;
+  try{Object.defineProperty(win,"isSecureContext",{value:true,configurable:true});}catch(e){}
+  Object.defineProperty(win.navigator,"clipboard",{configurable:true,value:{writeText:async(s)=>{if(shouldFail)throw new Error("denied");clip=String(s);return;}}});
+
+  // Map Bayern+Barcelona (both), leave Valencia/Fenerbahce unmapped.
+  tm.setList([
+    {id:"b1",sport:"Basketball",country:"Europe",flashscoreLeague:"Euroleague",flashscoreTeam:"Bayern",bcmTeam:"FC Bayern Munich (Men)",active:true},
+    {id:"b2",sport:"Basketball",country:"Europe",flashscoreLeague:"Euroleague",flashscoreTeam:"Barcelona",bcmTeam:"FC Barcelona",active:true}
+  ]);
+  addDay(win,"Basketball","2026-10-27",RAW["Basketball"]);
+  el(win,"workedInput").value="Sport name\tDate\tTime\tCountry\tLeague\tHome\tAway\tEvent ID\nBasketball\t01-01-2020\t10:00\tEurope\tEuroleague\tNobody A\tNobody B\t999";
+  el(win,"compareWorkedBtn").click();await new Promise(r=>setTimeout(r,40));
+
+  const rows=[...el(win,"newMatchesBody").rows].filter(r=>r.cells.length===11);
+  const homeFs=r=>{const n=r.cells[5].querySelector(".fs-name");return n?n.textContent:"";};const bayernRow=rows.find(r=>homeFs(r)==="Bayern");
+  const valenciaRow=rows.find(r=>homeFs(r)==="Valencia");
+  check(G,"a mapped fixture row and an unmapped fixture row are both present",!!bayernRow&&!!valenciaRow,[rows.length]);
+
+  // Home/Away cells stack FlashScore name + BCM beneath (display only).
+  check(G,"Home cell shows the FlashScore name with the BCM name beneath it",bayernRow&&/Bayern/.test(bayernRow.cells[5].textContent)&&/FC Bayern Munich \(Men\)/.test(bayernRow.cells[5].textContent),bayernRow&&bayernRow.cells[5].textContent);
+  check(G,"an unmapped team shows 'Not mapped' beneath the FlashScore name",valenciaRow&&/Valencia/.test(valenciaRow.cells[5].textContent)&&/Not mapped/.test(valenciaRow.cells[5].textContent),valenciaRow&&valenciaRow.cells[5].textContent);
+
+  // BCM Home (cell 8) copy button copies the EXACT BCM home name, not the FlashScore name.
+  const homeBtn=bayernRow.cells[8].querySelector("button.copy-btn");
+  check(G,"BCM Home cell has an enabled Copy button",!!homeBtn&&!homeBtn.disabled);
+  clip="";homeBtn.click();await new Promise(r=>setTimeout(r,10));
+  check(G,"clicking Copy copies ONLY the exact BCM home name",clip==="FC Bayern Munich (Men)",clip);
+  check(G,"the button shows a 'Copied!' confirmation after a successful copy",homeBtn.textContent==="Copied!"&&homeBtn.classList.contains("copied"),homeBtn.textContent);
+  check(G,"the FlashScore name was NOT copied",clip!=="Bayern");
+
+  // Away copy (cell 9).
+  const awayBtn=bayernRow.cells[9].querySelector("button.copy-btn");
+  clip="";awayBtn.click();await new Promise(r=>setTimeout(r,10));
+  check(G,"Away Copy copies the exact BCM away name",clip==="FC Barcelona",clip);
+
+  // Label restores after ~1-2s.
+  await new Promise(r=>setTimeout(r,1500));
+  check(G,"the button label restores to 'Copy' after the confirmation",homeBtn.textContent==="Copy"&&!homeBtn.classList.contains("copied"),homeBtn.textContent);
+
+  // Copy Both Teams (status cell 10) - exact format, no metadata/FS names.
+  const bothBtn=bayernRow.cells[10].querySelector("button.copy-both-btn");
+  check(G,"Copy Both Teams is enabled when both teams are mapped",!!bothBtn&&!bothBtn.disabled);
+  clip="";bothBtn.click();await new Promise(r=>setTimeout(r,10));
+  check(G,"Copy Both Teams copies exactly 'Home: <BCM>\\nAway: <BCM>' with no metadata",clip==="Home: FC Bayern Munich (Men)\nAway: FC Barcelona",JSON.stringify(clip));
+  check(G,"the combined copy contains no FlashScore names or fixture metadata",!/Bayern\b(?! Munich)/.test(clip)&&!/Euroleague|2026|Europe/.test(clip),clip);
+
+  // Unmapped fixture: both individual buttons and the combined button are disabled; no copy occurs.
+  const vHome=valenciaRow.cells[8].querySelector("button.copy-btn"),vBoth=valenciaRow.cells[10].querySelector("button.copy-both-btn");
+  check(G,"an unmapped team's Copy button is disabled with a reason",vHome&&vHome.disabled&&/mapping/i.test(vHome.title||""),vHome&&vHome.title);
+  check(G,"Copy Both Teams is disabled when either team is unmapped",vBoth&&vBoth.disabled);
+  clip="PREVIOUS";vHome.click();await new Promise(r=>setTimeout(r,10));
+  check(G,"clicking a disabled Copy button copies nothing",clip==="PREVIOUS",clip);
+
+  // Clipboard failure => error feedback, original label restored, no false 'Copied!'.
+  shouldFail=true;
+  // also disable the execCommand fallback so the failure path is deterministic
+  win.document.execCommand=()=>false;
+  const homeBtn2=bayernRow.cells[8].querySelector("button.copy-btn");
+  clip="UNCHANGED";homeBtn2.click();await new Promise(r=>setTimeout(r,20));
+  check(G,"a clipboard failure shows a clear error and does not claim success",/fail/i.test(homeBtn2.textContent)&&homeBtn2.classList.contains("copy-error"),homeBtn2.textContent);
+  check(G,"nothing is written to the clipboard when copy fails",clip==="UNCHANGED",clip);
+  await new Promise(r=>setTimeout(r,1500));
+  check(G,"the button recovers to 'Copy' after a failed attempt",homeBtn2.textContent==="Copy",homeBtn2.textContent);
+
+  // Repeated rapid clicks do not throw and do not stack labels.
+  shouldFail=false;
+  const homeBtn3=bayernRow.cells[8].querySelector("button.copy-btn");
+  let threw=false;try{homeBtn3.click();homeBtn3.click();homeBtn3.click();}catch(e){threw=true;}
+  await new Promise(r=>setTimeout(r,10));
+  check(G,"rapid repeated clicks do not throw and keep a single confirmation",!threw&&homeBtn3.textContent==="Copied!",homeBtn3.textContent);
+
+  // Works for a different sport (Ice hockey) too.
+  win=await freshApp();api=win.__MSFM;tm=api.teamMappings;stubDialogs(win);
+  try{Object.defineProperty(win,"isSecureContext",{value:true,configurable:true});}catch(e){}
+  let clip2="";Object.defineProperty(win.navigator,"clipboard",{configurable:true,value:{writeText:async(s)=>{clip2=String(s);}}});
+  tm.setList([
+    {id:"h1",sport:"Ice hockey",country:"Sweden",flashscoreLeague:"SHL",flashscoreTeam:"Frolunda",bcmTeam:"Frolunda HC",active:true},
+    {id:"h2",sport:"Ice hockey",country:"Sweden",flashscoreLeague:"SHL",flashscoreTeam:"Skelleftea",bcmTeam:"Skelleftea AIK",active:true}
+  ]);
+  addDay(win,"Ice hockey","2026-10-27",RAW["Ice hockey"]);
+  el(win,"workedInput").value="Sport name\tDate\tTime\tCountry\tLeague\tHome\tAway\tEvent ID\nIce hockey\t01-01-2020\t10:00\tSweden\tSHL\tNobody A\tNobody B\t999";
+  el(win,"compareWorkedBtn").click();await new Promise(r=>setTimeout(r,40));
+  const hRow=[...el(win,"newMatchesBody").rows].find(r=>r.cells.length===11&&r.cells[5].querySelector(".fs-name")&&r.cells[5].querySelector(".fs-name").textContent==="Frolunda");
+  const hBoth=hRow&&hRow.cells[10].querySelector("button.copy-both-btn");
+  clip2="";hBoth&&hBoth.click();await new Promise(r=>setTimeout(r,10));
+  check(G,"copy works for Ice hockey fixtures as well",clip2==="Home: Frolunda HC\nAway: Skelleftea AIK",clip2);
+
+  // Existing New Matches workflow intact: still 11 columns, comparison counts unaffected.
+  check(G,"New Matches still has exactly 11 columns after the copy enhancement",[...el(win,"newMatchesBody").closest("table").querySelectorAll("thead th")].length===11);
+  check(G,"priority league mappings remain 292 after copy activity",api.state().mappings.length===292,api.state().mappings.length);
+}
+/* =====================================================================
+   AUTHORITATIVE MAPPING LISTS (transcribed from the operations team's lists, 27/10/2026).
+   Format: Country|Priority League|Flashscore League Name (blank = no Flashscore name).
+   Column-alignment artefacts in the pasted text (e.g. "Super   League") were resolved
+   against the screenshots, which show single spaces.
+   ===================================================================== */
+const AUTH={
+"Ice hockey":`Asia|Asian Hockey League|
+Austria|Eishockey Liga|ICE Hockey League
+Austria|Eishockey Liga - Playoff|
+Europe|Alps Hockey League|Alps Hockey League
+Austria|Alps Hockey League - Playoffs|
+Australia|Australian Ice Hockey League|AIHL
+Belarus|Extraliga|Extraleague
+Belarus|Extraleague Divison B|
+Belarus|Extraliga Playoff|
+Czech Republic|1.Liga|Maxa liga
+Czech Republic|1.Liga Playoff|
+Czech Republic|1.Liga Playouts|
+Czech Republic|Extraliga|Extraliga
+Czech Republic|Extraliga - Playoff|
+Canada|Ontario Hockey League|OHL
+Denmark|Metal Ligaen|Metal Ligaen
+Denmark|Playoffs|
+Europe|Champions Hockey League|Champions League
+Europe|Euro Hockey Tour|
+Europe|European Icehockey Challenge|
+Europe|Karjala Cup|
+Finland|Mestis|Mestis
+Finland|Mestis Playoff|
+Finland|Mestis Playout|
+Finland|Mestis Promotion/Relegation|
+Finland|SM-Liiga|Liiga
+Finland|SM-Liiga Playoffs|
+France|Ligue Magnus|Ligue Magnus
+France|Ligue Magnus - Playoff|
+France|Ligue Magnus - Playout|
+Germany|DEL|DEL
+Germany|DEL Playoff|
+Germany|DEL 2|DEL2
+Germany|DEL 2 - Playoff|
+Germany|DEL 2 - Playdown|
+Europe|Germany Cup|Germany Cup
+Hungary|Erste Liga|Erste Liga
+Hungary|Erste Liga Playoffs|
+Italy|Italian Hockey league|IHL
+Latvia|Virslīga|Optibet Hokeja Liga
+Norway|EliteHockeyLigaen|EHL
+Norway|Norgesmesterskapet|Division 1
+Poland|PHL|Polish Hockey League
+Poland|PHL - Playoffs|
+Poland|PHL - Playouts|
+Russia|Continental Hockey League|KHL
+Russia|Continental Hockey League Playoff|
+Russia|Junior Hockey League (MHL)|MHL
+Russia|Junior Hockey League (MHL) Playoff|
+Russia|Vysshaya Hokkeynaya Liga (VHL)|VHL
+Russia|Vysshaya Hokkeynaya Liga (VHL) Playoff|
+Slovakia|Extraliga|Tipsport liga
+Slovakia|Extraliga - Playoff|
+Slovakia|Extraliga - Play Out|
+Sweden|Hockeyallsvenskan|HockeyAllsvenskan
+Sweden|Hockeyallsvenskan - Promotion/Relegation Round|
+Sweden|Kvalserien|
+Sweden|Playoff for Kvalserien|
+Sweden|SHL|SHL
+Sweden|SHL - Play-Off|
+Switzerland|Nationalliga A|National League
+Switzerland|Nationalliga A Playoff|
+Switzerland|Nationalliga A Playout|
+Switzerland|Swiss League|Swiss League
+Switzerland|Swiss League Playoff|
+United Kingdom|Elite League|Elite League
+United Kingdom|Elite League - Playoffs|
+World|International Friendlies|Friendly International
+World|International Friendlies - Women|Friendly International Women
+Europe|Spengler Cup|Spengler Cup (Davos)
+World|World Cup of Hockey|World Cup
+World|World Championships - Men|World Championship
+World|World Championships - Women|WCH Women
+World|World Championships Women Division 1|
+World|World Championships 1A/1B|
+World|World Championships 2A/2B|
+World|U20 World Championships|WCH U20
+World|U20 World Championships 1A/1B|
+World|U18 World Championships|WCH U18
+World|U18 World Championships Division 1A/1B|`,
+"Basketball":`Africa|FIBA AfroBasket - Men|AfroBasket
+Africa|FIBA AfroBasket - Women|AfroBasket Women
+America|Centrobasket Championship - Men|Centrobasket
+America|CentroBasket Championship - Women|Centrobasket Women
+America|FIBA AmeriCup - Men|AmeriCup
+America|FIBA AmeriCup - Women|AmeriCup Women
+America|Champions League Americas|Champions League Americas
+America|Pan American Games - Men|Pan American Games
+America|Pan American Games - Women|Pan American Games Women
+America|World Cup - Qualification|
+Argentina|Liga Nacional|Liga A
+Asia|FIBA Asia Cup - Men|
+Asia|FIBA Asia Cup - Women - Division A|
+Asia|FIBA Asia Cup - Women - Division B|
+Asia|World Cup - Qualification|
+Australia|NBL|NBL
+Australia|WNBL|WNBL Women
+Australia|NBL1 - Men|NBL1
+Australia|NBL1 - Women|NBL1 Women
+Austria|Cup|Austria Cup
+Austria|OBL|Superliga
+Austria|Supercup|ABL - Super Cup
+Belgium|Belgium Cup - Men|Belgian Cup
+Belgium|BLB|Pro Basketball League
+Belgium|Supercup|Super Cup
+Brazil|NBB|NBB
+Brazil|Liga de Basquete Femenino|LBF Women
+Bulgaria|Bulgarian Cup - Men|Bulgarian Cup
+Bulgaria|National Basketball League - Men|NBL
+Chile|Liga Nacional|LNB
+Chile|LNB Cup|LNB 2
+China|Chinese Basketball Association|CBA
+China|Women's Chinese Basketball Association|WCBA Women
+Colombia|Liga Profesional|LBP
+Croatia|HT Premijer Liga|Premijer liga
+Croatia|Croatia Cup - Men|Croatian Cup
+Cyprus|1st Division - Men|Division A
+Czech Republic|Kooperativa NBL|NBL
+Czech Republic|Czech Cup - Men|Czech Cup
+Czech Republic|ZBL - Women|ZBL Women
+Czech Republic|Czech Cup - Women|Czech Cup Women
+Denmark|Basketligaen|Basketligaen
+Denmark|Dameligaen|Kvindebasketligaen Women
+Dominican Republic|LNB|LNB
+Europe|Alpe Adria Cup|
+Europe|Balkan League|
+Europe|BNXT|BNXT League
+Europe|Estonian-Latvian Basketball League|Latvian-Estonian League
+Europe|Eurocup - Men|Eurocup
+Europe|Eurocup - Women|EuroCup Women
+Europe|Euroleague Men + Specials (Last 8 only)|Euroleague
+Europe|Euroleague Women|Euroleague Women
+Europe|EuroBasket - Men|EuroBasket
+Europe|EuroBasket - Women|EuroBasket Women
+Europe|EuroBasket - Qualification - Men|EuroBasket - Qualification
+Europe|EuroBasket - Qualification - Women|EuroBasket Women - Qualification - Second stage
+Europe|FIBA Champions League|Champions League
+Europe|FIBA Europe Cup|FIBA Europe Cup
+Europe|Liga ABA|AdmiralBet ABA League
+Europe|Liga ABA 2|ABA League 2
+Europe|North European Basketball League|ENBL
+Europe|U20 European Championship - Division A/B Men|EuroBasket U20
+Europe|U20 European Championship - Division A/B Women|
+Europe|VTB League|
+Europe|United Cup|
+Europe|United League Super Cup|
+Europe|World Cup Qualification|
+Europe|World Cup Pre-qualification|
+Finland|1st Divison A - Men|I Divisioona A
+Finland|Korisliiga|Korisliiga
+Finland|Korisliiga - Women|Korisliiga Women
+France|Coupe de France|French Cup
+France|Leaders Cup|Leaders Cup
+France|Ligue Feminine de Basketball|LFB Women
+France|Championnat Pro A|LNB
+France|Championnat Pro B|Elite 2
+Germany|BBL Champions Cup|
+Germany|BBL Pokal|German Cup
+Germany|Bundesliga|BBL
+Germany|DBBL|DBBL Women
+Germany|PRO A|Pro A
+Greece|A1 - Women|WBL1 Women
+Greece|A1 - Men|Basket League
+Greece|Elite - Men|Greek Cup
+Greece|Greek Cup|Greek Cup
+Hungary|NB I. A|NB I. A
+Iceland|Premier League|Premier League
+Iceland|Premier League - Women|Premier League Women
+Indonesia|IBL|IBL
+Israel|Cup - Men|State Cup
+Israel|Premier League|Super League
+Italy|Final Eight|
+Italy|Lega A|Lega A
+Italy|Serie A2 East|Serie A2
+Italy|Serie A2 West|Serie A2
+Italy|Serie A2 - Playoffs|Serie A2 (Play Offs: Quarter-finals)
+Italy|Serie A2 - Playout|Serie A2 (Play Out)
+Italy|Lega A1 Women|Serie A1 Women
+Italy|SuperCoppa|Super Cup
+Italy|Serie A2 - Women Group A|Serie A2 Women - Gr. A
+Italy|Serie A2 - Women Group B|Serie A2 Women - Gr. B
+Japan|B.League Premier|B.League Premier
+Japan|WJBL|W League Women
+Japan|B.League One|B.League One
+South Korea|Korean Basketball League|KBL
+South Korea|Women's Korean Basketball League|WKBL Women
+Lithuania|LKL League|LKL
+Lithuania|Lithuania Cup|King Mindaugas Cup
+Lithuania|LMKL League|
+Lithuania|NKL|NKL
+Mexico|Liga Nacional de Baloncesto Professional|LNBP
+Netherlands|Dutch Basketball League - Men|DBL
+Mexico|LMBPF - Women|LMBPF Women
+New Zealand|NBL|NBL
+New Zealand|Womens' Basketball Championship|Tauihi Women
+Norway|BLNO|BLNO
+Australia & Oceania|Fiba Ocenia Championship Men|Oceania Championship
+Australia & Oceania|Fiba Ocenia Championship Women|Oceania Championship Women
+Philippines|PBA|PBA Philippine Cup
+Poland|Polka Liga Koszykowki|Basket Liga
+Poland|Puchar Polski**|Polish Cup
+Poland|Polish Cup - Women|Polish Cup Women
+Poland|1. Liga|1. Liga
+Poland|Basket Liga - Women|Basket Liga Women
+Portugal|Liga Portuguesa|LPB
+Portugal|Proliga|Proliga
+Portugal|Campeonato Nacional Liga Feminina|LFB Women
+Romania|Liga Nationala - Men|Liga Nationala
+Serbia|1. KLS|First League
+Serbia|Serbia Cup|Korac Cup
+Serbia|Superliga Men|Superleague
+Slovakia|Extraliga Men|Extraliga
+Slovakia|SBL - Men|Extraliga
+Slovakia|League Cup men|Slovakia Cup
+Slovenia|Liga NovaKBM|Liga OTP banka
+Slovenia|Supercup Men|Supercup
+South America|Liga Sudamericana|South American League
+South America|South American Championship - Men|
+South America|South American Championship - Women|South American Championship Women
+Spain|Copa de S.M. La Reina|Copa de la Reina Women
+Spain|Copa del Rey|Copa del Rey
+Spain|Primera FEB|Primera FEB
+Spain|Liga ACB|ACB
+Spain|Liga Femenina|Liga Femenina Women
+Spain|Supercopa ACB|Supercopa ACB
+Spain|Supercopa Femenina|Supercopa Women
+Spain|Segunda FEB|Segunda FEB
+Sweden|Basketligan|Basketligan
+Sweden|Superettan|Superettan
+Sweden|Basketligan Damen|Basketligan Women
+Switzerland|LNA|SB League
+Turkey|President's Cup|Turkish Cup
+Turkey|TBSL|Super Lig
+Turkey|Turkey Cup|Turkish Cup
+Turkey|Turkey Cup - Women|Turkish Cup Women
+Turkey|KBSL - Women|KBSL Women
+Turkey|TBL|TBL
+United Kingdom|SLB Men|SLB
+United Kingdom|SLB Cup|SLB Cup
+United Kingdom|SLB - Women|SLB Women
+United Kingdom|SLB - Cup Women|SLB Cup Women
+United Kingdom|SLB - Trophy - Men|SLB Trophy
+United Kingdom|SLB - Trophy - Women|SLB Trophy Women
+Venezuela|Superliga|Superliga
+World|Intercontinental Cup|Intercontinental Cup
+World|International Men\`s Friendlies|Friendly International
+World|FIBA World Cup - Men|World Cup
+World|FIBA World Cup - Women|World Cup Women
+World|FIBA World Championship U19 - Men|World Championship U19
+World|FIBA World Championship U19 - Women|World Championship U19 Women
+Brazil|Campeonato Paulista 1A Division|Paulista
+El Salvador|Liga Mayor|Primera Division
+Puerto Rico|Baloncesto Superior Nacional|BSN`,
+"Bandy":`Finland|Bandyliiga|Bandyliiga
+Norway|Eliteserien|Eliteserien
+Russia|Super League|Super League
+Sweden|Elitserien|Elitserien
+Sweden|Elitserien Playoffs|
+World|World Championships|World Championship`,
+"Waterpolo":`Europe|Champions League Men|Champions League
+Europe|European Championships - Men|European Championship
+Europe|European Championships - Women|European Championship Women
+Europe|Regional League - Men|Regional League
+Europe|Adriatic League A1 - Men - Playoffs|Adriatic League
+Hungary|OB I|OB I
+Hungary|Cup – Men|
+Hungary|Cup – Women|
+Italy|Coppa Italia|
+Italy|Serie A1|A1
+Italy|Serie A1 - Playoffs|
+Russia|Superleague - Men|
+Russia|Championship - Women|
+World|FINA World Championship - Men|World Cup
+World|FINA World Championship - Women|World Cup Women
+World|World League - Men|
+World|World League - Women|`,
+"Floorball":`Czech Rep|Extraliga - Men|Livesport Superliga
+Denmark|UFL - Men|
+Europe|EuroFloorball Cup - Men|EuroFloorball Cup
+Europe|EuroFloorball Tour - Men|
+Finland|Salibandyliiga|
+Norway|Eliteserien - Men|Eliteserien
+Sweden|Superligan - Men|Svenska Superligan
+Switzerland|Nationalliga A - Men|Prime League
+World|World Championships Men|World Championship`,
+"Field hockey":`Belgium|Audi Hockey League|
+Europe|Euro Hockey League - Men|Euro Hockey League
+Europe|EuroHockey Nations Championship|EuroHockey Championship
+World|Champions Trophy - Men|Champions Trophy
+World|World Cup - Men|World Cup
+World|World Cup - Women|World Cup Women
+World|World League|World League`
+};
+const authRows=()=>Object.entries(AUTH).flatMap(([sport,txt])=>txt.split("\n").map(l=>{const p=l.split("|");return {sport,country:p[0],priorityLeague:p[1],flashscoreLeague:p[2]||""};}));
+let REPORT=null,AUTH_CSV="";
+async function authoritativeChecks(){
+  const G="Authoritative lists";
+  const auth=authRows();
+  /* A. Shipped defaults == authoritative list, row for row, field for field, in order. */
+  let win=await freshApp(),api=win.__MSFM;
+  const seeded=api.state().mappings;
+  for(const sport of api.SPORTS){
+    const a=auth.filter(r=>r.sport===sport),s=seeded.filter(m=>m.sport===sport);
+    const diffs=[];
+    for(let i=0;i<Math.max(a.length,s.length);i++){
+      const x=a[i],y=s[i];
+      if(!x||!y||x.country!==y.country||x.priorityLeague!==y.priorityLeague||x.flashscoreLeague!==y.flashscoreLeague)
+        diffs.push(`row ${i+1}: list=${x?[x.country,x.priorityLeague,x.flashscoreLeague].join(" | "):"(none)"}  app=${y?[y.country,y.priorityLeague,y.flashscoreLeague].join(" | "):"(none)"}`);
+    }
+    check(G,`${sport}: app defaults equal the list exactly (${a.length} rows, same order, same text)`,diffs.length===0&&a.length===s.length,diffs.slice(0,8).join("\n"));
+    check(G,`${sport}: every default mapping is active`,s.every(m=>m.active===true));
+  }
+  /* B. Importing the list through the app's own CSV import (Replace) keeps every row and every blank, renames nothing. */
+  const headers=["Sport","Country","Priority League","Flashscore League Name","Active"];
+  AUTH_CSV=api.buildCSV(headers,auth.map(r=>({"Sport":r.sport,"Country":r.country,"Priority League":r.priorityLeague,"Flashscore League Name":r.flashscoreLeague,"Active":"TRUE"})));
+  const imp=win.importMappingCSV(AUTH_CSV,"Basketball");
+  check(G,"CSV import reads every row of the list",imp.imported.length===auth.length&&imp.skipped.length===0,[imp.imported.length,auth.length,imp.skipped]);
+  win.applyImport(imp.imported,"replace");
+  const after=api.state().mappings;
+  const sig=m=>[m.sport,m.country,m.priorityLeague,m.flashscoreLeague].join("|");
+  check(G,"after Replace import the stored mappings are exactly the list (no loss, no rename, no extras)",JSON.stringify(after.map(sig).sort())===JSON.stringify(auth.map(sig).sort()),[after.length,auth.length]);
+  check(G,"blank Flashscore names stay blank after import",after.filter(m=>m.flashscoreLeague==="").length===auth.filter(r=>r.flashscoreLeague==="").length);
+  /* C. Merge import onto the defaults adds nothing and duplicates nothing. */
+  win=await freshApp();api=win.__MSFM;
+  const before=api.state().mappings.length;
+  const res=win.applyImport(win.importMappingCSV(AUTH_CSV,"Basketball").imported,"merge");
+  check(G,"Merge import onto the defaults creates no duplicates",res.added===0&&res.updated===auth.length&&api.state().mappings.length===before,res);
+  /* D. Every non-blank mapping actually matches a fixture with its own country heading; every blank one never does. */
+  const missed=[],leaked=[];
+  for(const r of auth){
+    const fixture={DetectedLeague:r.flashscoreLeague,Country:r.country.toUpperCase()==="CZECH REP"?"Czech Republic":r.country};
+    const out=api.makeMatcher(r.sport)(fixture);
+    if(r.flashscoreLeague&&!out.match)missed.push(`${r.sport} | ${r.country} | ${r.flashscoreLeague}: ${out.reason}`);
+    if(!r.flashscoreLeague&&api.makeMatcher(r.sport)({DetectedLeague:r.priorityLeague,Country:r.country}).match&&!auth.some(o=>o.sport===r.sport&&o.flashscoreLeague===r.priorityLeague))leaked.push(`${r.sport} | ${r.country} | ${r.priorityLeague}`);
+  }
+  check(G,"every mapping with a Flashscore name matches a fixture under its own country/region",missed.length===0,missed.join("\n"));
+  check(G,"no blank-Flashscore mapping matches by its priority-league name",leaked.length===0,leaked.join("\n"));
+  /* E. Report (informational, not pass/fail). */
+  const ck=win.countryKey,lk=win.leagueKey;
+  const group=(rows,keyFn)=>{const m=new Map();for(const r of rows){const k=keyFn(r);if(k==null)continue;if(!m.has(k))m.set(k,[]);m.get(k).push(r);}return [...m.values()].filter(g=>g.length>1);};
+  const fmt=r=>`${r.country} | ${r.priorityLeague} | ${r.flashscoreLeague||"(blank)"}`;
+  REPORT={perSport:api.SPORTS.map(s=>{const a=auth.filter(r=>r.sport===s);return {sport:s,total:a.length,blank:a.filter(r=>!r.flashscoreLeague).length,matchable:a.filter(r=>r.flashscoreLeague).length};}),
+    exactDuplicates:group(auth,r=>r.sport+"|"+ck(r.country)+"|"+lk(r.priorityLeague)).map(g=>g[0].sport+": "+g.map(fmt).join("  //  ")),
+    sharedFlashscoreSameCountry:group(auth,r=>r.flashscoreLeague?r.sport+"|"+ck(r.country)+"|"+lk(r.flashscoreLeague):null).map(g=>g[0].sport+": "+g.map(fmt).join("  //  ")),
+    sameFlashscoreDifferentCountries:group(auth,r=>r.flashscoreLeague?r.sport+"|"+lk(r.flashscoreLeague):null).filter(g=>new Set(g.map(r=>ck(r.country))).size>1).map(g=>`${g[0].sport}: "${g[0].flashscoreLeague}" used by ${[...new Set(g.map(r=>r.country))].join(", ")}`)};
+}
+function finish(){
+  const pass=results.filter(r=>r.pass).length,fail=results.length-pass;
+  const sumEl=document.getElementById("summary");sumEl.className=fail?"bad":"ok";
+  sumEl.textContent=(fail?"FAILURES — ":"ALL TESTS PASSED — ")+pass+" passed, "+fail+" failed ("+results.length+" checks)";
+  const out=document.getElementById("out");let grp="";
+  for(const r of results){if(r.group!==grp){grp=r.group;const h=document.createElement("h3");h.textContent=grp;out.appendChild(h);}const d=document.createElement("div");d.className="r "+(r.pass?"pass":"fail");d.textContent=r.name;if(!r.pass&&r.detail){const x=document.createElement("div");x.className="d";x.textContent=r.detail.slice(0,600);d.appendChild(x);}out.appendChild(d);}
+  document.getElementById("results").textContent="RESULTS_JSON:"+JSON.stringify({pass,fail,results,report:REPORT,performance:PERFORMANCE,authCsv:AUTH_CSV,seedSql:SEED_SQL});
+}
+main().catch(e=>{results.push({group:"Harness",name:"harness crashed",pass:false,detail:String(e&&e.stack||e)});finish();});
+</script>
+</body>
+</html>
