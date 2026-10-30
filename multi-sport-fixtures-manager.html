@@ -259,6 +259,24 @@ details.sport-block .table-wrap{margin-bottom:12px}
       <button class="secondary" id="reloadSharedTeamMappingsBtn" type="button">Reload Shared Team Mappings</button>
       <span class="count" id="teamExcelStatus"></span>
     </div>
+    <details class="sport-block" style="margin-top:4px">
+      <summary style="cursor:pointer;padding:10px 0;font-weight:650">Paste from Excel (Country, FlashScore League, FlashScore Team, BCM Team)</summary>
+      <div style="padding:0 0 10px">
+        <div class="toolbar-group" style="margin-bottom:8px">
+          <label for="teamPasteSport" style="margin:0;font-weight:650">Sport for all pasted rows</label>
+          <select id="teamPasteSport"></select>
+          <label style="margin:0;display:flex;gap:6px;align-items:center"><input type="checkbox" id="teamPasteHasHeader" style="width:17px;height:17px"> First row is a header</label>
+        </div>
+        <p class="hint" style="margin:4px 0">Copy the four columns from Excel and paste below (tab-separated). The Sport is taken from the dropdown above, so do not include a Sport column. Order: <b>Country</b> &rarr; <b>FlashScore League</b> &rarr; <b>FlashScore Team</b> &rarr; <b>BCM Team</b>.</p>
+        <textarea id="teamPasteBox" style="min-height:150px" spellcheck="false" placeholder="AUSTRALIA&#9;WNBL Women&#9;Southside W&#9;Southside Flyers (Women)&#10;ARGENTINA&#9;Liga A&#9;San Martin&#9;San Martin de Corrientes"></textarea>
+        <div class="actions">
+          <button class="primary" id="teamPasteAddBtn" type="button">Preview &amp; Add to Local List</button>
+          <button class="secondary" id="teamPasteSqlBtn" type="button">Copy Supabase SQL for Pasted Rows</button>
+          <button class="neutral" id="teamPasteClearBtn" type="button">Clear</button>
+        </div>
+        <p class="hint" style="margin:6px 0">Adding to the local list saves in this browser only. To put the rows in Supabase, run the generated SQL in the Supabase SQL Editor, then use <b>Reload Shared Team Mappings</b>.</p>
+      </div>
+    </details>
     <div id="teamMappingMessage" class="message" role="status" aria-live="polite"></div>
     <div class="table-wrap" style="margin-top:10px"><table><thead><tr><th>Sport</th><th>Country</th><th>Flashscore League</th><th>Flashscore Team</th><th>BCM Team</th><th>Active</th><th>Actions</th></tr></thead><tbody id="teamMappingBody"><tr><td colspan="7">No team mappings yet. Add one above or import a CSV / Excel file.</td></tr></tbody></table></div>
   </section>
@@ -1975,7 +1993,27 @@ function teamRowsFromMatrix(matrix){
   }
   return {rows,headers,error:""};
 }
-async function readTeamMappingFile(file){
+/* Parse a pasted 4-column block (Country, FlashScore League, FlashScore Team, BCM Team),
+   tab- or multi-space separated, injecting the chosen sport. Returns the 5-column matrix
+   (with header row) that teamRowsFromMatrix()/analyzeTeamImport() already understand.
+   {matrix, dataRows} - dataRows is the count of non-empty data lines seen. */
+function pasteToTeamMatrix(text,sport,hasHeader){
+  const lines=String(text??"").replace(/\r/g,"").split("\n").map(l=>l.replace(/\s+$/,"")).filter(l=>l.trim()!=="");
+  const header=["Sport","Country","FlashScore League","FlashScore Team","BCM Team"];
+  const matrix=[header];
+  let start=hasHeader?1:0;
+  for(let i=start;i<lines.length;i++){
+    // Prefer tabs; if none, fall back to runs of 2+ spaces (Excel "copy as text" often uses tabs).
+    const raw=lines[i];
+    let cells=raw.includes("\t")?raw.split("\t"):raw.split(/ {2,}|\t/);
+    cells=cells.map(c=>c.replace(/\s+/g," ").trim());
+    // Keep only the first 4 meaningful columns; ignore trailing empties from extra tabs.
+    while(cells.length>4&&cells[cells.length-1]==="")cells.pop();
+    const [country="",league="",fsTeam="",bcm=""]=cells;
+    matrix.push([sport,country,league,fsTeam,bcm]);
+  }
+  return {matrix,dataRows:matrix.length-1};
+}async function readTeamMappingFile(file){
   const name=(file.name||"").toLowerCase();
   if(/\.(xlsx|xls)$/.test(name)){
     if(!excelAvailable())throw new Error("Excel import is unavailable because the local SheetJS library did not load. Save the file as CSV UTF-8 and import that instead.");
@@ -2146,6 +2184,7 @@ function resetTeamForm(){editingTeamId=null;$("teamMappingForm").reset();$("save
 function bindTeamMappingEvents(){
   if(!$("teamMappingForm"))return;
   fillSportSelect($("tmSport"));
+  if($("teamPasteSport"))fillSportSelect($("teamPasteSport"));
   const sf=$("teamSportFilter");if(sf){fillSportSelect(sf);sf.insertBefore(new Option("All sports","all"),sf.firstChild);sf.value="all";}
   $("teamMappingForm").addEventListener("submit",e=>{
     e.preventDefault();
@@ -2208,6 +2247,46 @@ function bindTeamMappingEvents(){
     teamMappings=res.list;teamSharedLoadedAt=new Date().toISOString();saveTeamMappings();renderTeamMappings();if(comparisonRunAt)renderComparison(comparisonResults);
     setTeamMessage(`Loaded ${res.list.length} shared team mapping(s) from Supabase into this browser.`,"success");
   });
+  if($("teamPasteAddBtn")){
+    const readPaste=()=>pasteToTeamMatrix($("teamPasteBox").value,$("teamPasteSport").value,$("teamPasteHasHeader").checked);
+    $("teamPasteClearBtn").addEventListener("click",()=>{$("teamPasteBox").value="";setTeamMessage("Paste box cleared.");});
+    $("teamPasteAddBtn").addEventListener("click",async()=>{
+      const sport=$("teamPasteSport").value,{matrix,dataRows}=readPaste();
+      if(!dataRows){setTeamMessage("Paste at least one data row (Country, FlashScore League, FlashScore Team, BCM Team).","error");return;}
+      const parsed=teamRowsFromMatrix(matrix);
+      if(parsed.error){setTeamMessage(parsed.error,"error");return;}
+      const a=analyzeTeamImport(parsed.rows);
+      const detail=a.skipped.slice(0,6).map(s=>`Row ${s.row}: ${s.reason}`).join("\n");
+      const confList=a.conflicts.slice(0,6).map(c=>`"${c.item.flashscoreTeam}" -> "${c.item.bcmTeam}" (currently "${c.local.bcmTeam}")`).join("\n");
+      const choice=await askChoice(
+        `Preview ${dataRows} pasted row(s) for ${sport}: ${a.toAdd.length} new, ${a.conflicts.length} conflicting (different BCM team), ${a.dupInFile.length} duplicate in paste, ${a.skipped.length} invalid.`+
+        (detail?`\n\nInvalid:\n${detail}`:"")+(confList?`\n\nConflicts:\n${confList}`:"")+
+        `\n\nThis updates your LOCAL list only. Nothing is written to Supabase.`,
+        [{label:"Add to local list",value:"import",cls:"primary"},{label:"Cancel",value:null,cls:"neutral"}]);
+      if(!choice){setTeamMessage("Paste cancelled. Nothing was changed.");return;}
+      let policy="use-import";
+      if(a.conflicts.length){
+        policy=await askChoice(`${a.conflicts.length} pasted row(s) map an existing team to a DIFFERENT BCM team. Choose one policy for all of them.`,
+          [{label:"Keep my current BCM teams",value:"keep-local",cls:"neutral"},{label:"Use the pasted BCM teams",value:"use-import",cls:"primary"},{label:"Cancel",value:null,cls:"danger"}]);
+        if(!policy){setTeamMessage("Paste cancelled. Nothing was changed.");return;}
+      }
+      const r=applyTeamImport(a,policy);saveTeamMappings();renderTeamMappings();if(comparisonRunAt)renderComparison(comparisonResults);
+      setTeamMessage(`${sport}: ${r.added} added, ${r.updated} updated, ${r.keptLocal} kept local, ${a.dupInFile.length} duplicate paste row(s) ignored, ${a.skipped.length} invalid skipped. Saved locally only - not yet shared to Supabase.`,a.skipped.length||a.conflicts.length?"warn":"success");
+    });
+    $("teamPasteSqlBtn").addEventListener("click",async()=>{
+      const sport=$("teamPasteSport").value,{matrix,dataRows}=readPaste();
+      if(!dataRows){setTeamMessage("Paste at least one data row first.","error");return;}
+      const parsed=teamRowsFromMatrix(matrix);
+      if(parsed.error){setTeamMessage(parsed.error,"error");return;}
+      const a=analyzeTeamImport(parsed.rows);
+      if(!a.valid.length){setTeamMessage(`No valid rows to turn into SQL. ${a.skipped.length} row(s) were invalid.`,"error");return;}
+      const rows=a.valid.map(v=>({sport:v.sport,country:v.country,flashscoreLeague:v.flashscoreLeague,flashscoreTeam:v.flashscoreTeam,bcmTeam:v.bcmTeam,active:true}));
+      const sql=buildTeamMappingSQL(rows);
+      const ok=await copyTextToClipboard(sql);
+      if(!ok)downloadText("msfm_team_mappings_pasted.sql",sql,"application/sql;charset=utf-8;");
+      setTeamMessage(`${a.valid.length} valid row(s) turned into Supabase SQL and ${ok?"copied to the clipboard":"downloaded as msfm_team_mappings_pasted.sql"}. Run it in the Supabase SQL Editor, then Reload Shared Team Mappings. ${a.skipped.length?a.skipped.length+" invalid row(s) were skipped.":""}`,a.skipped.length?"warn":"success");
+    });
+  }
 }
 // Small test surface for deterministic persistence and business-rule checks; harmless in normal use.
 window.__MSFM={classifyFixtures,parseWorkedPaste,teamRelation,teamKey,makeMatcher,matchFixture,parseFixtures,parseFixturesDetailed,fixtureIdentity,exclusionCategory,importMappingCSV,applyImport,measureRepresentativePerformance,buildCSV,escapeCSV,dateKey,timeKey,countryKey,canonSport,migrateStoredData,addDaysISO,STORAGE,SPORTS,
@@ -2215,7 +2294,7 @@ window.__MSFM={classifyFixtures,parseWorkedPaste,teamRelation,teamKey,makeMatche
   persistence:{ready:()=>persistenceReady,flushDraftSaves,reconcileRecords,validStoredValue,idbConfig:IDB_CONFIG,simulateExternalRevision:showNewerData,status:()=>({revision:currentRevision,dirty:persistenceDirty,text:$("persistenceStatus").textContent})},
   backup:{buildBackup,serializeBackup,parseBackupText,backupDuplicateKeys,backupMergePreview,restoreFromBackup,reloadFromStorage,formatVersion:BACKUP_FORMAT_VERSION},
   copy:{copyTextToClipboard},
-  teamMappings:{loadTeamMappings,saveTeamMappings,teamRowsFromMatrix,analyzeTeamImport,applyTeamImport,resolveBcmTeam,resolveFixtureMapping,fixtureHasUnmapped,buildTeamMappingSQL,teamMapKey,excelAvailable,list:()=>teamMappings,setList:l=>{teamMappings=Array.isArray(l)?l:[];renderTeamMappings();},
+  teamMappings:{loadTeamMappings,saveTeamMappings,pasteToTeamMatrix,teamRowsFromMatrix,analyzeTeamImport,applyTeamImport,resolveBcmTeam,resolveFixtureMapping,fixtureHasUnmapped,buildTeamMappingSQL,teamMapKey,excelAvailable,list:()=>teamMappings,setList:l=>{teamMappings=Array.isArray(l)?l:[];renderTeamMappings();},
     importMatrix:(matrix,conflictPolicy)=>{const parsed=teamRowsFromMatrix(matrix);if(parsed.error)return {error:parsed.error};const a=analyzeTeamImport(parsed.rows);const r=applyTeamImport(a,conflictPolicy||"use-import");saveTeamMappings();renderTeamMappings();if(comparisonRunAt)renderComparison(comparisonResults);return {analysis:a,result:r};}},
   state:()=>({mappings,collectionDays,convertedRows,excludedRows,comparisonResults,lastParseAccounting,comparisonStale,comparisonRunAt})};
 if(TEST_MODE){currentRevision=parseRevision(readRaw(STORAGE.revision));init();persistenceReady=Promise.resolve({testMode:true});}
