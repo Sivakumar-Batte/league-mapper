@@ -51,7 +51,8 @@ details.sport-block .table-wrap{margin-bottom:12px}
 .overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
 .dialog{background:#fff;border-radius:12px;padding:20px;max-width:520px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.25)}.dialog p{margin:0 0 14px;white-space:pre-line}.dialog .actions{margin-top:0;justify-content:flex-end}
 .line{display:block}
-.bcm-cell{min-width:150px}.fs-name{font-weight:600}.bcm-name{display:block;color:var(--green);margin-top:2px;font-size:13px}.bcm-name.none{color:var(--muted);font-style:italic}.copy-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:3px}.copy-btn{background:var(--soft);color:#1e40af;border:0;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:650;cursor:pointer}.copy-btn:hover:not(:disabled){background:#dce7ff}.copy-btn:disabled{opacity:.5;cursor:not-allowed}.copy-btn.copied{background:#e9f8ef;color:var(--green)}.copy-btn.copy-error{background:#fff0ef;color:var(--danger)}.copy-both-btn{background:#edf0f5;color:#273449;border:0;border-radius:6px;padding:4px 9px;font-size:12px;font-weight:650;cursor:pointer}.copy-both-btn:hover:not(:disabled){background:#e2e7ef}.copy-both-btn:disabled{opacity:.5;cursor:not-allowed}.copy-both-btn.copied{background:#e9f8ef;color:var(--green)}.copy-both-btn.copy-error{background:#fff0ef;color:var(--danger)}
+.bcm-cell{min-width:150px}
+#bcmResultTable td,#bcmResultTable th{white-space:normal;vertical-align:top}.bcm-fs{color:var(--text)}.bcm-chip{display:inline;cursor:pointer;color:var(--green);font-weight:650;border-bottom:1px dotted var(--green);border-radius:3px;padding:0 1px}.bcm-chip:hover{background:#e9f8ef}.bcm-chip:focus-visible{outline:2px solid var(--accent);outline-offset:1px}.bcm-chip.copied{background:#e9f8ef;color:var(--green)}.bcm-chip.copy-error{background:#fff0ef;color:var(--danger)}.bcm-flag{display:inline;font-weight:650;cursor:pointer;border-radius:3px;padding:0 2px}.bcm-flag.unmapped{color:var(--amber)}.bcm-flag.conflict{color:var(--danger)}.bcm-flag:focus-visible{outline:2px solid var(--accent);outline-offset:1px}.fs-name{font-weight:600}.bcm-name{display:block;color:var(--green);margin-top:2px;font-size:13px}.bcm-name.none{color:var(--muted);font-style:italic}.copy-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:3px}.copy-btn{background:var(--soft);color:#1e40af;border:0;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:650;cursor:pointer}.copy-btn:hover:not(:disabled){background:#dce7ff}.copy-btn:disabled{opacity:.5;cursor:not-allowed}.copy-btn.copied{background:#e9f8ef;color:var(--green)}.copy-btn.copy-error{background:#fff0ef;color:var(--danger)}.copy-both-btn{background:#edf0f5;color:#273449;border:0;border-radius:6px;padding:4px 9px;font-size:12px;font-weight:650;cursor:pointer}.copy-both-btn:hover:not(:disabled){background:#e2e7ef}.copy-both-btn:disabled{opacity:.5;cursor:not-allowed}.copy-both-btn.copied{background:#e9f8ef;color:var(--green)}.copy-both-btn.copy-error{background:#fff0ef;color:var(--danger)}
 .tabbar{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 16px;border-bottom:1px solid var(--border)}
 .tabbar button{background:transparent;color:var(--muted);border-radius:8px 8px 0 0;padding:10px 16px;border-bottom:3px solid transparent;margin-bottom:-1px}
 .tabbar button:hover{color:var(--text);background:var(--soft)}
@@ -76,6 +77,7 @@ details.sport-block .table-wrap{margin-bottom:12px}
     <button type="button" role="tab" id="tabBtn-fixtures" data-tab="fixtures" aria-selected="true">Fixtures</button>
     <button type="button" role="tab" id="tabBtn-compare" data-tab="compare" aria-selected="false">Compare</button>
     <button type="button" role="tab" id="tabBtn-teammappings" data-tab="teammappings" aria-selected="false">Team Mappings</button>
+    <button type="button" role="tab" id="tabBtn-bcmmatcher" data-tab="bcmmatcher" aria-selected="false">BCM Team Matcher</button>
   </nav>
 
   <section class="panel mapping-panel" data-tab="mappings">
@@ -279,6 +281,30 @@ details.sport-block .table-wrap{margin-bottom:12px}
     </details>
     <div id="teamMappingMessage" class="message" role="status" aria-live="polite"></div>
     <div class="table-wrap" style="margin-top:10px"><table><thead><tr><th>Sport</th><th>Country</th><th>Flashscore League</th><th>Flashscore Team</th><th>BCM Team</th><th>Active</th><th>Actions</th></tr></thead><tbody id="teamMappingBody"><tr><td colspan="7">No team mappings yet. Add one above or import a CSV / Excel file.</td></tr></tbody></table></div>
+  </section>
+
+  <section class="panel" data-tab="bcmmatcher">
+    <div class="table-head"><h2>BCM Team Matcher</h2><span class="count" id="bcmMatchCount"></span></div>
+    <div class="section-note">Paste newly added Flashscore matches below. The matcher appends the corresponding <b>BCM team name in brackets</b> beside each Home and Away team, using your Team Mappings (scoped by Sport + Country + Flashscore League). Click a BCM name to copy just that exact name. The original Flashscore table, columns and row order are preserved. This is read-only: it never changes your mappings, collection or comparison data.</div>
+    <div class="controls" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
+      <div><label for="bcmSport">Sport (applies to the whole batch)</label><select id="bcmSport"></select></div>
+      <div style="display:flex;align-items:flex-end;gap:8px"><label style="margin:0;display:flex;gap:6px;align-items:center;font-weight:650"><input type="checkbox" id="bcmHasHeader" checked style="width:17px;height:17px"> First row is a header</label></div>
+    </div>
+    <label for="bcmInput">Flashscore matches (paste tab-separated; columns detected by header)</label>
+    <p class="hint" id="bcmInstructions">Include a header row with at least <b>Home Team</b> and <b>Away Team</b> (and ideally <b>Country</b> and <b>Competition</b>/<b>League</b>). Other columns (Date, Time, etc.) are preserved as-is. If headers cannot be identified, you get a preview to map the Home/Away/Country/League columns manually.</p>
+    <textarea id="bcmInput" aria-describedby="bcmInstructions" spellcheck="false" placeholder="Date	Time	Country	Competition	Home Team	Away Team"></textarea>
+    <div class="actions">
+      <button class="primary" id="bcmMatchBtn" type="button">Match Teams</button>
+      <button class="secondary" id="bcmCopyOutputBtn" type="button">Copy Output (TSV)</button>
+      <button class="secondary" id="bcmExportCsvBtn" type="button">Export CSV</button>
+      <button class="neutral" id="bcmClearInputBtn" type="button">Clear Input</button>
+      <button class="neutral" id="bcmClearResultsBtn" type="button">Clear Results</button>
+    </div>
+    <div id="bcmMessage" class="message" role="status" aria-live="polite"></div>
+    <div id="bcmColumnPicker" class="section-note hidden" aria-live="polite"></div>
+    <div id="bcmSummary" class="statusline" aria-label="BCM match summary"></div>
+    <div class="filterbar" id="bcmFilterBar" style="display:none"><label for="bcmFilter" style="margin:0">Show</label><select id="bcmFilter"><option value="all">All matches</option><option value="complete">Complete</option><option value="partial">Partial</option><option value="unmapped">Unmapped</option><option value="conflict">Conflicts</option></select><button class="secondary small" id="bcmExportUnmappedBtn" type="button">Export Unmapped Teams CSV</button></div>
+    <div class="table-wrap" style="margin-top:10px"><table id="bcmResultTable"><thead id="bcmResultHead"></thead><tbody id="bcmResultBody"><tr><td>Paste Flashscore matches and click Match Teams.</td></tr></tbody></table></div>
   </section>
 </main>
 <script>
@@ -1923,6 +1949,7 @@ function init(){
   migrateStoredData();
   bindEvents();
   loadTeamMappings();bindTeamMappingEvents();renderTeamMappings();
+  bindBcmMatcherEvents();renderBcmResults();
   renderMappings();updateSportHint();renderHistory();renderCollection();updateComparisonFreshness();
   const last=readJSON(STORAGE.lastParse,null);
   if(last&&Array.isArray(last.matched)){convertedRows=last.matched;excludedRows=Array.isArray(last.excluded)?last.excluded.map(r=>({...r,Category:r.Category||exclusionCategory(r.Reason)})):[];lastParseAccounting=last.accounting||{inputLines:0,unique:convertedRows.length+excludedRows.length,matched:convertedRows.length,excluded:excludedRows.length,invalid:0,duplicate:0,invalidRecords:[]};
@@ -2288,12 +2315,309 @@ function bindTeamMappingEvents(){
     });
   }
 }
+/* ============================= BCM TEAM MATCHER =============================
+   Read-only. Parses pasted Flashscore matches, appends the BCM team name in
+   brackets beside each Home/Away team using the Team Mappings (scoped by
+   Sport + Country + Flashscore League), with click-to-copy per BCM name.
+   Never writes to any mapping store; never touches the collection/comparison. */
+let bcmLastResult=null;   // {headers, rows:[{cells[], homeIdx, awayIdx, home:{...}, away:{...}}], idx:{...}}
+let bcmBusy=false;
+
+/* Conflict-aware resolver. Returns {status:'mapped'|'unmapped'|'conflict', bcm}.
+   status 'conflict' => multiple ACTIVE mappings for the same scope+team resolve to DIFFERENT BCM names. */
+function resolveBcmDetailed(sport,country,league,team){
+  if(!team||!String(team).trim())return {status:"unmapped",bcm:""};
+  const key=teamMapKey(sport,country,league,team);
+  const hits=teamMappings.filter(m=>m.active!==false&&teamMapKey(m.sport,m.country,m.flashscoreLeague,m.flashscoreTeam)===key);
+  if(!hits.length)return {status:"unmapped",bcm:""};
+  const distinct=[...new Set(hits.map(h=>h.bcmTeam))];
+  if(distinct.length>1)return {status:"conflict",bcm:"",options:distinct};
+  return {status:"mapped",bcm:hits[0].bcmTeam};
+}
+
+/* Header-aware parse of pasted Flashscore matches. Returns:
+   {error} on malformed input, or {headers, rows, hasHeader, idx:{home,away,country,comp}}.
+   Columns are detected by header aliases; positions are preserved and all columns kept. */
+const BCM_HOME_ALIASES=["home","home team","home team name","hometeam","home_team","host"];
+const BCM_AWAY_ALIASES=["away","away team","away team name","awayteam","away_team","guest","visitor"];
+const BCM_COUNTRY_ALIASES=["country","region","country region","country / region"];
+const BCM_COMP_ALIASES=["competition","league","flashscore league","flashscore league name","tournament"];
+function bcmParseMatches(text,hasHeader){
+  const lines=String(text??"").replace(/\r/g,"").split("\n").filter(l=>l.trim()!=="");
+  if(!lines.length)return {error:"Nothing to parse. Paste some Flashscore rows first."};
+  const split=l=>l.includes("\t")?l.split("\t"):l.split(/ {2,}|\t/);
+  const matrix=lines.map(l=>split(l).map(c=>cleanField(c)));
+  // Decide header row.
+  let headers,dataStart;
+  if(hasHeader){headers=matrix[0];dataStart=1;}
+  else{
+    // Infer: treat first row as header only if it looks like header text (contains "home"/"away"/"team").
+    const first=matrix[0].map(c=>normalize(c));
+    const looksHeader=first.some(c=>/home|away|team|country|competition|league/.test(c));
+    if(looksHeader){headers=matrix[0];dataStart=1;}
+    else{headers=matrix[0].map((_,i)=>"Column "+(i+1));dataStart=0;}
+  }
+  const norm=h=>normalize(h).replace(/[_-]/g," ").replace(/\s+/g," ");
+  const find=aliases=>headers.findIndex(h=>aliases.includes(norm(h)));
+  const idx={home:find(BCM_HOME_ALIASES),away:find(BCM_AWAY_ALIASES),country:find(BCM_COUNTRY_ALIASES),comp:find(BCM_COMP_ALIASES)};
+  const rows=[];
+  for(let i=dataStart;i<matrix.length;i++){
+    const cells=matrix[i].slice();
+    // pad/truncate to header width so columns stay aligned
+    while(cells.length<headers.length)cells.push("");
+    rows.push(cells);
+  }
+  if(!rows.length)return {error:"No data rows found (only a header was detected)."};
+  return {headers,rows,idx,needsManual:(idx.home<0||idx.away<0)};
+}
+
+/* Resolve one parsed batch against the mappings for the chosen sport.
+   Loads the relevant mapping subset once into a Map for efficient lookup. */
+function bcmResolveBatch(parsed,sport){
+  const {headers,rows,idx}=parsed;
+  // Build a lookup Map once for this sport: key -> Set of distinct active BCM names.
+  const map=new Map();
+  for(const m of teamMappings){
+    if(m.active===false)continue;
+    if(canonSport(m.sport)!==canonSport(sport))continue;
+    const k=teamMapKey(m.sport,m.country,m.flashscoreLeague,m.flashscoreTeam);
+    if(!map.has(k))map.set(k,new Set());
+    map.get(k).add(m.bcmTeam);
+  }
+  const resolveCell=(country,league,team)=>{
+    if(!team||!String(team).trim())return {status:"unmapped",bcm:""};
+    const k=teamMapKey(sport,country,league,team);
+    const set=map.get(k);
+    if(!set||!set.size)return {status:"unmapped",bcm:""};
+    if(set.size>1)return {status:"conflict",bcm:"",options:[...set]};
+    return {status:"mapped",bcm:[...set][0]};
+  };
+  const out=[];
+  for(const cells of rows){
+    const country=idx.country>=0?cells[idx.country]:"";
+    const league=idx.comp>=0?cells[idx.comp]:"";
+    const homeName=idx.home>=0?cells[idx.home]:"";
+    const awayName=idx.away>=0?cells[idx.away]:"";
+    out.push({cells,country,league,homeName,awayName,
+      home:resolveCell(country,league,homeName),
+      away:resolveCell(country,league,awayName)});
+  }
+  return {headers,idx,sport,rows:out};
+}
+
+/* Summary counts from a resolved batch. */
+function bcmSummary(res){
+  let complete=0,partial=0,unmapped=0,conflict=0,unmappedOcc=0;
+  for(const r of res.rows){
+    const sh=r.home.status,sa=r.away.status;
+    if(sh==="conflict"||sa==="conflict")conflict++;
+    else if(sh==="mapped"&&sa==="mapped")complete++;
+    else if(sh==="unmapped"&&sa==="unmapped")unmapped++;
+    else partial++;
+    if(sh==="unmapped")unmappedOcc++;
+    if(sa==="unmapped")unmappedOcc++;
+  }
+  return {total:res.rows.length,complete,partial,unmapped,conflict,unmappedOcc};
+}
+
+/* The inline cell TEXT for export/copy: "Flashscore (BCM)" | "Flashscore (UNMAPPED)" | "Flashscore (MAPPING CONFLICT)". */
+function bcmCellText(name,r){
+  if(!name||!String(name).trim())return String(name??"");
+  if(r.status==="mapped")return name+" ("+r.bcm+")";
+  if(r.status==="conflict")return name+" (MAPPING CONFLICT)";
+  return name+" (UNMAPPED)";
+}
+/* Build the output row (array of cell strings) preserving column count/order, BCM only on Home/Away. */
+function bcmOutputRow(entry,idx){
+  const cells=entry.cells.slice();
+  if(idx.home>=0)cells[idx.home]=bcmCellText(entry.homeName,entry.home);
+  if(idx.away>=0)cells[idx.away]=bcmCellText(entry.awayName,entry.away);
+  return cells;
+}
+function bcmRowMatchesFilter(entry,filter){
+  const sh=entry.home.status,sa=entry.away.status;
+  if(filter==="all")return true;
+  if(filter==="conflict")return sh==="conflict"||sa==="conflict";
+  if(filter==="complete")return sh==="mapped"&&sa==="mapped";
+  if(filter==="unmapped")return sh==="unmapped"&&sa==="unmapped";
+  if(filter==="partial"){if(sh==="conflict"||sa==="conflict")return false;const mapped=(sh==="mapped")+(sa==="mapped");return mapped===1;}
+  return true;
+}
+
+/* Build a clickable inline team cell: Flashscore name + (BCM chip | UNMAPPED | MAPPING CONFLICT). */
+function bcmTeamCellNode(name,r,ctx){
+  const td=document.createElement("td");
+  const fs=document.createElement("span");fs.className="bcm-fs";fs.textContent=name==null?"":String(name);td.appendChild(fs);
+  if(!name||!String(name).trim())return td;   // empty team cell: nothing to append
+  td.appendChild(document.createTextNode(" ("));
+  if(r.status==="mapped"){
+    const chip=document.createElement("span");chip.className="bcm-chip";chip.textContent=r.bcm;chip.tabIndex=0;chip.setAttribute("role","button");
+    chip.title="Click to copy the BCM name";chip.setAttribute("aria-label","Copy BCM team name "+r.bcm);
+    const doCopy=async()=>{if(chip.dataset.busy==="1")return;const ok=await copyTextToClipboard(r.bcm);flashBcmChip(chip,ok);};
+    chip.addEventListener("click",doCopy);
+    chip.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();doCopy();}});
+    td.appendChild(chip);
+  }else if(r.status==="conflict"){
+    const flag=document.createElement("span");flag.className="bcm-flag conflict";flag.textContent="MAPPING CONFLICT";flag.tabIndex=0;flag.setAttribute("role","button");
+    flag.title="Multiple active mappings resolve to different BCM names. Click to review in Team Mappings.";
+    const review=()=>bcmReviewConflict(ctx.sport,ctx.country,ctx.league,ctx.teamName);
+    flag.addEventListener("click",review);flag.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();review();}});
+    td.appendChild(flag);
+  }else{
+    const flag=document.createElement("span");flag.className="bcm-flag unmapped";flag.textContent="UNMAPPED";flag.tabIndex=0;flag.setAttribute("role","button");
+    flag.title="No active mapping. Click to add one in Team Mappings (prefilled).";
+    const add=()=>bcmAddMapping(ctx.sport,ctx.country,ctx.league,ctx.teamName);
+    flag.addEventListener("click",add);flag.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();add();}});
+    td.appendChild(flag);
+  }
+  td.appendChild(document.createTextNode(")"));
+  return td;
+}
+function flashBcmChip(chip,success){
+  if(chip.dataset.busy==="1")return;const original=chip.dataset.label||chip.textContent;chip.dataset.label=original;
+  chip.dataset.busy="1";chip.classList.remove("copied","copy-error");chip.classList.add(success?"copied":"copy-error");
+  chip.textContent=success?"Copied!":"Copy failed";
+  setTimeout(()=>{chip.textContent=chip.dataset.label;chip.classList.remove("copied","copy-error");chip.dataset.busy="";},1400);
+}
+/* Prefill the Team Mappings form for an unmapped team and switch to that tab (read-only: nothing saved). */
+function bcmAddMapping(sport,country,league,team){
+  if(window.msfmShowTab)window.msfmShowTab("teammappings");
+  if($("tmSport"))$("tmSport").value=canonSport(sport)||"Basketball";
+  if($("tmCountry"))$("tmCountry").value=country||"";
+  if($("tmLeague"))$("tmLeague").value=league||"";
+  if($("tmFsTeam"))$("tmFsTeam").value=team||"";
+  if($("tmBcmTeam")){$("tmBcmTeam").value="";$("tmBcmTeam").focus();}
+  setTeamMessage(`Prefilled from the BCM Team Matcher: enter the BCM name for "${team}" and click Add Mapping. Nothing is saved until you do.`,"");
+}
+function bcmReviewConflict(sport,country,league,team){
+  if(window.msfmShowTab)window.msfmShowTab("teammappings");
+  if($("teamSearch")){$("teamSearch").value=team||"";$("teamSearch").dispatchEvent(new Event("input"));}
+  setTeamMessage(`Showing mappings matching "${team}". Resolve the conflict by deactivating or correcting the duplicate BCM names.`,"warn");
+}
+
+function renderBcmResults(){
+  const head=$("bcmResultHead"),body=$("bcmResultBody");if(!head||!body)return;
+  head.replaceChildren();body.replaceChildren();
+  if(!bcmLastResult){body.innerHTML='<tr><td>Paste Flashscore matches and click Match Teams.</td></tr>';$("bcmSummary").replaceChildren();$("bcmFilterBar").style.display="none";$("bcmMatchCount").textContent="";return;}
+  const res=bcmLastResult,filter=$("bcmFilter")?.value||"all";
+  const htr=document.createElement("tr");for(const h of res.headers){const th=document.createElement("th");th.textContent=h;htr.appendChild(th);}head.appendChild(htr);
+  let shown=0;
+  for(const entry of res.rows){
+    if(!bcmRowMatchesFilter(entry,filter))continue;
+    shown++;
+    const tr=document.createElement("tr");
+    for(let i=0;i<res.headers.length;i++){
+      if(i===res.idx.home)tr.appendChild(bcmTeamCellNode(entry.homeName,entry.home,{sport:res.sport,country:entry.country,league:entry.league,teamName:entry.homeName}));
+      else if(i===res.idx.away)tr.appendChild(bcmTeamCellNode(entry.awayName,entry.away,{sport:res.sport,country:entry.country,league:entry.league,teamName:entry.awayName}));
+      else{const td=document.createElement("td");td.textContent=entry.cells[i]??"";tr.appendChild(td);}
+    }
+    body.appendChild(tr);
+  }
+  if(!shown){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=res.headers.length;td.textContent="No matches for this filter.";tr.appendChild(td);body.appendChild(tr);}
+  const s=bcmSummary(res);
+  $("bcmSummary").replaceChildren();
+  const stat=(label,val)=>{const d=document.createElement("div");d.className="stat";d.innerHTML='<span class="count">'+label+'</span><strong>'+val+'</strong>';$("bcmSummary").appendChild(d);};
+  stat("Matches processed",s.total);stat("Fully mapped",s.complete);stat("Partially mapped",s.partial);stat("Completely unmapped",s.unmapped);stat("With conflicts",s.conflict);stat("Unmapped team occurrences",s.unmappedOcc);
+  $("bcmFilterBar").style.display="";
+  $("bcmMatchCount").textContent=`${res.rows.length} match${res.rows.length===1?"":"es"}`;
+}
+
+/* Unique unmapped teams for the optional export. */
+function bcmUnmappedTeams(){
+  if(!bcmLastResult)return [];
+  const seen=new Map();
+  for(const e of bcmLastResult.rows){
+    for(const role of ["home","away"]){
+      const r=e[role],name=role==="home"?e.homeName:e.awayName;
+      if(r.status!=="unmapped"||!name||!String(name).trim())continue;
+      const k=teamMapKey(bcmLastResult.sport,e.country,e.league,name);
+      if(!seen.has(k))seen.set(k,{Sport:bcmLastResult.sport,Country:e.country,"Flashscore League":e.league,"Flashscore Team":name,Role:role==="home"?"Home":"Away"});
+    }
+  }
+  return [...seen.values()];
+}
+
+function bcmRunMatch(){
+  if(bcmBusy)return;
+  const sport=$("bcmSport").value,raw=$("bcmInput").value;
+  if(!raw.trim()){setMessage("bcmMessage","Paste some Flashscore rows first.","error");return;}
+  bcmBusy=true;$("bcmMatchBtn").disabled=true;setMessage("bcmMessage","Matching...");
+  try{
+    const parsed=bcmParseMatches(raw,$("bcmHasHeader").checked);
+    if(parsed.error){setMessage("bcmMessage",parsed.error,"error");$("bcmColumnPicker").classList.add("hidden");return;}
+    if(parsed.needsManual){
+      bcmShowColumnPicker(parsed,sport);
+      setMessage("bcmMessage","Could not find Home Team / Away Team columns by their headers. Assign the columns below, then click Match Teams again.","warn");
+      return;
+    }
+    $("bcmColumnPicker").classList.add("hidden");
+    bcmLastResult=bcmResolveBatch(parsed,sport);
+    renderBcmResults();
+    const s=bcmSummary(bcmLastResult);
+    setMessage("bcmMessage",`Matched ${s.total} row(s) for ${sport}: ${s.complete} fully mapped, ${s.partial} partial, ${s.unmapped} unmapped, ${s.conflict} with conflicts. Nothing was saved; this is read-only.`,(s.unmapped||s.partial||s.conflict)?"warn":"success");
+  }finally{bcmBusy=false;$("bcmMatchBtn").disabled=false;}
+}
+
+/* Manual column assignment when headers can't be detected. */
+function bcmShowColumnPicker(parsed,sport){
+  const box=$("bcmColumnPicker");if(!box)return;box.classList.remove("hidden");box.replaceChildren();
+  const title=document.createElement("div");title.innerHTML="<b>Assign columns</b> (detected "+parsed.headers.length+" columns). Pick which column is Home / Away / Country / Competition, then click Match Teams.";box.appendChild(title);
+  const opts=idxSel=>{const sel=document.createElement("select");sel.style.margin="4px 8px 4px 0";const none=new Option("(none)","-1");sel.appendChild(none);parsed.headers.forEach((h,i)=>sel.appendChild(new Option((h||("Column "+(i+1)))+"  [col "+(i+1)+"]",String(i))));sel.value=String(idxSel);return sel;};
+  const row=document.createElement("div");row.className="toolbar-group";
+  const hl=document.createElement("label");hl.textContent="Home";hl.style.margin="0";const hSel=opts(parsed.idx.home);
+  const al=document.createElement("label");al.textContent="Away";al.style.margin="0";const aSel=opts(parsed.idx.away);
+  const cl=document.createElement("label");cl.textContent="Country";cl.style.margin="0";const cSel=opts(parsed.idx.country);
+  const pl=document.createElement("label");pl.textContent="Competition";pl.style.margin="0";const pSel=opts(parsed.idx.comp);
+  row.append(hl,hSel,al,aSel,cl,cSel,pl,pSel);box.appendChild(row);
+  const apply=document.createElement("button");apply.type="button";apply.className="primary small";apply.textContent="Use these columns";
+  apply.addEventListener("click",()=>{
+    const idx={home:+hSel.value,away:+aSel.value,country:+cSel.value,comp:+pSel.value};
+    if(idx.home<0||idx.away<0){setMessage("bcmMessage","Home and Away columns are both required.","error");return;}
+    bcmLastResult=bcmResolveBatch({headers:parsed.headers,rows:parsed.rows,idx},sport);
+    box.classList.add("hidden");renderBcmResults();
+    const s=bcmSummary(bcmLastResult);
+    setMessage("bcmMessage",`Matched ${s.total} row(s) for ${sport}: ${s.complete} fully mapped, ${s.partial} partial, ${s.unmapped} unmapped, ${s.conflict} with conflicts.`,(s.unmapped||s.partial||s.conflict)?"warn":"success");
+  });
+  box.appendChild(apply);
+}
+
+function bcmOutputMatrix(){
+  if(!bcmLastResult)return null;
+  const rows=bcmLastResult.rows.map(e=>bcmOutputRow(e,bcmLastResult.idx));
+  return {headers:bcmLastResult.headers,rows};
+}
+function bindBcmMatcherEvents(){
+  if(!$("bcmMatchBtn"))return;
+  fillSportSelect($("bcmSport"));
+  $("bcmMatchBtn").addEventListener("click",bcmRunMatch);
+  $("bcmFilter").addEventListener("change",renderBcmResults);
+  $("bcmClearInputBtn").addEventListener("click",()=>{$("bcmInput").value="";setMessage("bcmMessage","Input cleared.");});
+  $("bcmClearResultsBtn").addEventListener("click",()=>{bcmLastResult=null;renderBcmResults();setMessage("bcmMessage","Results cleared.");});
+  $("bcmCopyOutputBtn").addEventListener("click",async()=>{
+    const m=bcmOutputMatrix();if(!m){setMessage("bcmMessage","Run Match Teams first.","error");return;}
+    const tsv=[m.headers.join("\t"),...m.rows.map(r=>r.join("\t"))].join("\n");
+    const ok=await copyTextToClipboard(tsv);
+    setMessage("bcmMessage",ok?`Copied ${m.rows.length} row(s) with ${m.headers.length} columns as tab-separated text. Paste into Excel.`:"Clipboard copy failed. Use Export CSV instead.",ok?"success":"error");
+  });
+  $("bcmExportCsvBtn").addEventListener("click",()=>{
+    const m=bcmOutputMatrix();if(!m){setMessage("bcmMessage","Run Match Teams first.","error");return;}
+    const rowsAsObj=m.rows.map(r=>{const o={};m.headers.forEach((h,i)=>o[h]=r[i]??"");return o;});
+    downloadCSV("bcm_matched_fixtures.csv",m.headers,rowsAsObj);
+    setMessage("bcmMessage",`Exported ${m.rows.length} row(s) to bcm_matched_fixtures.csv (BCM names kept inline in the team cells).`,"success");
+  });
+  $("bcmExportUnmappedBtn").addEventListener("click",()=>{
+    const list=bcmUnmappedTeams();if(!list.length){setMessage("bcmMessage","No unmapped teams to export.","warn");return;}
+    downloadCSV("bcm_unmapped_teams.csv",["Sport","Country","Flashscore League","Flashscore Team","Role"],list);
+    setMessage("bcmMessage",`Exported ${list.length} unique unmapped team(s).`,"success");
+  });
+}
 // Small test surface for deterministic persistence and business-rule checks; harmless in normal use.
 window.__MSFM={classifyFixtures,parseWorkedPaste,teamRelation,teamKey,makeMatcher,matchFixture,parseFixtures,parseFixturesDetailed,fixtureIdentity,exclusionCategory,importMappingCSV,applyImport,measureRepresentativePerformance,buildCSV,escapeCSV,dateKey,timeKey,countryKey,canonSport,migrateStoredData,addDaysISO,STORAGE,SPORTS,
   buildMappingSQL,playoffAlerts,historyCols,syncSharedMappings,sharedReady:()=>sharedState.promise,
   persistence:{ready:()=>persistenceReady,flushDraftSaves,reconcileRecords,validStoredValue,idbConfig:IDB_CONFIG,simulateExternalRevision:showNewerData,status:()=>({revision:currentRevision,dirty:persistenceDirty,text:$("persistenceStatus").textContent})},
   backup:{buildBackup,serializeBackup,parseBackupText,backupDuplicateKeys,backupMergePreview,restoreFromBackup,reloadFromStorage,formatVersion:BACKUP_FORMAT_VERSION},
   copy:{copyTextToClipboard},
+  bcmMatcher:{parse:bcmParseMatches,resolveBatch:bcmResolveBatch,resolveDetailed:resolveBcmDetailed,summary:bcmSummary,outputRow:bcmOutputRow,cellText:bcmCellText,unmappedTeams:bcmUnmappedTeams,result:()=>bcmLastResult,setResult:r=>{bcmLastResult=r;renderBcmResults();}},
   teamMappings:{loadTeamMappings,saveTeamMappings,pasteToTeamMatrix,teamRowsFromMatrix,analyzeTeamImport,applyTeamImport,resolveBcmTeam,resolveFixtureMapping,fixtureHasUnmapped,buildTeamMappingSQL,teamMapKey,excelAvailable,list:()=>teamMappings,setList:l=>{teamMappings=Array.isArray(l)?l:[];renderTeamMappings();},
     importMatrix:(matrix,conflictPolicy)=>{const parsed=teamRowsFromMatrix(matrix);if(parsed.error)return {error:parsed.error};const a=analyzeTeamImport(parsed.rows);const r=applyTeamImport(a,conflictPolicy||"use-import");saveTeamMappings();renderTeamMappings();if(comparisonRunAt)renderComparison(comparisonResults);return {analysis:a,result:r};}},
   state:()=>({mappings,collectionDays,convertedRows,excludedRows,comparisonResults,lastParseAccounting,comparisonStale,comparisonRunAt})};
