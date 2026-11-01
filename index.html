@@ -1633,16 +1633,32 @@ const BulkTab = {
     </div>`;
 
     if (news.length) {
-      const extraHead = p.type==='team' ? `<th>Match</th><th>Review</th>` : ``;
+      const isTeam = p.type==='team';
+      // Sort state cycles: file order -> lowest match first -> highest match first.
+      const sortMode = this.sortMode || 'file';
+      const arrow = sortMode==='asc' ? ' \u2193' : sortMode==='desc' ? ' \u2191' : ' \u21C5';
+      const matchHead = isTeam
+        ? `<th title="Click to sort by similarity (low \u2194 high)" style="cursor:pointer;user-select:none" onclick="BulkTab.cycleSort()">Match${arrow}</th>`
+        : ``;
+      const extraHead = isTeam ? `${matchHead}<th>Review</th>` : ``;
       html += `<div style="font-size:12.5px;font-weight:700;margin:10px 0 6px;color:var(--success);">New entries</div>
       <div class="table-wrap"><table><thead><tr><th class="checkbox-cell"><input type="checkbox" checked onchange="BulkTab.toggleAll(this.checked)"></th>${cols.map(c=>`<th>${c[1]}</th>`).join('')}${extraHead}</tr></thead><tbody>`;
+      // Build the display list, KEEPING each row's original index so toggleRow /
+      // copyPrompt still reference the correct entry after any sort.
+      let order = [];
       p.rows.forEach((r,i)=>{ if (r.isDup) return;
+        let score = null;
+        if (isTeam){ const prov = this.providerTeam(r.data); score = prov.value ? this.fuzzyScore(r.data.bcm_team, prov.value) : -1; }
+        order.push({ r, i, score });
+      });
+      if (isTeam && sortMode!=='file'){
+        order.sort((a,b)=> sortMode==='asc' ? a.score-b.score : b.score-a.score);
+      }
+      order.forEach(({r,i,score})=>{
         let extraCells = ``;
-        if (p.type==='team'){
-          const prov = this.providerTeam(r.data);
-          const score = this.fuzzyScore(r.data.bcm_team, prov.value);
+        if (isTeam){
           const col = score>=90 ? '#16a34a' : score>=70 ? '#ca8a04' : '#dc2626';
-          const badge = prov.value ? `<span style="font-weight:700;color:${col}">${score}%</span>` : `<span style="color:var(--text-faint)">\u2014</span>`;
+          const badge = score>=0 ? `<span style="font-weight:700;color:${col}">${score}%</span>` : `<span style="color:var(--text-faint)">\u2014</span>`;
           extraCells = `<td style="text-align:center">${badge}</td><td style="text-align:center"><button type="button" class="btn btn-sm btn-ghost" title="Copy review prompt for this fixture" onclick="BulkTab.copyPrompt(${i}, this)">\uD83D\uDCCB Copy</button></td>`;
         }
         html += `<tr><td class="checkbox-cell"><input type="checkbox" ${r.checked?'checked':''} onchange="BulkTab.toggleRow(${i}, this.checked)"></td>${cols.map(c=>`<td>${escapeHtml(r.data[c[0]])}</td>`).join('')}${extraCells}</tr>`;
@@ -1702,6 +1718,12 @@ const BulkTab = {
   },
   toggleRow(i, checked){ state.bulkParsed.rows[i].checked = checked; },
   toggleAll(checked){ state.bulkParsed.rows.forEach(r=>{ if(!r.isDup) r.checked = checked; }); this.renderPreview(); },
+  // Cycle the New-entries match sort: file order -> lowest first -> highest first.
+  cycleSort(){
+    const order = { 'file':'asc', 'asc':'desc', 'desc':'file' };
+    this.sortMode = order[this.sortMode || 'file'];
+    this.renderPreview();
+  },
   async uploadSelected(){
     const p = state.bulkParsed;
     if (!p) return;
