@@ -854,9 +854,13 @@ const DFC = {
       reader.onload = (e) => {
         try {
           const data = new Uint8Array(e.target.result);
-          const wb = XLSX.read(data, {type:'array'});
+          // cellText:true + raw:false make SheetJS return each cell's ORIGINAL
+          // formatted text (the ".w" value) instead of silently coercing a
+          // date-like string such as "01-11-2026 02:00" into an internal serial
+          // number (which surfaced as "2696.0833..." in the Provider Date column).
+          const wb = XLSX.read(data, {type:'array', cellText:true, cellDates:false, raw:false});
           const sheet = wb.Sheets[wb.SheetNames[0]];
-          const rows = XLSX.utils.sheet_to_json(sheet, {defval:'', raw:true});
+          const rows = XLSX.utils.sheet_to_json(sheet, {defval:'', raw:false});
           // Convert Excel serial dates in each row (DISABLED - handled by explicit formatters)
           if (false) rows.forEach(row => {
             Object.keys(row).forEach(key => {

@@ -138,6 +138,47 @@ details.sport-block .table-wrap{margin-bottom:12px}
     <div id="parseAccounting" class="accounting" aria-label="Fixture processing accounting"><div class="stat"><span class="count">Input nonblank lines</span><strong id="inputLineCount">0</strong></div><div class="stat"><span class="count">Parsed unique fixtures</span><strong id="uniqueFixtureCount">0</strong></div><div class="stat"><span class="count">Matched</span><strong id="accountMatchedCount">0</strong></div><div class="stat"><span class="count">Excluded</span><strong id="accountExcludedCount">0</strong></div><div class="stat"><span class="count">Duplicate source rows</span><strong id="duplicateSourceCount">0</strong></div><div class="stat"><span class="count">Invalid groups</span><strong id="invalidGroupCount">0</strong></div></div>
     <div id="invalidRecords" class="hint" aria-live="polite"></div>
     <div id="playoffAlerts" class="hidden" aria-live="polite"></div>
+
+    <!-- ======================================================================
+         Excel/CSV Fixture Import and Sorting - UI shell (Task 14.1)
+         Added BELOW the existing paste-and-filter area, inside section 2, and
+         does not modify or remove any existing feature (Req 1.1, 1.3). Reuses
+         host panel styling and status classes. This task renders the shell with
+         stable element IDs only; wiring/behavior is Task 14.2.
+         Requirements: 1.1, 2.1, 13.3, 17.1, 10.4, 10.5, 14.1
+         ====================================================================== -->
+    <div id="msfm-import-root" class="import-feature" style="margin-top:22px;padding-top:18px;border-top:1px solid var(--border)">
+      <div class="table-head"><h3 style="margin:0">Import &amp; Sort Fixtures from Excel / CSV</h3><span class="count">Select a sport, upload an .xls/.xlsx/.csv export, then process, review and confirm.</span></div>
+      <p class="hint">Records are not saved until you confirm the import. Nothing leaves this browser.</p>
+      <div class="controls" style="margin-top:12px">
+        <div><label for="msfm-import-sport">Sport</label><select id="msfm-import-sport"></select></div>
+        <div><label for="msfm-import-file">Fixtures file</label><input id="msfm-import-file" type="file" accept=".xls,.xlsx,.csv"></div>
+      </div>
+      <div class="actions">
+        <button class="primary" id="msfm-import-process" type="button">Process File</button>
+        <button class="secondary" id="msfm-import-dl-xlsx" type="button">Download Excel</button>
+        <button class="secondary" id="msfm-import-dl-csv" type="button">Download CSV</button>
+        <button class="neutral" id="msfm-import-clear" type="button">Clear</button>
+        <button class="primary" id="msfm-import-confirm" type="button">Confirm Import</button>
+      </div>
+      <div id="msfm-import-message" class="message" role="status" aria-live="polite"></div>
+      <div id="msfm-import-summary" class="accounting hidden" aria-label="Import summary counts">
+        <div class="stat"><span class="count">Source rows</span><strong id="msfm-import-sum-source">0</strong></div>
+        <div class="stat"><span class="count">Parsed records</span><strong id="msfm-import-sum-parsed">0</strong></div>
+        <div class="stat"><span class="count">Matched</span><strong id="msfm-import-sum-matched">0</strong></div>
+        <div class="stat"><span class="count">Unmatched</span><strong id="msfm-import-sum-unmatched">0</strong></div>
+        <div class="stat"><span class="count">Needs Review</span><strong id="msfm-import-sum-review">0</strong></div>
+        <div class="stat"><span class="count">Invalid</span><strong id="msfm-import-sum-invalid">0</strong></div>
+        <div class="stat"><span class="count">Duplicates removed</span><strong id="msfm-import-sum-duplicates">0</strong></div>
+        <div class="stat"><span class="count">Export rows</span><strong id="msfm-import-sum-export">0</strong></div>
+      </div>
+      <div class="filterbar"><label style="margin:0;display:flex;gap:6px;align-items:center;font-weight:650"><input type="checkbox" id="msfm-import-show-unmatched" style="width:17px;height:17px"> Show unmatched fixtures</label></div>
+      <div class="table-wrap" style="margin-top:10px">
+        <table id="msfm-import-preview"><thead><tr><th>Sport</th><th>Date</th><th>Time</th><th>Country</th><th>League</th><th>Home</th><th>Away</th><th>Status</th></tr></thead>
+        <tbody id="msfm-import-preview-body"><tr><td colspan="8" style="color:#64748b;text-align:center">No file processed yet.</td></tr></tbody></table>
+      </div>
+      <div id="msfm-import-review" class="hidden" aria-live="polite" style="margin-top:12px"></div>
+    </div>
   </section>
   <section class="panel" id="collectionPanel" data-tab="compare">
     <div class="table-head"><h2>3. 7-Day Fixture Collection</h2><span class="count" id="collectionProgress">0/7 dates collected</span></div>
@@ -1333,6 +1374,15 @@ function timeLine(l){
   const m=String(l??"").match(/^(?:(\d{1,2})\.(\d{1,2})\.(\d{4})?\s*)?(\d{1,2}:\d{2})$/);
   return m?{time:m[4],d:m[1]?+m[1]:0,mo:m[2]?+m[2]:0,y:m[3]?+m[3]:0}:null;
 }
+/* Flashscore prints a short status marker on its own line between the time and the
+   home team (e.g. "FRO" for a scheduled match, "AOT"/"AET"/"AP" after extra time,
+   "Postp.", "Canc.", "Abn.", "Awarded", "WO", "Ret.", "Live", "Finished"). These are
+   NOT team names and must be skipped so Home/Away align to the real teams. */
+function isStatusToken(l){
+  var s=String(l==null?"":l).trim();
+  if(s==="")return false;
+  return /^(?:FRO|AOT|AET|AP|AWO|WO|Ret\.?|Abn\.?|Canc\.?|Cancelled|Postp\.?|Postponed|Awarded|Susp\.?|Suspended|Interrupted|Live|Finished|After\s+(?:Pen\.?|OT|ET)|Pen\.?|OT|ET)$/i.test(s);
+}
 function parseFixtures(raw,sport,date){
   const lines=cleanLines(raw),rows=[];let league="",country="",leagueLine=-1;
   const isTime=l=>!!timeLine(l);
@@ -1350,17 +1400,19 @@ function parseFixtures(raw,sport,date){
     if(i+1<lines.length&&isCountryHeading(lines[i+1])&&!isTime(line)){league=line;leagueLine=i;continue;}
     const tl=timeLine(line);
     if(tl){
-      const home=lines[i+1],away=lines[i+2];
+      let hi=i+1;
+      while(hi<lines.length&&isStatusToken(lines[hi]))hi++;
+      const home=lines[hi],away=lines[hi+1];
       if(!home||!away||isTime(home)||isTime(away)||isCountryHeading(home)||isCountryHeading(away))continue;
       const row={Sport:sport,Date:date,Time:tl.time,Country:country,DetectedLeague:league,Home:home,Away:away};
-      Object.defineProperties(row,{SourceLine:{value:i+1},SourceContext:{value:lines.slice(Math.max(0,i-1),i+3).join(" | ")}});
+      Object.defineProperties(row,{SourceLine:{value:i+1},SourceContext:{value:lines.slice(Math.max(0,i-1),hi+2).join(" | ")}});
       // Valid prefixes on another date are Wrong date. Impossible calendar prefixes are malformed source groups.
       if(tl.d&&selISO){
         const iso=isoFromParts(tl.y||selY,tl.mo,tl.d),prefix=`${String(tl.d).padStart(2,"0")}.${String(tl.mo).padStart(2,"0")}.${tl.y||""}`;
         if(!iso)Object.defineProperty(row,"MalformedDateReason",{value:`Malformed or unsupported date prefix ${prefix}`});
         else if(iso!==selISO)row.DateNote=`Flashscore lists this fixture on ${prefix}, not on the selected date ${date}, so it was not collected under ${date}.`;
       }
-      rows.push(row);i+=2;
+      rows.push(row);i=hi+1;
     }
   }
   // Fixtures whose league could not be detected are kept (they are reported as excluded with a reason)
@@ -1373,7 +1425,7 @@ function parseFixturesDetailed(raw,sport,date){
   for(const f of all){const key=fixtureIdentity(f);if(seen.has(key)){const reason="Duplicate source fixture; the first identical row was retained.";duplicates.push({...f,Category:"Duplicate",Reason:reason});duplicateRecords.push({line:f.SourceLine||1,reason,context:f.SourceContext||`${f.Time} | ${f.Home} | ${f.Away}`});continue;}seen.add(key);rows.push(f);}
   const clean=cleanLines(raw),invalidRecords=[];
   for(const f of all)if(f.MalformedDateReason)invalidRecords.push({line:f.SourceLine||1,reason:f.MalformedDateReason,context:f.SourceContext||`${f.Time} | ${f.Home} | ${f.Away}`});
-  for(let i=0;i<clean.length;i++){const tl=timeLine(clean[i]);if(!tl)continue;const home=clean[i+1],away=clean[i+2];if(!home||!away||timeLine(home)||timeLine(away)||isCountryHeading(home)||isCountryHeading(away))invalidRecords.push({line:i+1,reason:"Time was not followed by valid home and away team lines",context:clean.slice(Math.max(0,i-1),i+4).join(" | ")});}
+  for(let i=0;i<clean.length;i++){const tl=timeLine(clean[i]);if(!tl)continue;let hi=i+1;while(hi<clean.length&&isStatusToken(clean[hi]))hi++;const home=clean[hi],away=clean[hi+1];if(!home||!away||timeLine(home)||timeLine(away)||isCountryHeading(home)||isCountryHeading(away))invalidRecords.push({line:i+1,reason:"Time was not followed by valid home and away team lines",context:clean.slice(Math.max(0,i-1),hi+2).join(" | ")});}
   if(!all.length&&String(raw).trim())invalidRecords.push({line:1,reason:"No complete fixture groups were detected",context:String(raw).trim().slice(0,240)});
   const issueRecords=[...invalidRecords,...duplicateRecords].sort((a,b)=>a.line-b.line);
   return {rows,duplicates,inputLines,invalidRecords:issueRecords.slice(0,MAX_INVALID_RECORDS),invalidCount:invalidRecords.length};
@@ -2631,6 +2683,3336 @@ else persistenceReady=preparePersistence().then(result=>{init();return result;})
   function show(name,focus=false){btns.forEach(b=>{const on=b.dataset.tab===name;b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1;if(on&&focus)b.focus();});panels.forEach(p=>{const hide=p.dataset.tab!==name;p.classList.toggle('tab-hidden',hide);p.hidden=hide;});if(name==='mappings'){const d=document.querySelector('section.mapping-panel > details');if(d)d.open=true;}}
   btns.forEach((b,i)=>{b.addEventListener('click',()=>show(b.dataset.tab));b.addEventListener('keydown',e=>{let n=null;if(e.key==='ArrowRight')n=(i+1)%btns.length;if(e.key==='ArrowLeft')n=(i-1+btns.length)%btns.length;if(e.key==='Home')n=0;if(e.key==='End')n=btns.length-1;if(n!==null){e.preventDefault();show(btns[n].dataset.tab,true);}});});window.msfmShowTab=show;show('fixtures');
 })();;
+</script>
+
+<!-- ============================================================================
+     Excel/CSV Fixture Import and Sorting  (feature: excel-fixture-import-sort)
+     Self-contained module region. Lives in its own script block so it never
+     touches any existing code above. It adds, read-only, to the Host_Application
+     assets (SPORTS, normalize, teamMappings, match list, STORE/safeSet) and
+     exposes its pure parsing core on window.__MSFM.import for direct testing.
+
+     This scaffold (Task 1) establishes the module boundary, the test surface,
+     and the shared data-model typedefs. Each pure function is attached to
+     window.__MSFM.import as it is implemented in later tasks.
+     Requirements: 1.1, 1.2, 19.1, 19.2
+     ============================================================================ -->
+<script>
+(function(){
+  "use strict";
+
+  // Shared data-model shapes (JSDoc typedefs). Documentation-only; no runtime cost.
+
+  /**
+   * A single parsed fixture in the in-memory preview model.
+   * Original display values (Home/Away/Country/League) are preserved verbatim;
+   * normalize() is used only for comparison keys, never for stored display text.
+   *
+   * @typedef {Object} PreviewRecord
+   * @property {string} Sport        Always the Selected_Sport (Req 2.2).
+   * @property {Date|null} date      Real date value (Req 5.5); null => Invalid/unparseable.
+   * @property {number|null} time    Minutes since midnight, 24h, no timezone (Req 6); null => blank time.
+   * @property {string} Country      From the active league header (Req 7.1).
+   * @property {string} League       From the active league header, week suffix stripped (Req 7.2).
+   * @property {string} Home         Original display text, preserved (Req 9.7).
+   * @property {string} Away         Original display text, preserved (Req 9.7).
+   * @property {("Matched"|"Unmatched"|"Needs Review"|"Invalid"|"Duplicate"|"Manually Corrected")} Status
+   *                                 Exactly one preview-only status (Req 13.1); excluded from export (Req 13.4).
+   * @property {string} reason       Explanation for Invalid / Needs Review (review section).
+   * @property {string} sourceText   Original source line, shown for Needs Review (Req 15.1).
+   * @property {number} sourceRow    1-based source row index.
+   */
+
+  /**
+   * The league header currently in effect, applied to every following fixture
+   * row until the next league header is detected (Req 4.2).
+   *
+   * @typedef {Object} ActiveHeader
+   * @property {string} sportToken   First dot-separated token, used for the sport-mismatch check (Req 2.3).
+   * @property {string} country      Second dot-separated token (Req 4.4).
+   * @property {string} league       Text after the second token, week suffix stripped, outer-trimmed (Req 4.5, 4.6).
+   */
+
+  /**
+   * Summary counts shown after a file is processed (Req 14).
+   *
+   * @typedef {Object} ImportSummary
+   * @property {number} sourceRows        Total source rows read (Req 14.1).
+   * @property {number} parsedRecords     Successfully parsed records (Req 14.2).
+   * @property {number} matched           Records with Status Matched (Req 14.3).
+   * @property {number} unmatched         Records with Status Unmatched (Req 14.3).
+   * @property {number} needsReview       Records with Status Needs Review (Req 14.3).
+   * @property {number} invalid           Records with Status Invalid (Req 14.3).
+   * @property {number} duplicatesRemoved Duplicates removed on confirmation (Req 14.4, 11.4).
+   * @property {number} exportRows        Final export-eligible rows (Req 14.5).
+   */
+
+  /**
+   * Read-only snapshot of Host_Application data handed to the pure core so the
+   * core never reaches into the DOM or storage directly.
+   *
+   * @typedef {Object} TeamDataMatch
+   * @property {string} Sport
+   * @property {string} Date
+   * @property {string} Time
+   * @property {string} Country
+   * @property {string} League
+   * @property {string} Home
+   * @property {string} Away
+   *
+   * @typedef {Object} TeamDataAlias
+   * @property {string} sport
+   * @property {string} country
+   * @property {string} flashscoreLeague
+   * @property {string} flashscoreTeam
+   * @property {string} bcmTeam
+   *
+   * @typedef {Object} TeamData
+   * @property {TeamDataMatch[]} matchList  The match list for the selected sport (Fixture_Matcher, Team_Matcher).
+   * @property {TeamDataAlias[]} aliases    The teamMappings alias list (Team_Matcher).
+   */
+
+  /**
+   * The strict seven-column projection written to Excel/CSV exports. The Status
+   * field and all non-output values are excluded (Req 18.1, 18.2).
+   *
+   * @typedef {Object} ExportRecord
+   * @property {string} Sport
+   * @property {string} Date    Display string DD/MM/YYYY (Req 18.4).
+   * @property {string} Time    Display string HH:mm (Req 18.4).
+   * @property {string} Country
+   * @property {string} League
+   * @property {string} Home
+   * @property {string} Away
+   */
+
+  // Test surface wiring. Mirror the existing window.__MSFM pattern: reuse the
+  // host test surface if present (otherwise create a minimal holder so this
+  // module stays self-contained), and attach an `import` namespace onto it.
+  var surface = (window.__MSFM = window.__MSFM || {});
+
+  // The import feature's own namespace on the shared test surface (Req 19.2).
+  var importApi = (surface.import = surface.import || {});
+
+  /**
+   * Register a pure function on window.__MSFM.import under the given name.
+   * Later tasks call attach("readingWorkbook", fn), attach("sortingFixtures", fn),
+   * and so on, so the test surface fills in incrementally.
+   *
+   * @param {string} name   One of the ten reusable function names (Req 19.2).
+   * @param {Function} fn   The pure implementation to expose.
+   * @returns {Function} fn The same function, for convenient chaining.
+   */
+  function attach(name, fn){
+    importApi[name] = fn;
+    return fn;
+  }
+
+  // The ten reusable parsing/transform functions this feature must expose
+  // (Req 19.2). Declared up front as the registration contract; each is wired
+  // via attach() in its implementing task. Declaring the list here does NOT
+  // create the functions - it documents the expected shape of the namespace.
+  var EXPECTED_EXPORTS = [
+    "readingWorkbook",
+    "detectingLeagueHeader",
+    "parsingLeagueHeader",
+    "parsingFixtureRow",
+    "matchingTeams",
+    "matchingExistingFixtures",
+    "detectingDuplicates",
+    "validatingRows",
+    "sortingFixtures",
+    "exportingWorkbook"
+  ];
+
+  // Expose the attach() helper and the expected-exports contract on the import
+  // namespace itself so implementing tasks (and tests) can wire and introspect
+  // the surface without reaching into this closure.
+  importApi.__attach = attach;
+  importApi.__expectedExports = EXPECTED_EXPORTS.slice();
+
+  // ==========================================================================
+  // Task 2.1 - Date and time helpers (Requirements 5.1-5.5, 6.1-6.5)
+  //
+  // Pure helpers underpinning Fixture_Row_Parser and Fixture_Sorter. Dates are
+  // built from explicit Year/Month/Day fields with the local Date constructor,
+  // so no UTC/timezone conversion is ever applied. Times are literal wall-clock
+  // minutes-since-midnight, never shifted. Exposed on window.__MSFM.import so
+  // later tasks and the property tests (2.2, 2.3) can call them directly.
+  // ==========================================================================
+
+  /**
+   * Pad a non-negative integer to a fixed width with leading zeros.
+   * @param {number} n     The value to pad.
+   * @param {number} [width=2] Target string length.
+   * @returns {string}     Zero-padded string.
+   */
+  function pad(n, width){
+    width = width || 2;
+    var s = String(Math.abs(n));
+    while (s.length < width) s = "0" + s;
+    return s;
+  }
+
+  /**
+   * Resolve a two-digit year to a full year using the century rule (Req 5.2,
+   * 5.3): 00-79 => 2000-2079, 80-99 => 1980-1999.
+   * @param {number} yy Two-digit year in the range 0-99.
+   * @returns {number}  The four-digit year.
+   */
+  function resolveCentury(yy){
+    return yy <= 79 ? 2000 + yy : 1900 + yy;
+  }
+
+  /**
+   * Build a real Date from a DD/MM token and a two-digit year, using explicit
+   * Y/M/D fields so no timezone conversion is applied (Req 5.1-5.3, 5.5). An
+   * impossible calendar date (e.g. 31/02) yields null so the caller can mark
+   * the row Invalid.
+   * @param {string} ddmm A DD/MM day-and-month token (e.g. "28/10").
+   * @param {(string|number)} yy A two-digit year (e.g. "26" or 26).
+   * @returns {Date|null} A local Date at midnight, or null when invalid.
+   */
+  function parseFixtureDate(ddmm, yy){
+    if (ddmm == null || yy == null) return null;
+    var dm = String(ddmm).trim();
+    var m = /^(\d{1,2})\/(\d{1,2})$/.exec(dm);
+    if (!m) return null;
+
+    var yearStr = String(yy).trim();
+    if (!/^\d{1,2}$/.test(yearStr)) return null;
+
+    var day = parseInt(m[1], 10);
+    var month = parseInt(m[2], 10);
+    var year = resolveCentury(parseInt(yearStr, 10));
+
+    if (month < 1 || month > 12) return null;
+    if (day < 1 || day > 31) return null;
+
+    var date = new Date(year, month - 1, day);
+
+    // Reject overflow dates (e.g. 31/02 -> March) via a round-trip check.
+    if (
+      date.getFullYear() !== year ||
+      date.getMonth() !== month - 1 ||
+      date.getDate() !== day
+    ) {
+      return null;
+    }
+    return date;
+  }
+
+  /**
+   * Format a Date as DD/MM/YYYY (Req 5.4) from its local Y/M/D fields, so the
+   * displayed day matches the stored wall-clock date with no timezone shift.
+   * @param {Date} date A real Date value.
+   * @returns {string}  DD/MM/YYYY, or "" when the input is not a valid Date.
+   */
+  function formatDMY(date){
+    if (!(date instanceof Date) || isNaN(date.getTime())) return "";
+    return pad(date.getDate()) + "/" + pad(date.getMonth() + 1) + "/" + pad(date.getFullYear(), 4);
+  }
+
+  /**
+   * Format minutes-since-midnight as a 24-hour HH:mm value (Req 6). A null or
+   * out-of-range value yields "" so blank times render cleanly (Req 6.4).
+   * @param {number|null} minutes Minutes since midnight in [0, 1439], or null.
+   * @returns {string} HH:mm, or "" when the value is null / out of range.
+   */
+  function formatHM(minutes){
+    if (minutes == null || typeof minutes !== "number" || !isFinite(minutes)) return "";
+    if (minutes < 0 || minutes >= 24 * 60) return "";
+    if (Math.floor(minutes) !== minutes) return "";
+    var h = Math.floor(minutes / 60);
+    var m = minutes % 60;
+    return pad(h) + ":" + pad(m);
+  }
+
+  /**
+   * Parse a 24-hour HH:mm token into minutes-since-midnight (Req 6.1-6.3) with
+   * no timezone conversion. Returns null for any value that is not a valid
+   * 24-hour time so the caller can leave the Time field blank (Req 6.4).
+   * @param {string} token A time token such as "20:45".
+   * @returns {number|null} Minutes since midnight in [0, 1439], or null.
+   */
+  function parseTime(token){
+    if (token == null) return null;
+    var t = String(token).trim();
+    var m = /^(\d{1,2}):(\d{2})$/.exec(t);
+    if (!m) return null;
+    var h = parseInt(m[1], 10);
+    var mins = parseInt(m[2], 10);
+    if (h < 0 || h > 23) return null;
+    if (mins < 0 || mins > 59) return null;
+    return h * 60 + mins;
+  }
+
+  // Expose the date/time helpers on the import test surface. (Not part of the
+  // ten EXPECTED_EXPORTS pipeline contract, but later tasks and the property
+  // tests 2.2/2.3 call them directly.)
+  attach("parseFixtureDate", parseFixtureDate);
+  attach("formatDMY", formatDMY);
+  attach("formatHM", formatHM);
+  attach("parseTime", parseTime);
+
+  // ==========================================================================
+  // Task 3.1 - Workbook reading (Requirements 3.1, 3.2, 3.3, 3.4, 1.4)
+  //
+  // Workbook_Reader. Reads an uploaded .xls/.xlsx workbook via the vendored
+  // SheetJS "xlsx" library and a .csv file via SheetJS or a built-in CSV
+  // splitter fallback. Produces an array-of-arrays of raw cell strings (rows)
+  // plus a whitespace-normalized source line per row (sourceLines) for the
+  // downstream line-oriented parsers. Pure/side-effect-free: the SheetJS
+  // reference is injectable through options.xlsx (defaulting to the global
+  // XLSX) so tests can stub or omit it to exercise the degraded mode.
+  // ==========================================================================
+
+  /**
+   * Collapse a row of raw cell values into a single whitespace-normalized
+   * source line: each cell stringified, trimmed, and joined with a single
+   * space, with runs of internal whitespace collapsed. Empty/blank cells are
+   * dropped so trailing blank columns do not add spurious spaces. Accented and
+   * Unicode characters are preserved verbatim (Req 16.4).
+   * @param {Array<*>} cells A row of raw cell values.
+   * @returns {string} The normalized source line.
+   */
+  function rowToSourceLine(cells){
+    if (!cells || !cells.length) return "";
+    var parts = [];
+    for (var i = 0; i < cells.length; i++){
+      var v = cells[i];
+      if (v == null) continue;
+      var s = String(v).replace(/\s+/g, " ").trim();
+      if (s !== "") parts.push(s);
+    }
+    return parts.join(" ");
+  }
+
+  /**
+   * Extract the lowercase file extension (without the dot) from a file name.
+   * @param {string} fileName The uploaded file's name.
+   * @returns {string} The extension (e.g. "xlsx"), or "" when none is present.
+   */
+  function fileExtension(fileName){
+    var name = String(fileName == null ? "" : fileName);
+    var dot = name.lastIndexOf(".");
+    if (dot < 0 || dot === name.length - 1) return "";
+    return name.slice(dot + 1).toLowerCase();
+  }
+
+  /**
+   * Minimal RFC-4180-ish CSV splitter used as a fallback when SheetJS is not
+   * available for .csv parsing. Handles quoted fields, escaped quotes (""),
+   * embedded commas/newlines inside quotes, and both CRLF and LF line endings.
+   * @param {string} text The CSV text.
+   * @returns {Array<Array<string>>} Rows of string cells.
+   */
+  function splitCSV(text){
+    var rows = [];
+    var row = [];
+    var field = "";
+    var inQuotes = false;
+    var i = 0;
+    var n = text.length;
+    while (i < n){
+      var ch = text.charAt(i);
+      if (inQuotes){
+        if (ch === '"'){
+          if (text.charAt(i + 1) === '"'){ field += '"'; i += 2; continue; }
+          inQuotes = false; i++; continue;
+        }
+        field += ch; i++; continue;
+      }
+      if (ch === '"'){ inQuotes = true; i++; continue; }
+      if (ch === ','){ row.push(field); field = ""; i++; continue; }
+      if (ch === '\r'){
+        if (text.charAt(i + 1) === '\n') i++;
+        row.push(field); rows.push(row); row = []; field = ""; i++; continue;
+      }
+      if (ch === '\n'){ row.push(field); rows.push(row); row = []; field = ""; i++; continue; }
+      field += ch; i++;
+    }
+    // Flush the final field/row (unless the input ended on a clean newline with
+    // nothing pending).
+    if (field !== "" || row.length){ row.push(field); rows.push(row); }
+    return rows;
+  }
+
+  /**
+   * Convert a SheetJS workbook's first worksheet into an array-of-arrays of
+   * cell strings, matching the shape the downstream parsers consume.
+   * @param {Object} xlsx    The SheetJS reference (with utils.sheet_to_json).
+   * @param {Object} workbook A parsed SheetJS workbook.
+   * @returns {Array<Array<string>>} Rows of cell strings.
+   */
+  function sheetRows(xlsx, workbook){
+    var sheetNames = workbook.SheetNames || [];
+    if (!sheetNames.length) return [];
+    var sheet = workbook.Sheets[sheetNames[0]];
+    if (!sheet) return [];
+    return xlsx.utils.sheet_to_json(sheet, { header: 1, raw: false, blankrows: false }) || [];
+  }
+
+  /**
+   * Read an uploaded workbook or CSV into rows and normalized source lines.
+   *
+   * Detects the file type by extension. For .xls/.xlsx it uses the injectable
+   * SheetJS reference (options.xlsx, defaulting to the global XLSX) to parse
+   * the bytes and flatten the first sheet. For .csv it prefers SheetJS when
+   * available and otherwise falls back to the built-in CSV splitter, so CSV
+   * import keeps working even when SheetJS is unavailable (Req 1.4). Each row
+   * is collapsed to a whitespace-normalized source line while the raw cells are
+   * preserved (Req 3.2, 3.3).
+   *
+   * @param {(ArrayBuffer|Uint8Array|string)} fileData The uploaded file bytes
+   *        (ArrayBuffer/typed array for Excel, text or bytes for CSV).
+   * @param {string} fileName The uploaded file's name (for extension detection).
+   * @param {{xlsx?: Object}} [options] Optional injectable SheetJS reference.
+   * @returns {{rows: Array<Array<string>>, sourceLines: Array<string>, ok: boolean, error?: string}}
+   */
+  function readingWorkbook(fileData, fileName, options){
+    options = options || {};
+    var xlsx = options.xlsx !== undefined
+      ? options.xlsx
+      : (typeof XLSX !== "undefined" ? XLSX : (typeof window !== "undefined" ? window.XLSX : undefined));
+
+    var ext = fileExtension(fileName);
+
+    if (ext !== "xls" && ext !== "xlsx" && ext !== "csv"){
+      return {
+        rows: [], sourceLines: [], ok: false,
+        error: "Unsupported file type \"" + (ext || "(none)") + "\". Please upload a .xls, .xlsx, or .csv file."
+      };
+    }
+
+    if (fileData == null){
+      return { rows: [], sourceLines: [], ok: false, error: "No file data was provided to read." };
+    }
+
+    var rows;
+
+    if (ext === "xls" || ext === "xlsx"){
+      // Excel formats require SheetJS. Degrade gracefully when it is absent
+      // (Req 1.4): reject Excel with a clear message while CSV still works.
+      if (!xlsx || !xlsx.read || !xlsx.utils || !xlsx.utils.sheet_to_json){
+        return {
+          rows: [], sourceLines: [], ok: false,
+          error: "Excel import unavailable: the spreadsheet library did not load. You can still import .csv files."
+        };
+      }
+      try {
+        var isArrayLike = (typeof ArrayBuffer !== "undefined" && fileData instanceof ArrayBuffer) ||
+          (fileData && typeof fileData === "object" && typeof fileData.byteLength === "number");
+        var workbook = xlsx.read(fileData, { type: isArrayLike ? "array" : "binary" });
+        rows = sheetRows(xlsx, workbook);
+      } catch (err){
+        return {
+          rows: [], sourceLines: [], ok: false,
+          error: "Could not read the Excel file: " + (err && err.message ? err.message : String(err))
+        };
+      }
+    } else {
+      // CSV: prefer SheetJS when present, otherwise the built-in splitter so
+      // CSV import keeps working in degraded mode (Req 1.4).
+      try {
+        if (xlsx && xlsx.read && xlsx.utils && xlsx.utils.sheet_to_json){
+          var csvWorkbook = xlsx.read(fileData, { type: "string" });
+          rows = sheetRows(xlsx, csvWorkbook);
+        } else {
+          var text;
+          if (typeof fileData === "string"){
+            text = fileData;
+          } else if (typeof TextDecoder !== "undefined"){
+            text = new TextDecoder("utf-8").decode(
+              fileData instanceof ArrayBuffer ? new Uint8Array(fileData) : fileData
+            );
+          } else {
+            text = String(fileData);
+          }
+          rows = splitCSV(text);
+        }
+      } catch (err2){
+        return {
+          rows: [], sourceLines: [], ok: false,
+          error: "Could not read the CSV file: " + (err2 && err2.message ? err2.message : String(err2))
+        };
+      }
+    }
+
+    if (!rows || !rows.length){
+      return {
+        rows: [], sourceLines: [], ok: false,
+        error: "The file was read but contained no rows."
+      };
+    }
+
+    var sourceLines = [];
+    for (var r = 0; r < rows.length; r++){
+      if (!rows[r]) rows[r] = [];
+      sourceLines.push(rowToSourceLine(rows[r]));
+    }
+
+    return { rows: rows, sourceLines: sourceLines, ok: true };
+  }
+
+  attach("readingWorkbook", readingWorkbook);
+
+
+  // ==========================================================================
+  // Task 4.1 - League header detection and parsing (Requirements 4.1, 4.4-4.6)
+  //
+  // League_Header_Detector and League_Header_Parser. A league header row is a
+  // competition line such as "Basketball.Lebanon.Division 1, week 44": it does
+  // NOT begin with a Valid_Fixture_Date (DD/MM + two-digit year, e.g. "28/10
+  // 26") and it carries dot-separated competition text. Parsing splits on "."
+  // into [sportToken, country, ...leagueTokens], uses the second token as the
+  // Country, and the remainder (rejoined on ".") as the League with any
+  // trailing ", week NN" suffix removed and outer whitespace trimmed while
+  // internal punctuation/qualifiers are preserved. Both accept either a source
+  // line string or a raw cell array (reusing the whitespace-normalized source
+  // line concept via rowToSourceLine). Pure/side-effect-free.
+  // ==========================================================================
+
+  /**
+   * Coerce a row input into the whitespace-normalized source line concept used
+   * throughout the parser. Accepts either an already-normalized/plain line
+   * string or a raw cell array (which is collapsed via rowToSourceLine).
+   * @param {(string|Array<*>)} row A source line or a row of raw cells.
+   * @returns {string} The whitespace-normalized source line.
+   */
+  function rowToLine(row){
+    if (row == null) return "";
+    if (typeof row === "string") return row.replace(/\s+/g, " ").trim();
+    if (Object.prototype.toString.call(row) === "[object Array]") return rowToSourceLine(row);
+    return String(row).replace(/\s+/g, " ").trim();
+  }
+
+  /**
+   * Whether a source line begins with a Valid_Fixture_Date: a DD/MM day-month
+   * token immediately followed by a two-digit year (e.g. "28/10 26"). Used to
+   * distinguish fixture rows from league header rows (Req 4.1).
+   * @param {string} line A whitespace-normalized source line.
+   * @returns {boolean} True when the line starts with a DD/MM + two-digit year.
+   */
+  function startsWithFixtureDate(line){
+    return /^\d{1,2}\/\d{1,2}\s+\d{2}(\s|$)/.test(line);
+  }
+
+  /**
+   * League_Header_Detector (Req 4.1). Classifies a row as a league header when
+   * it does NOT begin with a Valid_Fixture_Date and it contains dot-separated
+   * competition text (a "." with non-space competition text on both sides, as
+   * in "Sport.Country.League"). Accepts a line string or a cell array.
+   * @param {(string|Array<*>)} row A source line or a row of raw cells.
+   * @returns {boolean} True when the row is a league header row.
+   */
+  function detectingLeagueHeader(row){
+    var line = rowToLine(row);
+    if (line === "") return false;
+    if (startsWithFixtureDate(line)) return false;
+    // Dot-separated competition text: a dot with non-dot, non-space content on
+    // both sides (so "Sport.Country" qualifies but "20:45" or a trailing "."
+    // does not).
+    return /[^.\s]\.[^.\s]/.test(line);
+  }
+
+  /**
+   * League_Header_Parser (Req 4.4-4.6). Splits a detected league header on "."
+   * into [sportToken, country, ...leagueTokens]. Country is the second token;
+   * League is the remainder rejoined on "." with any trailing ", week NN"
+   * suffix removed and outer whitespace trimmed, internal punctuation and
+   * qualifiers preserved. The first token (sportToken) is returned for the
+   * sport-mismatch check (Req 2.3).
+   * @param {(string|Array<*>)} row A detected league-header row.
+   * @returns {{sportToken: string, country: string, league: string}}
+   */
+  function parsingLeagueHeader(row){
+    var line = rowToLine(row);
+    var parts = line.split(".");
+    var sportToken = (parts[0] != null ? parts[0] : "").trim();
+    var country = (parts.length > 1 && parts[1] != null ? parts[1] : "").trim();
+
+    // League = everything after the second token, rejoined on "." so internal
+    // dots within the league text are preserved.
+    var league = parts.length > 2 ? parts.slice(2).join(".") : "";
+
+    // Strip a trailing ", week NN" suffix (case-insensitive, optional spaces),
+    // then trim outer whitespace while leaving internal punctuation intact.
+    league = league.replace(/\s*,\s*week\s+\d+\s*$/i, "").trim();
+
+    return { sportToken: sportToken, country: country, league: league };
+  }
+
+  attach("detectingLeagueHeader", detectingLeagueHeader);
+  attach("parsingLeagueHeader", parsingLeagueHeader);
+
+
+
+
+  // ==========================================================================
+  // Task 5.1 - Fixture row parsing (Requirements 5.1, 6.1, 6.4, 8.1, 8.2, 8.3)
+  //
+  // Fixture_Row_Parser. A fixture row is a flat source line such as
+  // "28/10 26 20:45 SAGESSE ATLAS FERZOL No 75948900":
+  //   <DD/MM> <YY> <HH:mm> <Home/Away segment> <No|Yes> <numeric match id>
+  // Parsing:
+  //   - the leading DD/MM + two-digit year become the fixture date, via the
+  //     parseFixtureDate helper and its century rule (Req 5.1);
+  //   - the token immediately after the year is read as the HH:mm time via
+  //     parseTime; an invalid time leaves the time blank (null / "") rather
+  //     than rejecting the row, with no timezone shift applied (Req 6.1, 6.4);
+  //   - the text between the time and the neutral-ground flag (No/Yes) is the
+  //     Home/Away segment, with the neutral-ground value and the trailing
+  //     numeric match id excluded (Req 8.1, 8.2, 8.3).
+  // Accented/Unicode characters in the segment are preserved verbatim
+  // (Req 16.4). Pure/side-effect-free; accepts a source line string or a raw
+  // cell array (reusing rowToLine). When the row is malformed a parse reason is
+  // returned so the Row_Validator can mark the row Invalid.
+  // ==========================================================================
+
+  /**
+   * Fixture_Row_Parser (Req 5.1, 6.1, 6.4, 8.1-8.3). Extracts the fixture Date,
+   * Time, raw time text, and the Home/Away segment from a fixture row.
+   *
+   * Expected shape: a leading DD/MM day-month token, a two-digit year, a time
+   * token, the Home/Away text segment, a neutral-ground flag (No/Yes), then a
+   * numeric match id. The neutral-ground flag and match id are excluded from
+   * the returned segment (Req 8.1, 8.2); the segment is exactly the text
+   * between the time value and the neutral-ground value (Req 8.3). The date is
+   * built with the century rule via parseFixtureDate (Req 5.1). The time is the
+   * token after the year, read as 24-hour HH:mm; an invalid/missing time yields
+   * time null with an empty timeText rather than rejecting the row (Req 6.4),
+   * and no timezone conversion is ever applied (Req 6.5).
+   *
+   * @param {(string|Array<*>)} row A fixture row (source line or raw cells).
+   * @param {{sportToken?: string, country?: string, league?: string}} [activeHeader]
+   *        The currently active league header (unused for pure row parsing but
+   *        part of the pipeline contract; present so the orchestrator can pass
+   *        it through for later country/league assignment).
+   * @param {string} [selectedSport] The selected sport (part of the pipeline
+   *        contract; not needed to parse the row's own fields).
+   * @returns {{date: (Date|null), time: (number|null), timeText: string, segment: string, reason?: string}}
+   */
+  function parsingFixtureRow(row, activeHeader, selectedSport){
+    var line = rowToLine(row);
+
+    if (line === ""){
+      return { date: null, time: null, timeText: "", segment: "", reason: "empty row" };
+    }
+
+    // Leading DD/MM + two-digit year (e.g. "28/10 26"). The remainder is the
+    // rest of the row: time, segment, neutral-ground flag, match id.
+    var dateMatch = /^(\d{1,2}\/\d{1,2})\s+(\d{2})(?:\s+|$)/.exec(line);
+    if (!dateMatch){
+      return {
+        date: null, time: null, timeText: "", segment: "",
+        reason: "row does not begin with a DD/MM + two-digit year date token"
+      };
+    }
+
+    var date = parseFixtureDate(dateMatch[1], dateMatch[2]);
+    if (date == null){
+      return {
+        date: null, time: null, timeText: "", segment: "",
+        reason: "invalid calendar date \"" + dateMatch[1] + " " + dateMatch[2] + "\""
+      };
+    }
+
+    // Everything after the leading "DD/MM YY " prefix.
+    var rest = line.slice(dateMatch[0].length).replace(/^\s+/, "");
+
+    // The token immediately following the year is the time (Req 6.1). It may be
+    // a valid HH:mm (stored as minutes) or something else (blank time, Req 6.4).
+    var timeText = "";
+    var time = null;
+    var afterTime = rest;
+    var firstTokenMatch = /^(\S+)(?:\s+|$)/.exec(rest);
+    if (firstTokenMatch){
+      var firstToken = firstTokenMatch[1];
+      var parsed = parseTime(firstToken);
+      if (parsed != null){
+        time = parsed;
+        timeText = formatHM(parsed);
+        afterTime = rest.slice(firstTokenMatch[0].length).replace(/^\s+/, "");
+      } else {
+        // Not a valid time: leave the time blank and treat the remainder
+        // (including this token) as the start of the segment region (Req 6.4).
+        time = null;
+        timeText = "";
+        afterTime = rest;
+      }
+    }
+
+    // The segment is the text between the time and the neutral-ground flag
+    // (No/Yes), excluding that flag and the trailing numeric match id (Req 8).
+    // Match a trailing "<No|Yes> <digits>" (the neutral-ground value followed
+    // by the numeric match id) and remove it; the remainder is the segment.
+    var segment = afterTime;
+    var reason;
+    var tailMatch = /\s+(No|Yes)\s+(\d+)\s*$/i.exec(afterTime);
+    if (tailMatch){
+      segment = afterTime.slice(0, tailMatch.index);
+    } else {
+      // No clean neutral-ground + match-id tail. Fall back to stripping a
+      // trailing numeric match id and/or a trailing No/Yes flag if present, so
+      // the segment still excludes non-output columns where possible; flag the
+      // row so the validator can surface it.
+      var stripped = afterTime.replace(/\s+\d+\s*$/, "");
+      stripped = stripped.replace(/\s+(No|Yes)\s*$/i, "");
+      segment = stripped;
+      reason = "could not locate the neutral-ground flag and match id; Home/Away segment may be imprecise";
+    }
+
+    segment = segment.replace(/\s+/g, " ").trim();
+
+    if (segment === ""){
+      return {
+        date: date, time: time, timeText: timeText, segment: "",
+        reason: "no Home/Away text found between the time and the neutral-ground flag"
+      };
+    }
+
+    var result = { date: date, time: time, timeText: timeText, segment: segment };
+    if (reason) result.reason = reason;
+    return result;
+  }
+
+  attach("parsingFixtureRow", parsingFixtureRow);
+
+  // ==========================================================================
+  // Fixture matching (Task 8.1) — Fixture_Matcher
+  //
+  // matchingExistingFixtures(record, matchList) compares a parsed PreviewRecord
+  // against the Host_Application match list to decide whether the record
+  // corresponds to a worked/collected fixture (Req 10.1). Comparison keys are
+  // normalize(Home), normalize(Away), and the Date, with League used as an
+  // additional check. The record's real Date value is compared to each match
+  // list entry's DD/MM/YYYY Date string via the formatDMY helper, so a Date
+  // compares cleanly to a date string with no timezone drift.
+  //
+  // Pure/side-effect-free: it reads only its arguments and the host normalize()
+  // helper (comparison only — stored display values are never mutated).
+  // Exposed on window.__MSFM.import so property test 11 can call it directly.
+  // ==========================================================================
+
+  // Reuse the Host_Application normalize() (NFKC + trim + collapse-spaces +
+  // case-fold) for all comparison keys. It is defined at the top level of the
+  // page script, so it is reachable here as a global; fall back to a reference
+  // on window if the direct binding is ever unavailable.
+  var normalizeName = (typeof normalize === "function")
+    ? normalize
+    : (typeof window !== "undefined" && typeof window.normalize === "function"
+        ? window.normalize
+        : function(value){ return String(value == null ? "" : value).trim().replace(/\s+/g, " ").toLowerCase(); });
+
+  /**
+   * Render a record/entry Date value as a DD/MM/YYYY string for comparison.
+   * A real Date is formatted with formatDMY; a string is normalized to a
+   * trimmed form so a stored "DD/MM/YYYY" string compares equal to the
+   * formatted Date. Anything else yields "".
+   * @param {Date|string|null|undefined} value
+   * @returns {string}
+   */
+  function dateKeyForMatch(value){
+    if (value instanceof Date) return formatDMY(value);
+    if (typeof value === "string") return value.trim();
+    return "";
+  }
+
+  /**
+   * Decide whether a parsed Output_Record corresponds to an existing
+   * worked/collected fixture in the match list.
+   *
+   * A record matches an entry when normalize(Home), normalize(Away), and the
+   * Date all agree, with League used as an additional check: when both the
+   * record and the entry carry a non-empty League, their normalized League
+   * values must also agree; when either League is absent the Home/Away/Date
+   * agreement alone is sufficient.
+   *
+   * @param {Object} record A PreviewRecord (fields: Home, Away, date, League, ...).
+   * @param {Array<Object>} matchList Match list entries carrying
+   *        { Home, Away, Date (DD/MM/YYYY string), League, ... }.
+   * @returns {{matched: boolean}}
+   */
+  function matchingExistingFixtures(record, matchList){
+    if (record == null || !Array.isArray(matchList) || matchList.length === 0){
+      return { matched: false };
+    }
+
+    var recHome = normalizeName(record.Home);
+    var recAway = normalizeName(record.Away);
+    var recDate = dateKeyForMatch(record.date);
+    var recLeague = normalizeName(record.League);
+
+    for (var i = 0; i < matchList.length; i++){
+      var entry = matchList[i];
+      if (entry == null) continue;
+
+      if (normalizeName(entry.Home) !== recHome) continue;
+      if (normalizeName(entry.Away) !== recAway) continue;
+      if (dateKeyForMatch(entry.Date) !== recDate) continue;
+
+      // League is an additional check: only enforced when both sides carry a
+      // non-empty League value.
+      var entryLeague = normalizeName(entry.League);
+      if (recLeague !== "" && entryLeague !== "" && recLeague !== entryLeague) continue;
+
+      return { matched: true };
+    }
+
+    return { matched: false };
+  }
+
+  attach("matchingExistingFixtures", matchingExistingFixtures);
+
+
+
+  // ==========================================================================
+  // Task 7.1 - Team matching (Requirements 9.1-9.9) — Team_Matcher
+  //
+  // matchingTeams(segment, selectedSport, teamData) identifies the Home and
+  // Away team display substrings within the Home/Away text segment produced by
+  // parsingFixtureRow. The strategy, in order (Req 9.1-9.3):
+  //   (1) Full-segment match: try to split the segment into exactly a known
+  //       Home + a known Away where the two known names, joined by a single
+  //       space, reproduce the whole segment (checked against the match list
+  //       for the selected sport first, then against the union of all known
+  //       team names from the match list and the teamMappings aliases).
+  //   (2) Alias-based identification: known names include teamMappings aliases
+  //       (flashscoreTeam and bcmTeam), so step (1) already covers aliases; a
+  //       dedicated alias pass is folded in via the known-name set.
+  //   (3) Known-Home + space + known-Away identification anywhere a valid
+  //       boundary exists within the segment.
+  // Disambiguation (Req 9.4-9.6): when more than one boundary yields a valid
+  // known-Home / known-Away pair, prefer the split whose ordered (Home, Away)
+  // pair appears in the existing match/date/league data for the selected sport.
+  // If exactly one candidate is supported by that data, resolve to it. If none
+  // or several remain supported (still ambiguous) OR no known boundary exists
+  // at all, return needsReview with a reason and NEVER split on a bare space
+  // (Req 9.9). Comparison uses normalize() while the returned home/away are the
+  // ORIGINAL display substrings taken verbatim from the segment (Req 9.7).
+  // Names may contain punctuation, hyphens, brackets, accents, numbers, and
+  // tokens like U21/II/Women/BC/KK/FC/SK — all handled because comparison is by
+  // normalize() over whitespace-delimited tokens, with no token filtering
+  // (Req 9.8). Pure/side-effect-free: reads only its arguments and normalize().
+  // Exposed on window.__MSFM.import so property tests 9 and 10 can call it.
+  // ==========================================================================
+
+  /**
+   * Collect the set of known team display names for the selected sport from the
+   * supplied teamData snapshot. Match-list Home/Away names are included when the
+   * entry's Sport matches (or when the entry carries no Sport). teamMappings
+   * aliases contribute both flashscoreTeam and bcmTeam when the alias sport
+   * matches (or is absent). Returns a Map keyed by normalize(name) -> the first
+   * seen original display spelling, so comparison is normalized while a display
+   * value is available if ever needed.
+   *
+   * @param {string} selectedSport
+   * @param {{matchList?: Array<Object>, aliases?: Array<Object>}} teamData
+   * @returns {Map<string,string>} normalizedName -> displayName
+   */
+  function collectKnownTeams(selectedSport, teamData){
+    var known = new Map();
+    var sportKeyNorm = normalizeName(selectedSport);
+
+    function add(name){
+      if (name == null) return;
+      var display = String(name).trim();
+      if (display === "") return;
+      var key = normalizeName(display);
+      if (key === "") return;
+      if (!known.has(key)) known.set(key, display);
+    }
+
+    function sportMatches(entrySport){
+      if (entrySport == null || String(entrySport).trim() === "") return true;
+      if (sportKeyNorm === "") return true;
+      return normalizeName(entrySport) === sportKeyNorm;
+    }
+
+    var matchList = (teamData && Array.isArray(teamData.matchList)) ? teamData.matchList : [];
+    for (var i = 0; i < matchList.length; i++){
+      var m = matchList[i];
+      if (m == null) continue;
+      if (!sportMatches(m.Sport)) continue;
+      add(m.Home);
+      add(m.Away);
+    }
+
+    var aliases = (teamData && Array.isArray(teamData.aliases)) ? teamData.aliases : [];
+    for (var j = 0; j < aliases.length; j++){
+      var a = aliases[j];
+      if (a == null) continue;
+      if (!sportMatches(a.sport)) continue;
+      add(a.flashscoreTeam);
+      add(a.bcmTeam);
+    }
+
+    return known;
+  }
+
+  /**
+   * Build the set of ordered (normHome, normAway) pairs that exist in the
+   * match list for the selected sport. Used to disambiguate Home-then-Away vs
+   * Away-then-Home and to support the full-segment match (Req 9.1, 9.4).
+   *
+   * @param {string} selectedSport
+   * @param {{matchList?: Array<Object>}} teamData
+   * @returns {Set<string>} set of "normHome\u0001normAway" keys
+   */
+  function collectKnownPairs(selectedSport, teamData){
+    var pairs = new Set();
+    var sportKeyNorm = normalizeName(selectedSport);
+    var matchList = (teamData && Array.isArray(teamData.matchList)) ? teamData.matchList : [];
+    for (var i = 0; i < matchList.length; i++){
+      var m = matchList[i];
+      if (m == null) continue;
+      if (m.Sport != null && String(m.Sport).trim() !== "" && sportKeyNorm !== "" &&
+          normalizeName(m.Sport) !== sportKeyNorm) continue;
+      var h = normalizeName(m.Home);
+      var a = normalizeName(m.Away);
+      if (h === "" || a === "") continue;
+      pairs.add(h + "\u0001" + a);
+    }
+    return pairs;
+  }
+
+  /**
+   * Team_Matcher (Req 9.1-9.9). Identify Home and Away display substrings in a
+   * Home/Away segment using the match list and team aliases, never splitting on
+   * a bare space.
+   *
+   * @param {string} segment The Home/Away text segment from parsingFixtureRow.
+   * @param {string} selectedSport The selected sport.
+   * @param {{matchList?: Array<Object>, aliases?: Array<Object>}} teamData
+   *        Read-only snapshot of host match list + teamMappings aliases.
+   * @returns {{home: (string|null), away: (string|null), resolved: boolean, needsReview: boolean, reason?: string}}
+   */
+  function matchingTeams(segment, selectedSport, teamData){
+    var original = (segment == null) ? "" : String(segment);
+    var collapsed = original.replace(/\s+/g, " ").trim();
+
+    if (collapsed === ""){
+      return { home: null, away: null, resolved: false, needsReview: true,
+        reason: "empty Home/Away segment; no reliable boundary" };
+    }
+
+    var known = collectKnownTeams(selectedSport, teamData);
+    var knownPairs = collectKnownPairs(selectedSport, teamData);
+
+    // No known teams at all: we cannot find any reliable boundary, and we must
+    // never split on a bare space (Req 9.9) -> Needs Review.
+    if (known.size === 0){
+      return { home: null, away: null, resolved: false, needsReview: true,
+        reason: "no known teams available to identify a Home/Away boundary" };
+    }
+
+    // Tokenize on single spaces (the segment is already whitespace-collapsed).
+    // A valid boundary is BETWEEN two tokens: the left side is a known team and
+    // the right side is a known team. This supports multi-word names with
+    // punctuation, hyphens, brackets, accents, numbers, and tokens like U21,
+    // II, Women, BC, KK, FC, SK because comparison is purely by normalize().
+    var tokens = collapsed.split(" ");
+
+    // Candidate = a split point k (1..tokens.length-1): left tokens join to a
+    // known Home, right tokens join to a known Away. We record the ORIGINAL
+    // display substrings (verbatim from the collapsed segment).
+    var candidates = [];
+    for (var k = 1; k < tokens.length; k++){
+      var leftDisplay = tokens.slice(0, k).join(" ");
+      var rightDisplay = tokens.slice(k).join(" ");
+      var leftNorm = normalizeName(leftDisplay);
+      var rightNorm = normalizeName(rightDisplay);
+      if (known.has(leftNorm) && known.has(rightNorm)){
+        candidates.push({
+          home: leftDisplay, away: rightDisplay,
+          homeNorm: leftNorm, awayNorm: rightNorm
+        });
+      }
+    }
+
+    // No known boundary anywhere -> never bare-space split (Req 9.9).
+    if (candidates.length === 0){
+      return { home: null, away: null, resolved: false, needsReview: true,
+        reason: "no known team boundary found in the segment; refusing to split on a bare space" };
+    }
+
+    // Exactly one candidate boundary -> resolved (Req 9.1-9.3). This covers the
+    // full-segment match (whole segment = known Home + space + known Away) and
+    // the alias-based / known-Home + known-Away identification uniformly.
+    if (candidates.length === 1){
+      return { home: candidates[0].home, away: candidates[0].away,
+        resolved: true, needsReview: false };
+    }
+
+    // Multiple candidate boundaries -> ambiguous. Disambiguate Home-then-Away
+    // vs Away-then-Home (and any other ambiguity) using existing match/date/
+    // league data: keep only candidates whose ordered (Home, Away) pair exists
+    // in the match list for the selected sport (Req 9.4).
+    var supported = candidates.filter(function(c){
+      return knownPairs.has(c.homeNorm + "\u0001" + c.awayNorm);
+    });
+
+    if (supported.length === 1){
+      return { home: supported[0].home, away: supported[0].away,
+        resolved: true, needsReview: false };
+    }
+
+    // Still ambiguous after using existing data (none or several supported) ->
+    // Needs Review (Req 9.5, 9.6). Never fall back to a bare-space split.
+    return { home: null, away: null, resolved: false, needsReview: true,
+      reason: supported.length > 1
+        ? "multiple Home/Away splits are supported by existing data; still ambiguous"
+        : "multiple possible Home/Away splits and none is confirmed by existing date/league/match data; ambiguous" };
+  }
+
+  attach("matchingTeams", matchingTeams);
+
+
+
+
+  // ==========================================================================
+  // Task 8.2 - Duplicate detection & removal (Requirements 11.1, 11.2, 11.3,
+  // 11.5) — Duplicate_Detector
+  //
+  // detectingDuplicates(records) computes a duplicate key for each record from
+  // Sport + Date + Time + normalize(Home) + normalize(Away) and marks every
+  // surplus copy (all but the FIRST occurrence per key) with Status
+  // "Duplicate", RETAINING them in the preview (no record is removed before
+  // user confirmation, Req 11.2 / 16.6). Two records with the same teams but a
+  // different Date or Time produce different keys and are therefore distinct
+  // (Req 11.5).
+  //
+  // removeDuplicates(records) is applied only on user confirmation (Req 11.3):
+  // it keeps exactly one record per duplicate key and reports how many were
+  // removed (Req 11.4). It preserves the first occurrence of each key and the
+  // relative order of the survivors.
+  //
+  // Both are pure/side-effect-free with respect to the caller's list: records
+  // are not reordered, and detectingDuplicates annotates the SAME record
+  // objects in place (mutating only Status, to "Duplicate" for surplus copies)
+  // while returning the same list reference for convenient chaining. Exposed on
+  // window.__MSFM.import so property test 13 can call them directly.
+  // ==========================================================================
+
+  /**
+   * Build the duplicate key for a record (Req 11.1). The key is composed of:
+   *   Sport, Date (formatDMY of the real Date), Time (minutes-since-midnight,
+   *   or "" when blank), normalize(Home), normalize(Away).
+   *
+   * Date is rendered via formatDMY so distinct real Dates on the same calendar
+   * day collapse to the same key component, while a null/unparseable date
+   * yields "" (keeping such records from colliding with real-dated ones unless
+   * they genuinely share every other key component). Time uses the real
+   * minutes value directly so same-teams/different-time rows stay distinct
+   * (Req 11.5).
+   *
+   * @param {Object} record A PreviewRecord (fields: Sport, date, time, Home, Away).
+   * @returns {string}
+   */
+  function duplicateKey(record){
+    if (record == null) return "";
+    var sportKey = normalizeName(record.Sport);
+    var dateKey = (record.date instanceof Date) ? formatDMY(record.date) : "";
+    var timeKey = (typeof record.time === "number" && isFinite(record.time))
+      ? String(record.time)
+      : "";
+    var homeKey = normalizeName(record.Home);
+    var awayKey = normalizeName(record.Away);
+    // A field separator that cannot appear inside normalize() output keeps the
+    // components unambiguous (no accidental key collisions across fields).
+    return [sportKey, dateKey, timeKey, homeKey, awayKey].join("\u0000");
+  }
+
+  /**
+   * Detect duplicate records and mark surplus copies.
+   *
+   * For each duplicate key, the FIRST record keeps its existing Status; every
+   * subsequent record sharing that key is marked Status "Duplicate" and
+   * RETAINED in the list (Req 11.2). The input order is preserved and the same
+   * list reference is returned, annotated in place.
+   *
+   * @param {Array<Object>} records The list of parsed PreviewRecords.
+   * @returns {{records: Array<Object>, duplicateKeys: string[], detectedCount: number}}
+   *          records: the same list, annotated; duplicateKeys: the distinct
+   *          keys that had more than one occurrence; detectedCount: the total
+   *          number of surplus copies marked Duplicate.
+   */
+  function detectingDuplicates(records){
+    var list = Array.isArray(records) ? records : [];
+    var seen = Object.create(null);           // key -> true once the first copy is seen
+    var dupKeySet = Object.create(null);      // key -> true once a surplus copy is seen
+    var duplicateKeys = [];
+    var detectedCount = 0;
+
+    for (var i = 0; i < list.length; i++){
+      var rec = list[i];
+      if (rec == null) continue;
+      var key = duplicateKey(rec);
+      if (seen[key]){
+        // Surplus copy: mark Duplicate while retaining the record (Req 11.2).
+        rec.Status = "Duplicate";
+        detectedCount++;
+        if (!dupKeySet[key]){
+          dupKeySet[key] = true;
+          duplicateKeys.push(key);
+        }
+      } else {
+        seen[key] = true;
+      }
+    }
+
+    return { records: list, duplicateKeys: duplicateKeys, detectedCount: detectedCount };
+  }
+
+  /**
+   * Remove duplicates, keeping exactly one record per duplicate key (Req 11.3).
+   * Applied only on user confirmation. The first occurrence of each key is kept
+   * and the relative order of survivors is preserved. The input list is not
+   * mutated; a new array is returned.
+   *
+   * @param {Array<Object>} records The list of PreviewRecords.
+   * @returns {{records: Array<Object>, removedCount: number}}
+   *          records: a new list with one entry per duplicate key;
+   *          removedCount: how many records were removed (Req 11.4).
+   */
+  function removeDuplicates(records){
+    var list = Array.isArray(records) ? records : [];
+    var seen = Object.create(null);
+    var kept = [];
+    var removedCount = 0;
+
+    for (var i = 0; i < list.length; i++){
+      var rec = list[i];
+      if (rec == null) continue;
+      var key = duplicateKey(rec);
+      if (seen[key]){
+        removedCount++;
+        continue;
+      }
+      seen[key] = true;
+      kept.push(rec);
+    }
+
+    return { records: kept, removedCount: removedCount };
+  }
+
+  attach("detectingDuplicates", detectingDuplicates);
+  attach("removeDuplicates", removeDuplicates);
+
+
+  // ==========================================================================
+  // Task 9.1 - Row validation & status classification (Requirements 7.3, 10.2,
+  // 10.3, 13.1, 13.2, 16.3) — Row_Validator
+  //
+  // validatingRows(records, context) assigns EXACTLY ONE Status to every record
+  // from {Matched, Unmatched, Needs Review, Invalid, Duplicate, Manually
+  // Corrected} and records a `reason` for Invalid / Needs Review outcomes.
+  //
+  // Decision order (highest precedence first) so each record ends with exactly
+  // one Status (Req 13.1):
+  //   1. Status already "Manually Corrected" -> preserved verbatim (the operator
+  //      resolved it in the Needs Review workflow, Req 15.6). Likewise a record
+  //      already marked "Duplicate" by detectingDuplicates keeps Duplicate
+  //      (Req 11.2) — duplicates are not re-evaluated here.
+  //   2. Invalid conditions (Req 7.3, 16.3): a fixture row with no active league
+  //      header, or an unparseable record (no real Date, or a recorded parse
+  //      reason, or no resolved Home/Away). Invalid records carry a reason.
+  //   3. Matching (Req 10.2, 10.3): a record that matches the match list is
+  //      Matched; a parseable, non-matching record is Unmatched.
+  //
+  // Overlap/tie-break (Req 13.2): when a record simultaneously satisfies MORE
+  // THAN ONE of the mutually-exclusive classification conditions (for example it
+  // is flagged needsReview AND also appears to match), the record is assigned
+  // "Needs Review" and the combined reasons are recorded so the review section
+  // can surface them.
+  //
+  // Context shape (all fields optional; per-record signals already present on
+  // each PreviewRecord are the primary source, context only augments/overrides):
+  //   {
+  //     matchList:  Array<Object>,   // if provided, matchingExistingFixtures()
+  //                                  // is called to compute `matched`;
+  //                                  // otherwise record.matched is used.
+  //     hasActiveHeader: boolean               // applies to ALL records, OR
+  //                    | boolean[]             // per-record by index, OR
+  //                    | function(rec,i)->bool // per-record predicate.
+  //                                  // When omitted, falls back to the
+  //                                  // record.hasActiveHeader flag, and when
+  //                                  // that is also absent a header is assumed
+  //                                  // present (so absence never spuriously
+  //                                  // invalidates a record).
+  //   }
+  //
+  // Per-record signals consumed from each PreviewRecord:
+  //   record.Status      - pre-set "Duplicate" / "Manually Corrected" preserved.
+  //   record.needsReview - boolean from matchingTeams (Req 9.5, 9.6).
+  //   record.matched     - boolean from matchingExistingFixtures (used when no
+  //                        context.matchList is supplied).
+  //   record.date        - null => unparseable/Invalid (Req 16.3).
+  //   record.reason      - a parse reason (from parsingFixtureRow/matchingTeams)
+  //                        marks the record unparseable/ambiguous.
+  //   record.hasActiveHeader - fallback active-header flag (Req 7.3).
+  //
+  // Pure/side-effect-free with respect to the caller's data: the SAME record
+  // objects are annotated in place (Status + reason) and the same list is
+  // returned for convenient chaining. No record is added or removed.
+  // Exposed on window.__MSFM.import so property test 11 can call it directly.
+  // ==========================================================================
+
+  /**
+   * Resolve whether a league header was active for the record at `index`,
+   * consulting context first, then the per-record flag, then defaulting true.
+   *
+   * @param {Object} record
+   * @param {number} index
+   * @param {Object} context
+   * @returns {boolean}
+   */
+  function headerActiveFor(record, index, context){
+    if (context){
+      var h = context.hasActiveHeader;
+      if (typeof h === "function") return !!h(record, index);
+      if (Array.isArray(h)) return !!h[index];
+      if (typeof h === "boolean") return h;
+    }
+    if (record && typeof record.hasActiveHeader === "boolean"){
+      return record.hasActiveHeader;
+    }
+    // No signal either way: assume a header is present so a missing signal does
+    // not spuriously invalidate an otherwise-valid record.
+    return true;
+  }
+
+  /**
+   * Decide whether the record corresponds to an existing match. Prefer a live
+   * computation via matchingExistingFixtures when a match list is supplied in
+   * context; otherwise fall back to the record.matched flag already set by the
+   * pipeline (Req 10.1).
+   *
+   * @param {Object} record
+   * @param {Object} context
+   * @returns {boolean}
+   */
+  function recordMatches(record, context){
+    if (context && Array.isArray(context.matchList)){
+      return !!matchingExistingFixtures(record, context.matchList).matched;
+    }
+    return !!(record && record.matched);
+  }
+
+  /**
+   * Row_Validator (Req 7.3, 10.2, 10.3, 13.1, 13.2, 16.3). Assign exactly one
+   * Status to every record and record a reason for Invalid / Needs Review.
+   *
+   * @param {Array<Object>} records The parsed/matched PreviewRecords.
+   * @param {Object} [context] Optional augmenting context (see module header).
+   * @returns {Array<Object>} The same list, annotated in place.
+   */
+  function validatingRows(records, context){
+    var list = Array.isArray(records) ? records : [];
+    var ctx = context || {};
+
+    for (var i = 0; i < list.length; i++){
+      var rec = list[i];
+      if (rec == null) continue;
+
+      // (1) Preserve statuses owned by earlier stages / the operator.
+      if (rec.Status === "Manually Corrected" || rec.Status === "Duplicate"){
+        continue;
+      }
+
+      // Gather the independent classification conditions this record satisfies.
+      var reasons = [];              // human-readable reasons for the review section
+      var conditions = [];          // the mutually-exclusive status conditions hit
+
+      var headerActive = headerActiveFor(rec, i, ctx);
+      var hasDate = (rec.date instanceof Date) && !isNaN(rec.date.getTime());
+      var parseReason = (typeof rec.reason === "string") ? rec.reason.trim() : "";
+      var unresolvedTeams = (rec.needsReview === true) ||
+        (rec.home == null && rec.away == null &&
+         (rec.Home == null || String(rec.Home).trim() === "") &&
+         (rec.Away == null || String(rec.Away).trim() === ""));
+
+      // --- Invalid conditions (Req 7.3, 16.3) ---
+      if (!headerActive){
+        conditions.push("Invalid");
+        reasons.push("missing league header");
+      }
+      if (!hasDate){
+        conditions.push("Invalid");
+        reasons.push("unparseable record: no valid fixture date");
+      }
+
+      // --- Needs Review condition (Req 9.5, 9.6, 13.2) ---
+      var needsReview = (rec.needsReview === true);
+      if (needsReview){
+        conditions.push("Needs Review");
+        reasons.push(parseReason !== ""
+          ? parseReason
+          : "Home/Away split could not be reliably determined");
+      } else if (parseReason !== "" && !hasDate){
+        // A parse reason on an already-invalid row is captured above; nothing
+        // extra to add here.
+      } else if (parseReason !== ""){
+        // A parse reason without needsReview and with a valid date (e.g. an
+        // imprecise segment) is surfaced as a Needs Review condition so it is
+        // not silently treated as fully resolved (Req 16.3 reason recording).
+        conditions.push("Needs Review");
+        reasons.push(parseReason);
+      }
+
+      // --- Matching conditions (Req 10.2, 10.3) ---
+      // Only meaningful for a parseable record with resolved teams.
+      var matchEvaluable = hasDate && headerActive && !unresolvedTeams;
+      var matched = false;
+      if (matchEvaluable){
+        matched = recordMatches(rec, ctx);
+        conditions.push(matched ? "Matched" : "Unmatched");
+      }
+
+      // De-duplicate the condition list (a record can hit the same condition
+      // more than once, e.g. two Invalid reasons) to count DISTINCT conditions.
+      var distinct = [];
+      for (var c = 0; c < conditions.length; c++){
+        if (distinct.indexOf(conditions[c]) === -1) distinct.push(conditions[c]);
+      }
+
+      // --- Assign exactly one Status (Req 13.1) with tie-break (Req 13.2) ---
+      var combinedReason = reasons.join("; ");
+
+      if (distinct.length > 1){
+        // Overlapping/multiple status conditions -> Needs Review with the
+        // combined reasons recorded (Req 13.2).
+        rec.Status = "Needs Review";
+        rec.reason = "multiple status conditions: " + distinct.join(", ") +
+          (combinedReason ? " (" + combinedReason + ")" : "");
+      } else if (distinct.length === 1){
+        rec.Status = distinct[0];
+        if (distinct[0] === "Invalid" || distinct[0] === "Needs Review"){
+          rec.reason = combinedReason;      // record reason for Invalid/Needs Review
+        } else {
+          rec.reason = "";                  // Matched/Unmatched carry no reason
+        }
+      } else {
+        // No condition fired: a parseable, header-backed, resolved record that
+        // was not match-evaluated (no match data available). Default to
+        // Unmatched per Req 10.3 (not matched against the match list).
+        rec.Status = "Unmatched";
+        rec.reason = "";
+      }
+    }
+
+    return list;
+  }
+
+  attach("validatingRows", validatingRows);
+
+
+
+  // ==========================================================================
+  // Fixture_Sorter - sortingFixtures(records)  (Task 10.1; Req 12.1, 12.2)
+  //
+  // Stable ascending sort by Sport, Date, Time, Country, League, Home, Away.
+  // Date is ordered by its real Date value and Time by its real numeric value
+  // (minutes since midnight), NOT by text (Req 12.2). Null date/time sort last
+  // so unparsed/blank values do not collide with real chronological values.
+  // Returns a NEW array; the input is never mutated (design: input not
+  // mutated). Stability is guaranteed via decorate-sort-undecorate using the
+  // original index as the final tiebreaker. Exposed on window.__MSFM.import so
+  // property test 15 can call it directly.
+  // ==========================================================================
+
+  /**
+   * Case-insensitive, deterministic string comparison for the text keys
+   * (Sport, Country, League, Home, Away). Compares on normalizeName() first
+   * for case-insensitive ordering, then falls back to the raw string so the
+   * order stays deterministic when two values normalize equal but differ in
+   * case/spacing. null/undefined sort as empty string.
+   *
+   * @param {*} a
+   * @param {*} b
+   * @returns {number} negative, zero, or positive
+   */
+  function compareTextKey(a, b){
+    var an = normalizeName(a == null ? "" : a);
+    var bn = normalizeName(b == null ? "" : b);
+    if (an < bn) return -1;
+    if (an > bn) return 1;
+    // Tiebreaker on the raw display value for determinism.
+    var ar = (a == null ? "" : String(a));
+    var br = (b == null ? "" : String(b));
+    if (ar < br) return -1;
+    if (ar > br) return 1;
+    return 0;
+  }
+
+  /**
+   * Compare two Date-valued keys by their real time value. null sorts last.
+   *
+   * @param {Date|null} a
+   * @param {Date|null} b
+   * @returns {number}
+   */
+  function compareDateKey(a, b){
+    var av = (a instanceof Date && !isNaN(a.getTime())) ? a.getTime() : null;
+    var bv = (b instanceof Date && !isNaN(b.getTime())) ? b.getTime() : null;
+    if (av === null && bv === null) return 0;
+    if (av === null) return 1;  // nulls sort last
+    if (bv === null) return -1;
+    return av - bv;
+  }
+
+  /**
+   * Compare two Time-valued keys (minutes since midnight). null sorts last.
+   *
+   * @param {number|null} a
+   * @param {number|null} b
+   * @returns {number}
+   */
+  function compareTimeKey(a, b){
+    var av = (typeof a === "number" && isFinite(a)) ? a : null;
+    var bv = (typeof b === "number" && isFinite(b)) ? b : null;
+    if (av === null && bv === null) return 0;
+    if (av === null) return 1;  // nulls sort last
+    if (bv === null) return -1;
+    return av - bv;
+  }
+
+  /**
+   * Stable ascending sort of fixture records (Req 12.1, 12.2).
+   *
+   * Order: Sport, Date (real value), Time (real value), Country, League,
+   * Home, Away. Returns a NEW array and does NOT mutate the input. Records
+   * that are not objects are preserved and sorted to the end deterministically
+   * by their original position.
+   *
+   * @param {Array<Object>} records
+   * @returns {Array<Object>} a new, sorted array
+   */
+  function sortingFixtures(records){
+    if (!Array.isArray(records)) return [];
+
+    // Decorate: pair each record with its original index for stable ordering.
+    var decorated = records.map(function(rec, idx){
+      return { rec: rec, idx: idx };
+    });
+
+    decorated.sort(function(x, y){
+      var a = x.rec;
+      var b = y.rec;
+
+      // Non-object records (null/undefined/primitive) sort to the end but keep
+      // their relative order via the index tiebreaker below.
+      var aObj = (a != null && typeof a === "object");
+      var bObj = (b != null && typeof b === "object");
+      if (!aObj && !bObj) return x.idx - y.idx;
+      if (!aObj) return 1;
+      if (!bObj) return -1;
+
+      var c;
+      c = compareTextKey(a.Sport, b.Sport);   if (c !== 0) return c;
+      c = compareDateKey(a.date, b.date);      if (c !== 0) return c;
+      c = compareTimeKey(a.time, b.time);      if (c !== 0) return c;
+      c = compareTextKey(a.Country, b.Country); if (c !== 0) return c;
+      c = compareTextKey(a.League, b.League);  if (c !== 0) return c;
+      c = compareTextKey(a.Home, b.Home);      if (c !== 0) return c;
+      c = compareTextKey(a.Away, b.Away);      if (c !== 0) return c;
+
+      // Final tiebreaker: original index guarantees a stable sort.
+      return x.idx - y.idx;
+    });
+
+    // Undecorate: return a new array of the records in sorted order.
+    return decorated.map(function(d){ return d.rec; });
+  }
+
+  attach("sortingFixtures", sortingFixtures);
+
+
+
+  // ==========================================================================
+  // Task 11.1 - Pipeline orchestrator (chunked, responsive)
+  // (Requirements 2.2, 2.3, 2.4, 4.2, 4.3, 7.1, 7.2, 16.1, 16.2, 16.4, 16.5)
+  //
+  // The orchestrator chains the pure core into a single one-way pipeline:
+  //   read -> detect/parse header -> parse fixture rows (inheriting the active
+  //   header) -> match teams -> match existing fixtures -> detect duplicates
+  //   -> validate -> sort.
+  //
+  // It operates on the row/sourceLine shape produced by readingWorkbook and
+  // produces the in-memory preview model (an array of PreviewRecords). The pure
+  // transformation core is exposed synchronously as buildRecordsFromRows() so
+  // property tests can call the whole chain without timers; the async
+  // runImportPipeline() wrapper reads the workbook and drives the same core in
+  // responsive batches (requestAnimationFrame / setTimeout(0) yields) so a large
+  // file never freezes the browser (Req 16.5). The batching is injectable and
+  // skippable (options.sync === true) so tests run deterministically with no
+  // scheduling (Req 16.5 is a UI-responsiveness concern, not a correctness one).
+  //
+  // Rules honoured here:
+  //   - Every Output_Record's Sport is set to the selected sport (Req 2.2).
+  //   - A sport-mismatch produces a WARNING and processing continues; it never
+  //     halts the import. Mismatch is detected per league header when
+  //     normalizeName(firstDotToken) !== normalizeName(selectedSport) (2.3, 2.4).
+  //   - A league header row does NOT emit an Output_Record (4.3); each fixture
+  //     inherits the most recent active header's Country/League, which stays
+  //     active until the next header (4.2, 7.1, 7.2).
+  //   - Empty rows, the "Fixture" title row, and the column-heading row are
+  //     ignored (16.1). A single unparseable row never stops processing: it is
+  //     emitted as an Invalid record and the pipeline continues (16.2).
+  //   - Accented characters are preserved verbatim: the pure core only ever uses
+  //     normalizeName() for comparison keys, never for stored display values
+  //     (16.4). The orchestrator copies the original segment/header text through.
+  //
+  // Each pure function stays synchronous; only the async wrapper schedules the
+  // batch yields.
+  // ==========================================================================
+
+  // Rows that are structural noise rather than fixtures or league headers:
+  // the sheet title row ("Fixture") and the column-heading row (Req 16.1).
+  // Detection is tolerant: the title row is a single "Fixture" token; the
+  // heading row is a row whose tokens are the known column labels.
+  var HEADING_TOKENS = {
+    "date": true, "time": true, "home": true, "away": true,
+    "neutral": true, "neutral ground": true, "no": true, "yes": true,
+    "match": true, "match id": true, "id": true, "fixture": true,
+    "country": true, "league": true, "sport": true
+  };
+
+  /**
+   * True when a source line is structural noise that must never become an
+   * Output_Record (Req 16.1): an empty row, the "Fixture" title row, or the
+   * column-heading row. League header rows are handled separately by
+   * detectingLeagueHeader and are NOT treated as noise here.
+   *
+   * @param {string} line A whitespace-normalized source line.
+   * @returns {boolean}
+   */
+  function isNoiseRow(line){
+    if (line == null) return true;
+    var trimmed = String(line).replace(/\s+/g, " ").trim();
+    if (trimmed === "") return true;                         // empty row
+
+    var lower = trimmed.toLowerCase();
+
+    // The "Fixture" title row (exactly the word "Fixture", possibly with a
+    // trailing colon or similar punctuation).
+    if (/^fixture[:\s]*$/i.test(trimmed)) return true;
+
+    // The column-heading row: a short row whose every token is a known column
+    // label. Guard on token count so a real fixture/team line is never caught.
+    var tokens = lower.split(" ");
+    if (tokens.length > 0 && tokens.length <= 10){
+      var allHeading = true;
+      for (var i = 0; i < tokens.length; i++){
+        if (!HEADING_TOKENS[tokens[i]]){ allHeading = false; break; }
+      }
+      // Only treat as the heading row when it actually contains the core
+      // Date/Time labels, so a fixture line that happens to use heading words
+      // as team names is not mistaken for the heading row.
+      if (allHeading && (lower.indexOf("date") !== -1 || lower.indexOf("time") !== -1)){
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Build the in-memory preview model from already-read rows/sourceLines. This
+   * is the synchronous, timer-free core of the pipeline so property tests can
+   * exercise the full chain deterministically.
+   *
+   * Pipeline: for each source line, decide noise / league-header / fixture:
+   *   - noise -> skipped (no Output_Record, Req 16.1);
+   *   - league header -> parsed, becomes the active header, no Output_Record
+   *     emitted (Req 4.3); a sport mismatch is recorded as a warning (2.3, 2.4)
+   *     and processing continues;
+   *   - fixture -> parsed (parsingFixtureRow); the Home/Away segment is resolved
+   *     via matchingTeams; the record inherits the active header's Country and
+   *     League (4.2, 7.1, 7.2) and always carries the selected sport (2.2). A
+   *     row that cannot be parsed still yields an Invalid record so the single
+   *     bad row never stops the run (Req 16.2).
+   * After all rows are turned into records, the list is matched against the
+   * supplied match list, duplicate-marked, validated (one Status each), and
+   * sorted.
+   *
+   * @param {(string[]|string[][])} sourceLines The per-row source lines (or raw
+   *        cell arrays) produced by readingWorkbook.
+   * @param {string} selectedSport The sport selected by the operator (Req 2.2).
+   * @param {{matchList?: Array<Object>, aliases?: Array<Object>}} [teamData]
+   *        Read-only snapshot of the host match list + teamMappings aliases.
+   * @returns {{records: Array<Object>, warnings: Array<Object>, sourceRows: number}}
+   *          records: the sorted PreviewRecords (Sport set, Country/League
+   *          inherited, Status assigned, sourceText/sourceRow populated);
+   *          warnings: non-fatal warnings (e.g. sport mismatches);
+   *          sourceRows: the number of source rows considered.
+   */
+  function buildRecordsFromRows(sourceLines, selectedSport, teamData){
+    var lines = Array.isArray(sourceLines) ? sourceLines : [];
+    var sport = (selectedSport == null) ? "" : String(selectedSport);
+    var data = teamData || {};
+    var warnings = [];
+    var records = [];
+
+    var activeHeader = null;             // {sportToken, country, league} or null
+    var selectedSportNorm = normalizeName(sport);
+
+    for (var idx = 0; idx < lines.length; idx++){
+      var raw = lines[idx];
+      var line = rowToLine(raw);         // whitespace-normalized source line
+      var sourceRow = idx + 1;           // 1-based source row index
+
+      // (1) Structural noise is ignored entirely (Req 16.1).
+      if (isNoiseRow(line)) continue;
+
+      // (2) League header: becomes the active header, emits NO record (4.3).
+      if (detectingLeagueHeader(raw)){
+        var parsedHeader = parsingLeagueHeader(raw);
+        activeHeader = parsedHeader;
+
+        // Sport-mismatch WARNING (never a halt): compare the first dot-separated
+        // token against the selected sport by normalized comparison (2.3, 2.4).
+        var firstTokenNorm = normalizeName(parsedHeader.sportToken);
+        if (firstTokenNorm !== selectedSportNorm){
+          warnings.push({
+            type: "sport-mismatch",
+            sourceRow: sourceRow,
+            sourceText: line,
+            headerSport: parsedHeader.sportToken,
+            selectedSport: sport,
+            message: "League header sport \"" + parsedHeader.sportToken +
+              "\" does not match the selected sport \"" + sport +
+              "\"; continuing with the selected sport."
+          });
+        }
+        continue;
+      }
+
+      // (3) Fixture row. A single bad row must never stop the run (Req 16.2):
+      // any parse problem is captured on the record (reason / needsReview) and
+      // resolved by validatingRows into an Invalid / Needs Review Status.
+      var hasActiveHeader = (activeHeader != null);
+      var parsed;
+      try {
+        parsed = parsingFixtureRow(raw, activeHeader, sport);
+      } catch (err){
+        parsed = {
+          date: null, time: null, timeText: "", segment: "",
+          reason: "row threw while parsing: " + (err && err.message ? err.message : String(err))
+        };
+      }
+
+      // Resolve Home/Away. The source workbook (e.g. PrintOut_*.xls) already
+      // provides Home and Away as SEPARATE cells:
+      //   [0]=Date  [1]=KO  [2]=Home Team  [3]=Away Team  [4]=Neutral  [5]=Match Id
+      // When the raw row is a cell array with that shape, read Home/Away
+      // directly from their own columns - no boundary guessing and no reliance
+      // on the teams already being known. We only fall back to the
+      // segment-matching path (Team_Matcher) for sources that deliver a single
+      // flattened line (e.g. some CSV exports) where the split is not explicit.
+      var home = null, away = null, needsReview = false, teamReason;
+
+      var cellHome = "", cellAway = "";
+      if (Array.isArray(raw) && raw.length >= 4){
+        // Direct column read: trim only, preserve original display text/accents.
+        cellHome = (raw[2] == null) ? "" : String(raw[2]).replace(/\s+/g, " ").trim();
+        cellAway = (raw[3] == null) ? "" : String(raw[3]).replace(/\s+/g, " ").trim();
+      }
+
+      if (cellHome !== "" && cellAway !== ""){
+        // Home and Away came straight from their own cells. Resolved, no review.
+        home = cellHome;
+        away = cellAway;
+        needsReview = false;
+      } else {
+        // Fallback: no explicit Home/Away columns -> use the Team_Matcher on the
+        // Home/Away text segment. Original display substrings are preserved,
+        // including accents (Req 16.4).
+        var segment = (parsed && parsed.segment != null) ? parsed.segment : "";
+        if (segment !== ""){
+          var tm;
+          try {
+            tm = matchingTeams(segment, sport, data);
+          } catch (errTm){
+            tm = { home: null, away: null, resolved: false, needsReview: true,
+              reason: "team matching threw: " + (errTm && errTm.message ? errTm.message : String(errTm)) };
+          }
+          home = tm.home;
+          away = tm.away;
+          needsReview = !!tm.needsReview;
+          if (tm.reason) teamReason = tm.reason;
+        } else {
+          // No usable segment -> cannot resolve teams; validator will classify it
+          // Invalid (no date) or Needs Review (unresolved teams) as appropriate.
+          needsReview = true;
+          teamReason = (parsed && parsed.reason) ? parsed.reason
+            : "no Home/Away segment to resolve";
+        }
+      }
+
+      // Combine any parse-stage reason with the team-stage reason so the
+      // validator / review section can surface the full story (Req 16.3).
+      var combinedReason = "";
+      if (parsed && parsed.reason) combinedReason = parsed.reason;
+      if (teamReason){
+        combinedReason = combinedReason
+          ? (combinedReason + "; " + teamReason)
+          : teamReason;
+      }
+
+      // Build the PreviewRecord. Sport is ALWAYS the selected sport (Req 2.2);
+      // Country/League are inherited from the active header (Req 4.2, 7.1, 7.2)
+      // and left blank when no header is active (validator -> Invalid, Req 7.3).
+      var rec = {
+        Sport:   sport,
+        date:    (parsed && parsed.date) ? parsed.date : null,
+        time:    (parsed && typeof parsed.time === "number") ? parsed.time : null,
+        Country: hasActiveHeader ? activeHeader.country : "",
+        League:  hasActiveHeader ? activeHeader.league : "",
+        Home:    (home != null) ? home : "",
+        Away:    (away != null) ? away : "",
+        Status:  "",
+        reason:  combinedReason,
+        sourceText: line,
+        sourceRow:  sourceRow,
+        hasActiveHeader: hasActiveHeader,
+        needsReview: needsReview,
+        // carry the resolver's raw outputs so validatingRows can read them
+        home: home,
+        away: away,
+        matched: false,
+        timeText: (parsed && parsed.timeText) ? parsed.timeText : ""
+      };
+
+      records.push(rec);
+    }
+
+    // Match each record against the existing match list (Req 10.1). Done here
+    // (rather than only inside validatingRows) so record.matched is populated
+    // even when no context.matchList is later supplied.
+    var matchList = Array.isArray(data.matchList) ? data.matchList : [];
+    if (matchList.length){
+      for (var r = 0; r < records.length; r++){
+        try {
+          records[r].matched = !!matchingExistingFixtures(records[r], matchList).matched;
+        } catch (e){
+          records[r].matched = false;
+        }
+      }
+    }
+
+    // Detect (but never remove) duplicates: surplus copies are marked Duplicate
+    // and retained pending confirmation (Req 11.2 / 16.6).
+    detectingDuplicates(records);
+
+    // Assign exactly one Status to each record (Req 7.3, 10.2, 10.3, 13.*).
+    validatingRows(records, { matchList: matchList });
+
+    // Stable chronological sort by real date/time values (Req 12).
+    var sorted = sortingFixtures(records);
+
+    return { records: sorted, warnings: warnings, sourceRows: lines.length };
+  }
+
+  /**
+   * Yield control back to the browser between batches so a large file never
+   * freezes the UI (Req 16.5). Prefers requestAnimationFrame, falling back to
+   * setTimeout(0). Returns a Promise that resolves on the next frame/tick.
+   *
+   * @returns {Promise<void>}
+   */
+  function yieldToBrowser(){
+    return new Promise(function(resolve){
+      if (typeof requestAnimationFrame === "function"){
+        requestAnimationFrame(function(){ resolve(); });
+      } else {
+        setTimeout(resolve, 0);
+      }
+    });
+  }
+
+  /**
+   * Async pipeline orchestrator. Reads the uploaded workbook and runs the pure
+   * core, yielding to the browser between row batches so the interface stays
+   * responsive on large files (Req 16.5).
+   *
+   * The batch yielding is purely a responsiveness concern — the records are
+   * built by the synchronous buildRecordsFromRows() core regardless, so the
+   * output is identical whether or not yields occur. Pass options.sync === true
+   * (or options.batchSize <= 0) to skip all scheduling and run synchronously,
+   * which tests use for deterministic, timer-free execution.
+   *
+   * @param {(ArrayBuffer|string)} fileData The uploaded file bytes / binary string.
+   * @param {string} fileName The file name (used for extension detection).
+   * @param {string} selectedSport The sport selected by the operator (Req 2.2).
+   * @param {{matchList?: Array<Object>, aliases?: Array<Object>}} [teamData]
+   *        Read-only snapshot of the host match list + teamMappings aliases.
+   * @param {{xlsx?: *, sync?: boolean, batchSize?: number}} [options]
+   *        xlsx: injectable SheetJS reference for readingWorkbook;
+   *        sync: when true, run without any requestAnimationFrame/setTimeout
+   *              yields (used by tests);
+   *        batchSize: rows per batch between yields (default 300; <= 0 disables).
+   * @returns {Promise<{records: Array<Object>, warnings: Array<Object>, ok: boolean, error?: string, sourceRows: Array<string>}>}
+   *          records: sorted PreviewRecords (Sport set, Status assigned,
+   *          Country/League inherited, sourceText+sourceRow populated);
+   *          warnings: non-fatal warnings (sport mismatches, etc.);
+   *          ok: false with error when the workbook could not be read (3.4);
+   *          sourceRows: the raw per-row source lines that were processed.
+   */
+  function runImportPipeline(fileData, fileName, selectedSport, teamData, options){
+    options = options || {};
+    var sync = (options.sync === true);
+    var batchSize = (typeof options.batchSize === "number") ? options.batchSize : 300;
+
+    // Read the workbook first. A read failure is surfaced as ok:false with a
+    // descriptive error and leaves the caller free to keep the current preview
+    // unchanged (Req 3.4) — the UI layer owns that decision.
+    var read;
+    try {
+      read = readingWorkbook(fileData, fileName, { xlsx: options.xlsx });
+    } catch (err){
+      return Promise.resolve({
+        records: [], warnings: [], ok: false,
+        error: "Could not read the file: " + (err && err.message ? err.message : String(err)),
+        sourceRows: []
+      });
+    }
+
+    if (!read || read.ok === false){
+      return Promise.resolve({
+        records: [], warnings: [], ok: false,
+        error: (read && read.error) ? read.error : "The uploaded file could not be read as a workbook.",
+        sourceRows: (read && read.sourceLines) ? read.sourceLines : []
+      });
+    }
+
+    var sourceLines = Array.isArray(read.sourceLines) ? read.sourceLines : [];
+    // Prefer the raw per-row cell arrays so Home/Away can be read from
+    // their own columns ([2]/[3]); fall back to flattened lines if absent.
+    var sourceRowsCells = Array.isArray(read.rows) ? read.rows : sourceLines;
+
+    // Build the result. The core transformation is synchronous; batching only
+    // inserts browser yields so parsing a large file does not block the UI.
+    function finish(){
+      var built = buildRecordsFromRows(sourceRowsCells, selectedSport, teamData);
+      return {
+        records: built.records,
+        warnings: built.warnings,
+        ok: true,
+        sourceRows: sourceLines
+      };
+    }
+
+    // Synchronous path (tests, or when no yields are requested): run the whole
+    // core immediately and resolve.
+    if (sync || batchSize <= 0 || sourceLines.length <= batchSize){
+      return Promise.resolve(finish());
+    }
+
+    // Responsive path: walk the rows in batches, yielding between each so the
+    // browser can paint/handle input, then build the records once all batches
+    // have been traversed. The traversal does not itself transform rows (the
+    // pure core does that in one pass); it exists purely to spread the wall
+    // clock over multiple frames for large inputs (Req 16.5).
+    return new Promise(function(resolve, reject){
+      var index = 0;
+      function step(){
+        try {
+          var end = Math.min(index + batchSize, sourceLines.length);
+          index = end;
+          if (index < sourceLines.length){
+            yieldToBrowser().then(step, reject);
+          } else {
+            resolve(finish());
+          }
+        } catch (e){
+          reject(e);
+        }
+      }
+      step();
+    });
+  }
+
+  attach("buildRecordsFromRows", buildRecordsFromRows);
+  attach("runImportPipeline", runImportPipeline);
+  attach("isNoiseRow", isNoiseRow);
+
+
+
+  // ==========================================================================
+  // Task 13.1 - Import summary builder (Requirements 14.1, 14.2, 14.3, 14.4,
+  // 14.5, 11.4) — aligns with design Property 16 (accounting identity) and
+  // Requirement 20.4 (unresolved Needs Review excluded from export).
+  //
+  // buildImportSummary(records, sourceRows) computes the ImportSummary object
+  // directly from the in-memory preview model (the validated PreviewRecords):
+  //
+  //   {
+  //     sourceRows,         // total source rows (passed in; the records list
+  //                         //   excludes noise/header rows, so this cannot be
+  //                         //   derived from records alone). Req 14.1.
+  //     parsedRecords,      // number of records produced. Req 14.2.
+  //     matched,            // count of Status "Matched". Req 14.3.
+  //     unmatched,          // count of Status "Unmatched". Req 14.3.
+  //     needsReview,        // count of Status "Needs Review". Req 14.3.
+  //     invalid,            // count of Status "Invalid". Req 14.3.
+  //     duplicatesRemoved,  // count of Status "Duplicate" (surplus copies that
+  //                         //   would be removed on confirm). Req 11.4, 14.4.
+  //     exportRows          // count of export-eligible records. Req 14.5, 20.4.
+  //   }
+  //
+  // Accounting identity (design Property 16): the six mutually-exclusive
+  // statuses assigned by validatingRows partition the parsed records, so
+  //   parsedRecords = matched + unmatched + needsReview + invalid
+  //                 + duplicate + manuallyCorrected
+  // holds for any validated preview model.
+  //
+  // Export eligibility rule (Req 20.4, Property 16/20): a record is
+  // export-eligible iff, after removing duplicate surplus copies, its Status is
+  // one of {Matched, Unmatched, Manually Corrected}. Unresolved "Needs Review"
+  // and "Invalid" records are excluded from export until corrected/approved;
+  // surplus "Duplicate" copies are excluded because exactly one copy per key
+  // survives removeDuplicates on confirm. Equivalently: exportRows counts
+  // records whose Status is Matched / Unmatched / Manually Corrected.
+  //
+  // Pure / side-effect-free: reads the records, mutates nothing, returns a new
+  // ImportSummary object. Exposed on window.__MSFM.import so property test 16
+  // can call it directly.
+  // ==========================================================================
+
+  /**
+   * Row_Validator-aligned summary builder (Req 14, 11.4). Count each validated
+   * PreviewRecord by its single assigned Status and derive the export-eligible
+   * total.
+   *
+   * @param {Array<Object>} records     Validated PreviewRecords (post-validation).
+   * @param {number}        [sourceRows] Total source rows read from the file.
+   *                                     Defaults to the record count when omitted
+   *                                     (records already exclude noise/headers).
+   * @returns {{sourceRows:number, parsedRecords:number, matched:number,
+   *   unmatched:number, needsReview:number, invalid:number,
+   *   duplicatesRemoved:number, exportRows:number}} The ImportSummary.
+   */
+  function buildImportSummary(records, sourceRows){
+    var list = Array.isArray(records) ? records : [];
+
+    var matched = 0;
+    var unmatched = 0;
+    var needsReview = 0;
+    var invalid = 0;
+    var duplicate = 0;
+    var manuallyCorrected = 0;
+
+    for (var i = 0; i < list.length; i++){
+      var rec = list[i];
+      if (rec == null) continue;
+      switch (rec.Status){
+        case "Matched":            matched++;            break;
+        case "Unmatched":          unmatched++;          break;
+        case "Needs Review":       needsReview++;        break;
+        case "Invalid":            invalid++;            break;
+        case "Duplicate":          duplicate++;          break;
+        case "Manually Corrected": manuallyCorrected++;  break;
+        default:
+          // An unclassified record is treated as Unmatched for counting so the
+          // accounting identity still partitions every parsed record (a record
+          // reaching the summary should already carry a Status from
+          // validatingRows; this guard keeps the identity total-preserving).
+          unmatched++;
+          break;
+      }
+    }
+
+    var parsedRecords = matched + unmatched + needsReview + invalid +
+      duplicate + manuallyCorrected;
+
+    // duplicatesRemoved = surplus copies that confirm would drop (Req 11.4).
+    var duplicatesRemoved = duplicate;
+
+    // Export-eligible = records that survive duplicate removal AND are not
+    // unresolved Needs Review / Invalid (Req 20.4). That is exactly the
+    // Matched + Unmatched + Manually Corrected records (Duplicate surplus copies
+    // and Needs Review / Invalid records are all excluded from export).
+    var exportRows = matched + unmatched + manuallyCorrected;
+
+    var totalSource = (typeof sourceRows === "number" && isFinite(sourceRows))
+      ? sourceRows
+      : parsedRecords;
+
+    return {
+      sourceRows:        totalSource,
+      parsedRecords:     parsedRecords,
+      matched:           matched,
+      unmatched:         unmatched,
+      needsReview:       needsReview,
+      invalid:           invalid,
+      duplicatesRemoved: duplicatesRemoved,
+      exportRows:        exportRows
+    };
+  }
+
+  attach("buildImportSummary", buildImportSummary);
+
+
+
+
+
+  // ==========================================================================
+  // Task 13.3 - Export-eligibility filter + Workbook_Exporter (Requirements
+  // 13.4, 18.1, 18.2, 18.3, 18.4, 18.5, 20.4, 20.5).
+  //
+  // Two concerns live here:
+  //
+  //   1. filterExportEligible(records): given preview records, return ONLY the
+  //      export-eligible ones. A record is export-eligible iff its Status is one
+  //      of {Matched, Unmatched, Manually Corrected}. Unresolved "Needs Review"
+  //      (Req 20.4) and "Invalid" records are excluded until corrected/approved,
+  //      and surplus "Duplicate" copies are excluded (exactly one copy per key
+  //      survives removeDuplicates on confirm). This mirrors the exportRows rule
+  //      used by buildImportSummary so the summary count and the exported rows
+  //      always agree.
+  //
+  //   2. exportingWorkbook(records, format, selectedSport, options): project the
+  //      eligible records to EXACTLY the seven output columns in order
+  //      (Sport, Date, Time, Country, League, Home, Away), excluding Status and
+  //      every non-output field (Req 13.4, 18.1, 18.2, 20.5). Date is rendered
+  //      via formatDMY (DD/MM/YYYY) and Time via formatHM (HH:mm).
+  //
+  //      - format "xlsx": build a SheetJS workbook (injectable via options.xlsx,
+  //        default global XLSX): bold header row, auto-filter over the 7 columns,
+  //        frozen first row (!freeze + !views pane), auto-fit column widths
+  //        (!cols), Date cells formatted DD/MM/YYYY and Time cells HH:mm.
+  //        Filename Sorted_Fixtures_<Sport>_<YYYY-MM-DD>.xlsx (today's date).
+  //        Triggers a download via XLSX.writeFile in a browser.
+  //      - format "csv": emit the same seven columns as properly-quoted CSV text.
+  //
+  //      Testability: when options.returnWorkbook / options.returnData is true
+  //      (or there is no DOM), the function RETURNS the constructed data instead
+  //      of (or in addition to) downloading, so tests can assert structure
+  //      without a real download. Degrades gracefully when XLSX is unavailable
+  //      for xlsx (returns an error object) while CSV always works.
+  //
+  // The projection is pure and deterministic. Exposed on window.__MSFM.import so
+  // property tests 19 and 20 can call it directly.
+  // ==========================================================================
+
+  // The seven output columns, in the exact required order (Req 18.1).
+  var EXPORT_COLUMNS = ["Sport", "Date", "Time", "Country", "League", "Home", "Away"];
+
+  /**
+   * Export-eligibility filter (Req 20.4). Returns a NEW array containing only
+   * the records whose Status makes them eligible for export:
+   * {Matched, Unmatched, Manually Corrected}. Excludes Duplicate (surplus
+   * copies), unresolved Needs Review, and Invalid records. Non-object entries
+   * are dropped. Input is never mutated.
+   *
+   * @param {Array<Object>} records Validated PreviewRecords.
+   * @returns {Array<Object>} A new array of export-eligible records.
+   */
+  function filterExportEligible(records){
+    if (!Array.isArray(records)) return [];
+    var eligible = [];
+    for (var i = 0; i < records.length; i++){
+      var rec = records[i];
+      if (rec == null || typeof rec !== "object") continue;
+      var status = rec.Status;
+      if (status === "Matched" || status === "Unmatched" || status === "Manually Corrected"){
+        eligible.push(rec);
+      }
+    }
+    return eligible;
+  }
+
+  attach("filterExportEligible", filterExportEligible);
+
+  /**
+   * Project a single PreviewRecord to the strict seven-column ExportRecord
+   * (Req 13.4, 18.1, 18.2, 20.5). Date is rendered DD/MM/YYYY via formatDMY and
+   * Time is rendered HH:mm via formatHM. Status and all non-output fields are
+   * excluded. Pure and deterministic.
+   *
+   * @param {Object} rec A PreviewRecord.
+   * @returns {{Sport:string, Date:string, Time:string, Country:string,
+   *   League:string, Home:string, Away:string}} The ExportRecord.
+   */
+  function projectExportRecord(rec){
+    var r = (rec && typeof rec === "object") ? rec : {};
+    return {
+      Sport:   r.Sport   != null ? String(r.Sport)   : "",
+      Date:    formatDMY(r.date),
+      Time:    formatHM(r.time),
+      Country: r.Country != null ? String(r.Country) : "",
+      League:  r.League  != null ? String(r.League)  : "",
+      Home:    r.Home    != null ? String(r.Home)    : "",
+      Away:    r.Away    != null ? String(r.Away)    : ""
+    };
+  }
+
+  attach("projectExportRecord", projectExportRecord);
+
+  /**
+   * Today's date formatted YYYY-MM-DD for the Excel filename (Req 18.5).
+   * @returns {string}
+   */
+  function todayStamp(){
+    var d = new Date();
+    function p2(n){ n = String(n); return n.length < 2 ? "0" + n : n; }
+    return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+  }
+
+  /**
+   * Build the Excel filename (Req 18.5): Sorted_Fixtures_<Sport>_<YYYY-MM-DD>.xlsx.
+   * The sport token is lightly sanitized so the name is a safe filename while
+   * remaining human-readable.
+   *
+   * @param {string} selectedSport
+   * @returns {string}
+   */
+  function exportFilename(selectedSport){
+    var sport = (selectedSport != null ? String(selectedSport) : "").trim();
+    if (sport === "") sport = "Fixtures";
+    // Replace characters that are illegal in filenames; keep spaces/letters.
+    sport = sport.replace(/[\\/:*?"<>|]+/g, "_");
+    return "Sorted_Fixtures_" + sport + "_" + todayStamp() + ".xlsx";
+  }
+
+  /**
+   * Determine whether a download can actually be triggered in this environment
+   * (a DOM/browser context). Tests run without a real file-save surface, so
+   * this gates the XLSX.writeFile call.
+   * @returns {boolean}
+   */
+  function canTriggerDownload(){
+    return typeof window !== "undefined" &&
+      typeof document !== "undefined" &&
+      document != null;
+  }
+
+  /**
+   * Compute an array-of-arrays (header row + data rows) for the seven columns.
+   * Each value is already a display string from projectExportRecord.
+   *
+   * @param {Array<Object>} exportRecords Projected ExportRecords.
+   * @returns {Array<Array<string>>}
+   */
+  function buildExportAoa(exportRecords){
+    var aoa = [EXPORT_COLUMNS.slice()];
+    for (var i = 0; i < exportRecords.length; i++){
+      var er = exportRecords[i];
+      aoa.push([er.Sport, er.Date, er.Time, er.Country, er.League, er.Home, er.Away]);
+    }
+    return aoa;
+  }
+
+  /**
+   * Emit CSV text for the seven columns (header + rows), each field quoted via
+   * the host escapeCSV helper when available (falls back to a local quoter).
+   * Rows are joined with CRLF to match the host's buildCSV convention.
+   *
+   * @param {Array<Object>} exportRecords Projected ExportRecords.
+   * @returns {string}
+   */
+  function buildExportCsv(exportRecords){
+    var quote = (typeof escapeCSV === "function")
+      ? escapeCSV
+      : function (value){
+          var s = String(value == null ? "" : value);
+          return '"' + s.replace(/"/g, '""') + '"';
+        };
+    var lines = [EXPORT_COLUMNS.map(quote).join(",")];
+    for (var i = 0; i < exportRecords.length; i++){
+      var er = exportRecords[i];
+      lines.push([
+        quote(er.Sport), quote(er.Date), quote(er.Time), quote(er.Country),
+        quote(er.League), quote(er.Home), quote(er.Away)
+      ].join(","));
+    }
+    return lines.join("\r\n");
+  }
+
+  /**
+   * Compute auto-fit column widths (SheetJS !cols) from the header and data.
+   * Width is the max character length in each column (header included), with a
+   * small padding and a sensible floor, so columns are not clipped.
+   *
+   * @param {Array<Array<string>>} aoa
+   * @returns {Array<{wch:number}>}
+   */
+  function autoFitCols(aoa){
+    var widths = [];
+    for (var c = 0; c < EXPORT_COLUMNS.length; c++){
+      var max = 0;
+      for (var r = 0; r < aoa.length; r++){
+        var cell = aoa[r] && aoa[r][c] != null ? String(aoa[r][c]) : "";
+        if (cell.length > max) max = cell.length;
+      }
+      widths.push({ wch: Math.max(8, max + 2) });
+    }
+    return widths;
+  }
+
+  /**
+   * Build the SheetJS worksheet for the seven columns with the Req 18.3/18.4
+   * formatting: bold header row, auto-filter over the full range, frozen first
+   * row (!freeze + !views pane), auto-fit widths (!cols), and Date/Time cells
+   * tagged with the DD/MM/YYYY and HH:mm number formats where a value exists.
+   *
+   * @param {Object} xlsx The SheetJS reference.
+   * @param {Array<Object>} exportRecords Projected ExportRecords.
+   * @returns {Object} A SheetJS worksheet object.
+   */
+  function buildWorksheet(xlsx, exportRecords){
+    var aoa = buildExportAoa(exportRecords);
+    var worksheet = xlsx.utils.aoa_to_sheet(aoa);
+
+    var lastColIdx = EXPORT_COLUMNS.length - 1;          // 0-based (Away => 6)
+    var lastRowIdx = aoa.length - 1;                     // 0-based incl. header
+
+    // Bold the header row (Req 18.3).
+    for (var c = 0; c <= lastColIdx; c++){
+      var hdrAddr = xlsx.utils.encode_cell({ r: 0, c: c });
+      var hdrCell = worksheet[hdrAddr];
+      if (hdrCell){
+        hdrCell.s = hdrCell.s || {};
+        hdrCell.s.font = { bold: true };
+      }
+    }
+
+    // Date (col 1) and Time (col 2) number formats (Req 18.4). Applied to data
+    // rows only, and only where the cell carries a value.
+    var DATE_COL = 1, TIME_COL = 2;
+    for (var r = 1; r <= lastRowIdx; r++){
+      var dateAddr = xlsx.utils.encode_cell({ r: r, c: DATE_COL });
+      var dateCell = worksheet[dateAddr];
+      if (dateCell && dateCell.v !== "" && dateCell.v != null) dateCell.z = "dd/mm/yyyy";
+
+      var timeAddr = xlsx.utils.encode_cell({ r: r, c: TIME_COL });
+      var timeCell = worksheet[timeAddr];
+      if (timeCell && timeCell.v !== "" && timeCell.v != null) timeCell.z = "hh:mm";
+    }
+
+    // Auto-filter over the 7 columns across all rows (Req 18.3).
+    worksheet["!autofilter"] = {
+      ref: xlsx.utils.encode_range(
+        { r: 0, c: 0 },
+        { r: Math.max(0, lastRowIdx), c: lastColIdx }
+      )
+    };
+
+    // Freeze the first (header) row (Req 18.3). Provide both the legacy
+    // !freeze anchor and a !views pane so the freeze survives write.
+    worksheet["!freeze"] = { xSplit: 0, ySplit: 1, topLeftCell: "A2", activePane: "bottomLeft", state: "frozen" };
+    worksheet["!views"] = [{ pane: { xSplit: 0, ySplit: 1, topLeftCell: "A2", activePane: "bottomLeft", state: "frozen" } }];
+
+    // Auto-fit column widths (Req 18.3).
+    worksheet["!cols"] = autoFitCols(aoa);
+
+    return worksheet;
+  }
+
+  /**
+   * Workbook_Exporter (Req 13.4, 18). Projects the given records to the strict
+   * seven-column export and either builds a downloadable workbook/CSV or returns
+   * the constructed data for testing.
+   *
+   * NOTE: the caller is expected to pass export-eligible records (e.g. the
+   * output of filterExportEligible or removeDuplicates). As a safety net this
+   * function ALSO applies filterExportEligible so that an unresolved Needs
+   * Review / Invalid / Duplicate record can never leak into an export
+   * (Req 20.4), regardless of how it is called.
+   *
+   * @param {Array<Object>} records       Preview/eligible records.
+   * @param {("xlsx"|"csv")} format        Export format.
+   * @param {string} selectedSport         The selected sport (for the filename).
+   * @param {{xlsx?:Object, returnWorkbook?:boolean, returnData?:boolean,
+   *          download?:boolean}} [options] Injectable XLSX + testing toggles.
+   * @returns {{ok:boolean, format:string, filename?:string,
+   *   columns:Array<string>, aoa?:Array<Array<string>>, worksheet?:Object,
+   *   workbook?:Object, csv?:string, records:Array<Object>, downloaded:boolean,
+   *   error?:string}} Result object. `error` is set (and ok:false) when xlsx is
+   *   requested but SheetJS is unavailable.
+   */
+  function exportingWorkbook(records, format, selectedSport, options){
+    options = options || {};
+    var fmt = String(format == null ? "" : format).toLowerCase();
+
+    // Always enforce export eligibility, even if the caller already filtered.
+    var eligible = filterExportEligible(records);
+    var exportRecords = eligible.map(projectExportRecord);
+
+    // The constructed data is ALWAYS returned (so tests can assert structure).
+    // A download is additionally triggered only in a real browser context and
+    // only when the caller has not explicitly requested data-only via
+    // returnWorkbook/returnData (options.download:true forces a download).
+    var wantDownload = options.download === true ||
+      (options.returnWorkbook !== true && options.returnData !== true && canTriggerDownload());
+
+    if (fmt === "csv"){
+      var csv = buildExportCsv(exportRecords);
+      var csvResult = {
+        ok: true,
+        format: "csv",
+        columns: EXPORT_COLUMNS.slice(),
+        aoa: buildExportAoa(exportRecords),
+        csv: csv,
+        records: exportRecords,
+        downloaded: false
+      };
+
+      if (wantDownload){
+        try {
+          var blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8;" });
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement("a");
+          var csvName = exportFilename(selectedSport).replace(/\.xlsx$/i, ".csv");
+          a.href = url;
+          a.download = csvName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          csvResult.filename = csvName;
+          csvResult.downloaded = true;
+        } catch (e){
+          // Download failed (no DOM / blocked) — still return the data so the
+          // caller/test can use it. CSV generation itself never fails.
+          csvResult.downloaded = false;
+        }
+      } else {
+        csvResult.filename = exportFilename(selectedSport).replace(/\.xlsx$/i, ".csv");
+      }
+      return csvResult;
+    }
+
+    // Default to the xlsx path for "xlsx" (and any unrecognized format, which
+    // we treat as xlsx so a typo still produces a workbook rather than silence).
+    var xlsx = options.xlsx !== undefined
+      ? options.xlsx
+      : (typeof XLSX !== "undefined" ? XLSX : (typeof window !== "undefined" ? window.XLSX : undefined));
+
+    var filename = exportFilename(selectedSport);
+
+    // Degrade gracefully when SheetJS is unavailable (Req 1.4): return an error
+    // object rather than throwing, while still reporting the projected data so
+    // the caller can fall back to CSV.
+    if (!xlsx || !xlsx.utils || !xlsx.utils.aoa_to_sheet){
+      return {
+        ok: false,
+        format: "xlsx",
+        filename: filename,
+        columns: EXPORT_COLUMNS.slice(),
+        aoa: buildExportAoa(exportRecords),
+        records: exportRecords,
+        downloaded: false,
+        error: "Excel export unavailable: the spreadsheet library did not load. You can still download a .csv file."
+      };
+    }
+
+    var worksheet = buildWorksheet(xlsx, exportRecords);
+    var workbook = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(workbook, worksheet, "Fixtures");
+
+    var result = {
+      ok: true,
+      format: "xlsx",
+      filename: filename,
+      columns: EXPORT_COLUMNS.slice(),
+      aoa: buildExportAoa(exportRecords),
+      worksheet: worksheet,
+      workbook: workbook,
+      records: exportRecords,
+      downloaded: false
+    };
+
+    if (wantDownload && typeof xlsx.writeFile === "function"){
+      try {
+        xlsx.writeFile(workbook, filename);
+        result.downloaded = true;
+      } catch (e){
+        result.downloaded = false;
+      }
+    }
+
+    return result;
+  }
+
+  attach("exportingWorkbook", exportingWorkbook);
+
+  // ==========================================================================
+  // Task 14.2 - Wire Process File, preview rendering, and default/toggle
+  // visibility (Requirements 3.4, 10.4, 10.5, 10.6, 2.4, 14.1-14.5).
+  //
+  // This is the thin UI shell that gathers inputs, calls the pure parsing core
+  // (runImportPipeline), and renders the preview table + summary counts. It
+  // holds a single in-memory module state object so later tasks (15.1 review,
+  // 16.1 confirm/clear) can reuse the current preview records, summary, the
+  // selected sport, and the uploaded file name. The state and a re-render hook
+  // are exposed on window.__MSFM.import for tests (getImportState,
+  // renderPreview). No parsing logic lives here (Req 19.1).
+  //
+  // Default/toggle visibility (Req 10.4, 10.5, 10.6):
+  //   - By default the preview shows ONLY Matched records, plus the records that
+  //     need operator action (Needs Review, Invalid, Duplicate) so nothing that
+  //     requires attention is ever hidden. Unmatched records are retained in the
+  //     model but hidden until the operator opts in.
+  //   - When the "Show unmatched fixtures" checkbox is enabled, Unmatched records
+  //     are additionally revealed. Unmatched records are never removed (10.6).
+  //
+  // Error handling (Req 3.4): when the pipeline returns ok:false, the descriptive
+  // error is shown in the message area and the EXISTING preview is left untouched
+  // (the module state is not replaced).
+  //
+  // Sport mismatch (Req 2.4): any sport-mismatch warnings returned by the
+  // pipeline are surfaced inline in the message area while processing continues.
+  // ==========================================================================
+
+  // The single in-memory preview model for the import panel. Replaced wholesale
+  // only on a successful process; left untouched on a read failure (Req 3.4).
+  var importState = {
+    records: [],        // validated+sorted PreviewRecords (the whole model)
+    summary: null,      // the ImportSummary from buildImportSummary
+    selectedSport: "",  // sport chosen when the file was processed
+    fileName: "",       // uploaded file name
+    sourceRows: [],     // raw per-row source lines that were processed
+    warnings: [],       // non-fatal warnings (e.g. sport mismatches)
+    showUnmatched: false// mirrors the "Show unmatched fixtures" checkbox
+  };
+
+  /**
+   * Test/consumer accessor for the current preview model. Returns the live
+   * state object so tasks 15.1 / 16.1 and the tests can read records, summary,
+   * selectedSport, fileName, sourceRows, and warnings.
+   * @returns {Object} The import module state.
+   */
+  function getImportState(){ return importState; }
+
+  /**
+   * The seven output columns + the preview-only Status column, in render order.
+   * Status is shown in the preview but excluded from every export (Req 13.3/13.4).
+   */
+  var PREVIEW_COLUMNS = ["Sport", "Date", "Time", "Country", "League", "Home", "Away", "Status"];
+
+  /**
+   * Read the host's match list for the selected sport. The host exposes worked /
+   * collected fixtures via collectedFixtures() (records carry Sport, Date in
+   * DD/MM/YYYY, Time, Country, Home, Away, and "Flashscore League Name"). We map
+   * the league name onto a League field and filter to the selected sport so the
+   * Fixture_Matcher compares against the right sport only.
+   * @param {string} selectedSport
+   * @returns {Array<Object>} The match-list snapshot.
+   */
+  function hostMatchListSnapshot(selectedSport){
+    var list = [];
+    try {
+      if (typeof collectedFixtures === "function"){
+        list = collectedFixtures() || [];
+      }
+    } catch (e){ list = []; }
+    var sportNorm = (typeof normalize === "function") ? normalize(selectedSport) : String(selectedSport || "").trim().toLowerCase();
+    var out = [];
+    for (var i = 0; i < list.length; i++){
+      var r = list[i];
+      if (r == null || typeof r !== "object") continue;
+      // Filter to the selected sport when a Sport field is present.
+      if (r.Sport != null && sportNorm){
+        var rsNorm = (typeof normalize === "function") ? normalize(r.Sport) : String(r.Sport).trim().toLowerCase();
+        if (rsNorm !== sportNorm) continue;
+      }
+      out.push({
+        Sport:   r.Sport != null ? r.Sport : selectedSport,
+        Date:    r.Date != null ? r.Date : "",
+        Time:    r.Time != null ? r.Time : "",
+        Country: r.Country != null ? r.Country : "",
+        League:  (r.League != null ? r.League : (r["Flashscore League Name"] != null ? r["Flashscore League Name"] : "")),
+        Home:    r.Home != null ? r.Home : "",
+        Away:    r.Away != null ? r.Away : ""
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Read the host's team-alias list (teamMappings: Flashscore team -> BCM team,
+   * scoped by sport/country/league). Active mappings only. Used by the
+   * Team_Matcher as alias data.
+   * @returns {Array<Object>} The aliases snapshot.
+   */
+  function hostAliasesSnapshot(){
+    var out = [];
+    try {
+      if (typeof teamMappings !== "undefined" && Array.isArray(teamMappings)){
+        for (var i = 0; i < teamMappings.length; i++){
+          var m = teamMappings[i];
+          if (m == null || typeof m !== "object") continue;
+          if (m.active === false) continue;
+          out.push({
+            sport:            m.sport != null ? m.sport : "",
+            country:          m.country != null ? m.country : "",
+            flashscoreLeague: m.flashscoreLeague != null ? m.flashscoreLeague : "",
+            flashscoreTeam:   m.flashscoreTeam != null ? m.flashscoreTeam : "",
+            bcmTeam:          m.bcmTeam != null ? m.bcmTeam : ""
+          });
+        }
+      }
+    } catch (e){ /* no aliases available */ }
+    return out;
+  }
+
+  /**
+   * Build the read-only TeamData snapshot passed into the pure core:
+   * { matchList, aliases }. matchList comes from the host collectedFixtures()
+   * (filtered to the sport); aliases come from the host teamMappings list.
+   * @param {string} selectedSport
+   * @returns {{matchList: Array<Object>, aliases: Array<Object>}}
+   */
+  function buildTeamDataSnapshot(selectedSport){
+    return {
+      matchList: hostMatchListSnapshot(selectedSport),
+      aliases:   hostAliasesSnapshot()
+    };
+  }
+
+  /**
+   * Read the chosen File into an ArrayBuffer (preferred for .xls/.xlsx so
+   * SheetJS parses the binary workbook correctly; CSV also reads fine from an
+   * ArrayBuffer). Returns a Promise resolving to the ArrayBuffer.
+   * @param {File} file
+   * @returns {Promise<ArrayBuffer>}
+   */
+  function readFileData(file){
+    return new Promise(function(resolve, reject){
+      try {
+        var reader = new FileReader();
+        reader.onload = function(){ resolve(reader.result); };
+        reader.onerror = function(){ reject(reader.error || new Error("The file could not be read.")); };
+        reader.readAsArrayBuffer(file);
+      } catch (e){ reject(e); }
+    });
+  }
+
+  /**
+   * Decide whether a record is visible under the current default/toggle rule
+   * (Req 10.4, 10.5, 10.6). Matched and the action-needed statuses (Needs
+   * Review, Invalid, Duplicate, Manually Corrected) are always visible so
+   * nothing that needs attention is hidden; Unmatched is visible only when the
+   * "Show unmatched fixtures" toggle is enabled.
+   * @param {Object} rec
+   * @param {boolean} showUnmatched
+   * @returns {boolean}
+   */
+  function isRecordVisible(rec, showUnmatched){
+    if (rec == null) return false;
+    if (rec.Status === "Unmatched") return showUnmatched === true;
+    return true; // Matched + Needs Review + Invalid + Duplicate + Manually Corrected
+  }
+
+  /**
+   * Render the preview table body (#msfm-import-preview-body) from the current
+   * module state, honouring the default/toggle visibility rule. Values are set
+   * via textContent so team/country/league text (including accents and any
+   * stray markup) is XSS-safe (never injected as HTML).
+   */
+  function renderPreview(){
+    var body = document.getElementById("msfm-import-preview-body");
+    if (!body) return;
+    body.replaceChildren();
+
+    var records = Array.isArray(importState.records) ? importState.records : [];
+    var showUnmatched = importState.showUnmatched === true;
+
+    var visible = [];
+    for (var i = 0; i < records.length; i++){
+      if (isRecordVisible(records[i], showUnmatched)) visible.push(records[i]);
+    }
+
+    if (records.length === 0){
+      var emptyTr = document.createElement("tr");
+      var emptyTd = document.createElement("td");
+      emptyTd.colSpan = PREVIEW_COLUMNS.length;
+      emptyTd.style.color = "#64748b";
+      emptyTd.style.textAlign = "center";
+      emptyTd.textContent = "No file processed yet.";
+      emptyTr.appendChild(emptyTd);
+      body.appendChild(emptyTr);
+      return;
+    }
+
+    if (visible.length === 0){
+      var noneTr = document.createElement("tr");
+      var noneTd = document.createElement("td");
+      noneTd.colSpan = PREVIEW_COLUMNS.length;
+      noneTd.style.color = "#64748b";
+      noneTd.style.textAlign = "center";
+      noneTd.textContent = showUnmatched
+        ? "No records to display."
+        : "No matched records. Enable \u201CShow unmatched fixtures\u201D to see unmatched records.";
+      noneTr.appendChild(noneTd);
+      body.appendChild(noneTr);
+      return;
+    }
+
+    for (var j = 0; j < visible.length; j++){
+      var rec = visible[j];
+      var tr = document.createElement("tr");
+      var cells = [
+        rec.Sport != null ? String(rec.Sport) : "",
+        formatDMY(rec.date),
+        formatHM(rec.time),
+        rec.Country != null ? String(rec.Country) : "",
+        rec.League != null ? String(rec.League) : "",
+        rec.Home != null ? String(rec.Home) : "",
+        rec.Away != null ? String(rec.Away) : "",
+        rec.Status != null ? String(rec.Status) : ""
+      ];
+      for (var c = 0; c < cells.length; c++){
+        var td = document.createElement("td");
+        td.textContent = cells[c]; // XSS-safe: never parsed as HTML
+        tr.appendChild(td);
+      }
+      body.appendChild(tr);
+    }
+  }
+
+  /**
+   * Populate the summary counts panel (#msfm-import-summary + child counters)
+   * from the current state's ImportSummary and reveal it (Req 14.1-14.5).
+   */
+  function renderSummary(){
+    var panel = document.getElementById("msfm-import-summary");
+    var s = importState.summary;
+    if (!panel || !s) return;
+    function setCount(id, value){
+      var el = document.getElementById(id);
+      if (el) el.textContent = String(value == null ? 0 : value);
+    }
+    setCount("msfm-import-sum-source",     s.sourceRows);
+    setCount("msfm-import-sum-parsed",     s.parsedRecords);
+    setCount("msfm-import-sum-matched",    s.matched);
+    setCount("msfm-import-sum-unmatched",  s.unmatched);
+    setCount("msfm-import-sum-review",     s.needsReview);
+    setCount("msfm-import-sum-invalid",    s.invalid);
+    setCount("msfm-import-sum-duplicates", s.duplicatesRemoved);
+    setCount("msfm-import-sum-export",     s.exportRows);
+    panel.classList.remove("hidden");
+  }
+
+  /**
+   * Set the import panel status message, reusing the host's message styling via
+   * setMessage when available (type: "", "success", "warn", "error").
+   * @param {string} text
+   * @param {string} [type]
+   */
+  function setImportMessage(text, type){
+    if (typeof setMessage === "function"){
+      setMessage("msfm-import-message", text, type || "");
+      return;
+    }
+    var el = document.getElementById("msfm-import-message");
+    if (el){ el.textContent = text; el.className = "message" + (type ? " " + type : ""); }
+  }
+
+  /**
+   * Compose the inline sport-mismatch notice from the pipeline warnings. Returns
+   * "" when there are no sport-mismatch warnings. Processing is always allowed to
+   * continue (Req 2.4).
+   * @param {Array<Object>} warnings
+   * @returns {string}
+   */
+  function sportMismatchNotice(warnings){
+    if (!Array.isArray(warnings) || warnings.length === 0) return "";
+    var mismatches = [];
+    for (var i = 0; i < warnings.length; i++){
+      var w = warnings[i];
+      if (w && w.type === "sport-mismatch"){
+        var where = (w.sourceRow != null) ? (" (row " + w.sourceRow + ")") : "";
+        mismatches.push("\u201C" + (w.headerSport != null ? w.headerSport : "?") + "\u201D" + where);
+      }
+    }
+    if (mismatches.length === 0) return "";
+    return " Sport mismatch: " + mismatches.length +
+      " league header" + (mismatches.length === 1 ? "" : "s") +
+      " did not match the selected sport (" + mismatches.join(", ") +
+      "); the selected sport was applied and processing continued.";
+  }
+
+  /**
+   * Process the currently selected file: read its bytes, call the pipeline, and
+   * render the preview + summary. On a read failure (ok:false) the existing
+   * preview is left unchanged and only a descriptive error is shown (Req 3.4).
+   * Returns a Promise so tests can await completion.
+   * @returns {Promise<void>}
+   */
+  function processImportFile(){
+    var sportSel = document.getElementById("msfm-import-sport");
+    var fileInput = document.getElementById("msfm-import-file");
+
+    var selectedSport = sportSel ? sportSel.value : "";
+    var file = (fileInput && fileInput.files && fileInput.files.length) ? fileInput.files[0] : null;
+
+    if (!selectedSport){
+      setImportMessage("Please choose a sport before processing a file.", "error");
+      return Promise.resolve();
+    }
+    if (!file){
+      setImportMessage("Please choose an .xls, .xlsx, or .csv file to process.", "error");
+      return Promise.resolve();
+    }
+
+    setImportMessage("Reading and processing " + file.name + "\u2026", "processing");
+
+    return readFileData(file).then(function(fileData){
+      var teamData = buildTeamDataSnapshot(selectedSport);
+      return runImportPipeline(fileData, file.name, selectedSport, teamData, {})
+        .then(function(result){
+          result = result || {};
+
+          // Read failure: leave the existing preview UNTOUCHED (Req 3.4). Do not
+          // replace importState; only surface the descriptive error.
+          if (result.ok === false){
+            setImportMessage(result.error || "The uploaded file could not be read.", "error");
+            return;
+          }
+
+          // Success: replace the whole preview model.
+          var records = Array.isArray(result.records) ? result.records : [];
+          var sourceRows = Array.isArray(result.sourceRows) ? result.sourceRows : [];
+          importState.records = records;
+          importState.sourceRows = sourceRows;
+          importState.warnings = Array.isArray(result.warnings) ? result.warnings : [];
+          importState.selectedSport = selectedSport;
+          importState.fileName = file.name;
+          importState.summary = buildImportSummary(records, sourceRows.length);
+
+          renderPreview();
+          renderSummary();
+          renderReviewPanel();
+
+          var mismatch = sportMismatchNotice(importState.warnings);
+          var base = "Processed " + file.name + ": " +
+            importState.summary.parsedRecords + " record" +
+            (importState.summary.parsedRecords === 1 ? "" : "s") + " parsed, " +
+            importState.summary.matched + " matched, " +
+            importState.summary.unmatched + " unmatched, " +
+            importState.summary.needsReview + " need review, " +
+            importState.summary.invalid + " invalid.";
+          setImportMessage(base + mismatch, mismatch ? "warn" : "success");
+        });
+    }).catch(function(err){
+      // A thrown read error also leaves the existing preview unchanged (Req 3.4).
+      setImportMessage("Could not read the file: " +
+        (err && err.message ? err.message : String(err)), "error");
+    });
+  }
+
+  /**
+   * Attach the Process File click handler and the "Show unmatched fixtures"
+   * toggle. The toggle flips the visibility flag and re-renders (Req 10.5).
+   */
+  function wireImportHandlers(){
+    var processBtn = document.getElementById("msfm-import-process");
+    if (processBtn && !processBtn.__msfmWired){
+      processBtn.__msfmWired = true;
+      processBtn.addEventListener("click", function(){ processImportFile(); });
+    }
+
+    var toggle = document.getElementById("msfm-import-show-unmatched");
+    if (toggle && !toggle.__msfmWired){
+      toggle.__msfmWired = true;
+      importState.showUnmatched = toggle.checked === true;
+      toggle.addEventListener("change", function(){
+        importState.showUnmatched = toggle.checked === true;
+        renderPreview();
+      });
+    }
+
+    // Task 16.1: Confirm Import, Clear, and the two download buttons. Each is
+    // guarded against double-binding exactly like the handlers above.
+    var confirmBtn = document.getElementById("msfm-import-confirm");
+    if (confirmBtn && !confirmBtn.__msfmWired){
+      confirmBtn.__msfmWired = true;
+      confirmBtn.addEventListener("click", function(){ handleConfirmImport(); });
+    }
+
+    var clearBtn = document.getElementById("msfm-import-clear");
+    if (clearBtn && !clearBtn.__msfmWired){
+      clearBtn.__msfmWired = true;
+      clearBtn.addEventListener("click", function(){ clearImport(); });
+    }
+
+    var dlXlsxBtn = document.getElementById("msfm-import-dl-xlsx");
+    if (dlXlsxBtn && !dlXlsxBtn.__msfmWired){
+      dlXlsxBtn.__msfmWired = true;
+      dlXlsxBtn.addEventListener("click", function(){ downloadImport("xlsx"); });
+    }
+
+    var dlCsvBtn = document.getElementById("msfm-import-dl-csv");
+    if (dlCsvBtn && !dlCsvBtn.__msfmWired){
+      dlCsvBtn.__msfmWired = true;
+      dlCsvBtn.addEventListener("click", function(){ downloadImport("csv"); });
+    }
+  }
+
+  // Expose the preview-model accessor and the re-render hook for tests and for
+  // tasks 15.1 (review) and 16.1 (confirm/clear).
+  attach("getImportState", getImportState);
+  attach("renderPreview", renderPreview);
+  attach("buildTeamDataSnapshot", buildTeamDataSnapshot);
+  attach("processImportFile", processImportFile);
+
+  // ==========================================================================
+  // Task 15.1 - Needs Review correction workflow (Requirements 15.1-15.6)
+  //
+  // The pure resolution function resolveNeedsReview(record, {home, away},
+  // matchList) applies the operator-chosen Home/Away to a Needs Review record
+  // and reclassifies it (Req 15.5, 15.6): Matched when the resolved record
+  // matches the match list via matchingExistingFixtures, otherwise Manually
+  // Corrected. It is DOM-independent so Property 17 tests can call it directly.
+  //
+  // renderReviewPanel() renders one entry per Needs Review record inside
+  // #msfm-import-review, showing the ORIGINAL source text (Req 15.1) and three
+  // correction affordances (Req 15.2-15.4):
+  //   - a boundary control over the source Home/Away segment tokens (set where
+  //     Home ends / Away begins),
+  //   - Home/Away selects populated from the known team list for the sport,
+  //   - free-text Home/Away inputs for a manual correction.
+  // On Resolve the chosen Home/Away are applied via resolveNeedsReview, the
+  // summary is recomputed (buildImportSummary) and the preview + review panel
+  // re-render. The panel is revealed only while at least one Needs Review
+  // record remains, and hidden otherwise. All text is rendered via textContent
+  // / value assignment, never innerHTML, so it is XSS-safe.
+  // ==========================================================================
+
+  /**
+   * Apply the operator-chosen Home/Away to a Needs Review record and reclassify
+   * it. Pure with respect to the DOM: it mutates only the given record's
+   * Home/Away/Status (and clears reason on success) and returns the new Status.
+   *
+   * @param {Object} record   A PreviewRecord (its Home/Away/Status are updated).
+   * @param {{home?: string, away?: string}} resolution The chosen names.
+   * @param {Array<Object>} matchList The match-list snapshot to reclassify against.
+   * @returns {string} The new Status: "Matched" or "Manually Corrected".
+   */
+  function resolveNeedsReview(record, resolution, matchList){
+    if (record == null || typeof record !== "object") return "";
+    var res = resolution || {};
+    if (res.home != null) record.Home = String(res.home);
+    if (res.away != null) record.Away = String(res.away);
+
+    var list = Array.isArray(matchList) ? matchList : [];
+    var outcome = matchingExistingFixtures(record, list);
+    var newStatus = (outcome && outcome.matched === true) ? "Matched" : "Manually Corrected";
+
+    record.Status = newStatus;
+    record.needsReview = false;
+    record.reason = "";
+    return newStatus;
+  }
+
+  attach("resolveNeedsReview", resolveNeedsReview);
+
+  /**
+   * Split a source segment / line into whitespace-delimited display tokens,
+   * preserving the original spellings (accents, punctuation, numbers). Used to
+   * drive the Home/Away boundary control.
+   * @param {string} text
+   * @returns {Array<string>}
+   */
+  function reviewTokens(text){
+    var s = String(text == null ? "" : text).trim();
+    if (s === "") return [];
+    return s.split(/\s+/);
+  }
+
+  /**
+   * Compose a sorted list of known team display names for the selected sport,
+   * reusing collectKnownTeams (match list + teamMappings aliases).
+   * @param {string} selectedSport
+   * @param {{matchList?: Array<Object>, aliases?: Array<Object>}} teamData
+   * @returns {Array<string>}
+   */
+  function knownTeamNameList(selectedSport, teamData){
+    var names = [];
+    try {
+      var map = collectKnownTeams(selectedSport, teamData);
+      map.forEach(function(display){ names.push(display); });
+    } catch (e){ names = []; }
+    names.sort(function(a, b){ return String(a).localeCompare(String(b)); });
+    return names;
+  }
+
+  /**
+   * Build a labelled control row (label + control element) using the host's
+   * existing styling conventions. Returns the wrapper div.
+   * @param {string} labelText
+   * @param {HTMLElement} control
+   * @returns {HTMLElement}
+   */
+  function reviewField(labelText, control){
+    var wrap = document.createElement("div");
+    wrap.style.display = "flex";
+    wrap.style.flexDirection = "column";
+    wrap.style.gap = "4px";
+    var label = document.createElement("label");
+    label.textContent = labelText;
+    label.style.fontWeight = "650";
+    label.style.fontSize = "12px";
+    wrap.appendChild(label);
+    wrap.appendChild(control);
+    return wrap;
+  }
+
+  /**
+   * Populate a <select> with an empty first option plus the supplied display
+   * names. All option text is set via textContent (XSS-safe).
+   * @param {HTMLSelectElement} sel
+   * @param {Array<string>} names
+   * @param {string} placeholder
+   */
+  function fillTeamSelect(sel, names, placeholder){
+    sel.replaceChildren();
+    var blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = placeholder || "\u2014 select \u2014";
+    sel.appendChild(blank);
+    for (var i = 0; i < names.length; i++){
+      var opt = document.createElement("option");
+      opt.value = names[i];
+      opt.textContent = names[i];
+      sel.appendChild(opt);
+    }
+  }
+
+  /**
+   * Render the Needs Review panel (#msfm-import-review) from the current module
+   * state. One entry per Needs Review record; reveals the panel only when at
+   * least one such record exists, hides it otherwise. Resolving an entry calls
+   * resolveNeedsReview, recomputes the summary and re-renders.
+   */
+  function renderReviewPanel(){
+    var panel = document.getElementById("msfm-import-review");
+    if (!panel) return;
+    panel.replaceChildren();
+
+    var records = Array.isArray(importState.records) ? importState.records : [];
+    var reviewRecords = [];
+    for (var i = 0; i < records.length; i++){
+      if (records[i] && records[i].Status === "Needs Review") reviewRecords.push(records[i]);
+    }
+
+    if (reviewRecords.length === 0){
+      panel.classList.add("hidden");
+      return;
+    }
+
+    var teamData = buildTeamDataSnapshot(importState.selectedSport);
+    var knownNames = knownTeamNameList(importState.selectedSport, teamData);
+
+    var head = document.createElement("div");
+    head.className = "table-head";
+    var h = document.createElement("h3");
+    h.style.margin = "0";
+    h.textContent = "Needs Review \u2014 resolve Home / Away";
+    var c = document.createElement("span");
+    c.className = "count";
+    c.textContent = reviewRecords.length + " record" + (reviewRecords.length === 1 ? "" : "s") + " to resolve";
+    head.appendChild(h);
+    head.appendChild(c);
+    panel.appendChild(head);
+
+    for (var r = 0; r < reviewRecords.length; r++){
+      panel.appendChild(buildReviewEntry(reviewRecords[r], knownNames, teamData.matchList));
+    }
+
+    panel.classList.remove("hidden");
+  }
+
+  /**
+   * Build a single Needs Review entry card with the three correction
+   * affordances (boundary, selects, free-text) and a Resolve button.
+   * @param {Object} record
+   * @param {Array<string>} knownNames
+   * @param {Array<Object>} matchList
+   * @returns {HTMLElement}
+   */
+  function buildReviewEntry(record, knownNames, matchList){
+    var card = document.createElement("div");
+    card.className = "panel";
+    card.style.marginTop = "10px";
+    card.style.padding = "12px";
+
+    // (15.1) Original source text.
+    var src = document.createElement("div");
+    src.style.fontFamily = "monospace";
+    src.style.fontSize = "12px";
+    src.style.marginBottom = "8px";
+    src.style.wordBreak = "break-word";
+    var srcLabel = document.createElement("strong");
+    srcLabel.textContent = "Source: ";
+    src.appendChild(srcLabel);
+    var srcText = document.createElement("span");
+    srcText.textContent = String(record.sourceText == null ? "" : record.sourceText);
+    src.appendChild(srcText);
+    card.appendChild(src);
+
+    if (record.reason){
+      var reasonEl = document.createElement("div");
+      reasonEl.className = "hint";
+      reasonEl.style.marginBottom = "8px";
+      reasonEl.textContent = "Reason: " + String(record.reason);
+      card.appendChild(reasonEl);
+    }
+
+    var grid = document.createElement("div");
+    grid.style.display = "flex";
+    grid.style.flexWrap = "wrap";
+    grid.style.gap = "10px";
+    grid.style.alignItems = "flex-end";
+
+    // (15.4) Free-text Home / Away, prefilled with current values.
+    var homeInput = document.createElement("input");
+    homeInput.type = "text";
+    homeInput.value = String(record.Home == null ? "" : record.Home);
+    var awayInput = document.createElement("input");
+    awayInput.type = "text";
+    awayInput.value = String(record.Away == null ? "" : record.Away);
+
+    // (15.3) Known-team selects: picking a team fills the matching free-text input.
+    var homeSelect = document.createElement("select");
+    fillTeamSelect(homeSelect, knownNames, "\u2014 pick Home \u2014");
+    homeSelect.addEventListener("change", function(){
+      if (homeSelect.value){ homeInput.value = homeSelect.value; }
+    });
+    var awaySelect = document.createElement("select");
+    fillTeamSelect(awaySelect, knownNames, "\u2014 pick Away \u2014");
+    awaySelect.addEventListener("change", function(){
+      if (awaySelect.value){ awayInput.value = awaySelect.value; }
+    });
+
+    // (15.2) Boundary control over the source Home/Away segment tokens: choose
+    // the token index where Away begins; everything before is Home, the rest is
+    // Away. Derived from the original segment (sourceText) tokens.
+    var tokens = reviewTokens(record.sourceText);
+    var boundarySelect = document.createElement("select");
+    var noneOpt = document.createElement("option");
+    noneOpt.value = "";
+    noneOpt.textContent = "\u2014 no split \u2014";
+    boundarySelect.appendChild(noneOpt);
+    for (var t = 1; t < tokens.length; t++){
+      var bopt = document.createElement("option");
+      bopt.value = String(t);
+      bopt.textContent = tokens.slice(0, t).join(" ") + "  |  " + tokens.slice(t).join(" ");
+      boundarySelect.appendChild(bopt);
+    }
+    boundarySelect.addEventListener("change", function(){
+      var idx = parseInt(boundarySelect.value, 10);
+      if (!isNaN(idx) && idx > 0 && idx < tokens.length){
+        homeInput.value = tokens.slice(0, idx).join(" ");
+        awayInput.value = tokens.slice(idx).join(" ");
+      }
+    });
+
+    grid.appendChild(reviewField("Split boundary", boundarySelect));
+    grid.appendChild(reviewField("Pick Home", homeSelect));
+    grid.appendChild(reviewField("Pick Away", awaySelect));
+    grid.appendChild(reviewField("Home", homeInput));
+    grid.appendChild(reviewField("Away", awayInput));
+
+    var resolveBtn = document.createElement("button");
+    resolveBtn.type = "button";
+    resolveBtn.className = "primary";
+    resolveBtn.textContent = "Resolve";
+    resolveBtn.addEventListener("click", function(){
+      var home = homeInput.value != null ? homeInput.value.trim() : "";
+      var away = awayInput.value != null ? awayInput.value.trim() : "";
+      if (home === "" || away === ""){
+        setImportMessage("Enter both a Home and an Away value before resolving.", "error");
+        return;
+      }
+      var newStatus = resolveNeedsReview(record, { home: home, away: away }, matchList);
+      // Recompute the summary from the live model and re-render everything.
+      importState.summary = buildImportSummary(
+        importState.records,
+        Array.isArray(importState.sourceRows) ? importState.sourceRows.length : 0
+      );
+      renderPreview();
+      renderSummary();
+      renderReviewPanel();
+      setImportMessage("Resolved \u201C" + home + "\u201D vs \u201C" + away +
+        "\u201D \u2192 " + newStatus + ".", "success");
+    });
+    grid.appendChild(reviewField("\u00A0", resolveBtn));
+
+    card.appendChild(grid);
+    return card;
+  }
+
+  attach("renderReviewPanel", renderReviewPanel);
+
+  // ==========================================================================
+  // Task 16.1 - Confirm Import, duplicate removal, Clear, and downloads
+  // (Requirements 11.3, 11.4, 17.2, 17.3, 17.4).
+  //
+  // This is the only point in the whole feature where duplicates are actually
+  // removed (Req 11.3) and the only point where anything is persisted (Req
+  // 17.2). Everything upstream operates on the in-memory preview model and
+  // never touches storage.
+  //
+  // Persistence path: the host backs its data with a localStorage-swappable
+  // STORE and a low-level safeSet(key, value) helper. safeSet writes through
+  // STORE (which the automated test harness replaces with
+  // window.__MSFM_TEST_STORE when the page is opened with "#msfm-test"), returns
+  // true on success, and on failure surfaces the host's existing
+  // storage-unavailable notice and returns false. We reuse that exact path:
+  //   - a successful Confirm Import writes the final export-eligible records to
+  //     a dedicated key (IMPORT_STORAGE_KEY) via safeSet;
+  //   - a failed write leaves the preview intact (Req 17.3) and relies on the
+  //     host notice that safeSet already rendered.
+  // Persistence is routed through an injectable persist function
+  // (importPersist) so tests can confirm STORE is unchanged before confirm and
+  // written after, without needing a real browser download/storage surface.
+  //
+  // Clear discards the preview, summary, and uploaded file WITHOUT persisting
+  // anything (Req 17.4): it resets importState, clears the file input value,
+  // and re-renders the (now empty) preview, summary, and review panel.
+  //
+  // Downloads (Download Excel / Download CSV) project the CURRENT preview to the
+  // export-eligible rows (filterExportEligible) and call exportingWorkbook with
+  // the selected sport. A download does NOT dedup or mutate the in-memory
+  // preview; it only projects eligible rows for the file.
+  // ==========================================================================
+
+  // Dedicated storage key for confirmed imported fixtures. Kept separate from
+  // the host's own keys so a confirmed import never overwrites the existing
+  // 7-day collection, mappings, or history (Req 1.3 non-regression).
+  var IMPORT_STORAGE_KEY = "msfm_imported_fixtures_v1";
+
+  /**
+   * Injectable persistence hook (Req 17.2, 17.3). Defaults to the host safeSet
+   * when available, which writes through STORE (test harness swaps STORE for
+   * window.__MSFM_TEST_STORE) and surfaces the storage-unavailable notice on
+   * failure. Tests can reassign window.__MSFM.import.importPersist to observe
+   * writes. Returns true on success, false on failure (never throws).
+   *
+   * @param {string} key
+   * @param {string} value Serialized JSON payload.
+   * @returns {boolean}
+   */
+  function importPersist(key, value){
+    try {
+      if (typeof safeSet === "function") return safeSet(key, value) === true;
+      // Fallback for isolated harnesses without the host safeSet: write through
+      // STORE directly if present, mirroring safeSet's success/failure contract.
+      if (typeof STORE !== "undefined" && STORE && typeof STORE.setItem === "function"){
+        STORE.setItem(key, value);
+        return true;
+      }
+    } catch (e){ /* fall through to false */ }
+    return false;
+  }
+
+  /**
+   * Build the final, persist-ready records from the current preview model:
+   * remove surplus duplicate copies (Req 11.3), then keep only export-eligible
+   * rows (Matched / Unmatched / Manually Corrected), projected to the strict
+   * seven output columns. The in-memory preview is NOT mutated here beyond the
+   * Status marks already set by detectingDuplicates upstream; removeDuplicates
+   * returns a new array and filterExportEligible/projectExportRecord are pure.
+   *
+   * @param {Array<Object>} records The current preview records.
+   * @returns {{finalRecords:Array<Object>, exportRecords:Array<Object>,
+   *   duplicatesRemoved:number}}
+   */
+  function buildFinalImportRecords(records){
+    var list = Array.isArray(records) ? records : [];
+    var deduped = removeDuplicates(list); // { records, removedCount }
+    var eligible = filterExportEligible(deduped.records);
+    var exportRecords = eligible.map(projectExportRecord);
+    return {
+      finalRecords: eligible,
+      exportRecords: exportRecords,
+      duplicatesRemoved: deduped.removedCount
+    };
+  }
+
+  /**
+   * Confirm Import (Req 11.3, 11.4, 17.2, 17.3). Applies removeDuplicates to the
+   * current preview records (the ONLY point duplicates are actually removed),
+   * builds the final export-eligible records, and persists them via the
+   * injectable importPersist (host safeSet -> STORE). Nothing persists before
+   * this call (Req 17.2). On a storage failure the preview is RETAINED and the
+   * host's existing storage-unavailable notice (rendered by safeSet) stands
+   * (Req 17.3).
+   *
+   * Pure with respect to the DOM: callable from tests. Returns a result summary
+   * object so Property 18 and example tests can assert behavior.
+   *
+   * @returns {{persisted:boolean, duplicatesDetected:number,
+   *   duplicatesRemoved:number, exportRows:number, ok:boolean, error?:string,
+   *   key:string}}
+   */
+  function confirmImport(){
+    var records = Array.isArray(importState.records) ? importState.records : [];
+
+    // Count duplicates currently detected in the preview (surplus copies marked
+    // "Duplicate" by detectingDuplicates upstream) for the confirm message (Req
+    // 11.4). This count is taken BEFORE removal so it reflects what was found.
+    var duplicatesDetected = 0;
+    for (var i = 0; i < records.length; i++){
+      if (records[i] && records[i].Status === "Duplicate") duplicatesDetected++;
+    }
+
+    var built = buildFinalImportRecords(records);
+
+    // Serialize the strict seven-column projection (no Status / non-output
+    // fields) so the persisted payload matches the export projection exactly.
+    var payload = JSON.stringify(built.exportRecords);
+    var ok = importPersist(IMPORT_STORAGE_KEY, payload) === true;
+
+    var result = {
+      persisted: ok,
+      duplicatesDetected: duplicatesDetected,
+      duplicatesRemoved: built.duplicatesRemoved,
+      exportRows: built.exportRecords.length,
+      ok: ok,
+      key: IMPORT_STORAGE_KEY
+    };
+    if (!ok){
+      result.error = "Browser storage is unavailable; the import was not saved. The preview is kept so you can export it.";
+    }
+    return result;
+  }
+
+  attach("buildFinalImportRecords", buildFinalImportRecords);
+  attach("confirmImport", confirmImport);
+  attach("importPersist", importPersist);
+
+  /**
+   * Clear the import panel (Req 17.4). Discards the preview, summary, and
+   * uploaded file WITHOUT persisting anything: resets importState in place
+   * (preserving the showUnmatched toggle), clears the file input value, and
+   * re-renders the (now empty) preview, summary, and review panel so nothing
+   * lingers on screen. Returns nothing is persisted.
+   */
+  function clearImport(){
+    importState.records = [];
+    importState.summary = null;
+    importState.selectedSport = "";
+    importState.fileName = "";
+    importState.sourceRows = [];
+    importState.warnings = [];
+    // showUnmatched intentionally preserved so the toggle state survives a Clear.
+
+    var fileInput = document.getElementById("msfm-import-file");
+    if (fileInput){
+      try { fileInput.value = ""; } catch (e){ /* some browsers guard this */ }
+    }
+
+    // Re-render: preview shows its empty state, summary hides, review hides.
+    renderPreview();
+    var summaryPanel = document.getElementById("msfm-import-summary");
+    if (summaryPanel) summaryPanel.classList.add("hidden");
+    renderReviewPanel();
+
+    setImportMessage("Cleared the import preview. Nothing was saved.", "");
+  }
+
+  attach("clearImport", clearImport);
+
+  /**
+   * Download the current preview as an export file (Req 18, invoked by the
+   * Download Excel / Download CSV buttons). Projects the CURRENT preview to the
+   * export-eligible rows (filterExportEligible) and hands them to
+   * exportingWorkbook with the selected sport. Does NOT remove duplicates from
+   * the in-memory preview; it only projects eligible rows for the file.
+   *
+   * @param {("xlsx"|"csv")} format
+   * @returns {Object} The exportingWorkbook result (for tests).
+   */
+  function downloadImport(format){
+    var records = Array.isArray(importState.records) ? importState.records : [];
+    var eligible = filterExportEligible(records);
+    if (eligible.length === 0){
+      setImportMessage("There are no export-eligible fixtures to download yet.", "error");
+      return { ok: false, downloaded: false, error: "no-eligible-records", records: [] };
+    }
+    var result = exportingWorkbook(eligible, format, importState.selectedSport, { download: true });
+    if (result && result.ok === false && result.error){
+      setImportMessage(result.error, "error");
+    } else {
+      var label = (String(format).toLowerCase() === "csv") ? "CSV" : "Excel";
+      setImportMessage("Downloaded " + eligible.length + " fixture" +
+        (eligible.length === 1 ? "" : "s") + " as " + label + ".", "success");
+    }
+    return result;
+  }
+
+  attach("downloadImport", downloadImport);
+
+  /**
+   * Handle a Confirm Import button click: run confirmImport and surface the
+   * duplicate detected/removed counts and the outcome in the message area (Req
+   * 11.4, 17.3). On success the preview is kept too (confirming does not clear
+   * the screen); on failure the host's storage-unavailable notice already
+   * rendered by safeSet stands and the preview is retained.
+   */
+  function handleConfirmImport(){
+    var records = Array.isArray(importState.records) ? importState.records : [];
+    if (records.length === 0){
+      setImportMessage("Process a file before confirming the import.", "error");
+      return;
+    }
+    var res = confirmImport();
+    var dupMsg = res.duplicatesDetected + " duplicate" +
+      (res.duplicatesDetected === 1 ? "" : "s") + " detected, " +
+      res.duplicatesRemoved + " removed.";
+    if (res.ok){
+      setImportMessage("Import confirmed and saved: " + res.exportRows +
+        " fixture" + (res.exportRows === 1 ? "" : "s") + " stored. " + dupMsg, "success");
+    } else {
+      setImportMessage((res.error || "The import could not be saved.") +
+        " " + dupMsg + " The preview has been kept.", "error");
+    }
+  }
+
+
+
+
+
+  // ==========================================================================
+  // UI shell bootstrap (Task 14.1): populate the import sport selector from the
+  // host SPORTS list and render the shell with stable element IDs. This only
+  // ADDS behavior for the new panel; it never touches existing controls.
+  // Task 14.2 extends it to wire the Process File + toggle handlers.
+  // Requirements: 1.1, 2.1, 13.3, 17.1, 10.4, 10.5, 14.1
+  // ==========================================================================
+  function initImportUI(){
+    var sel = document.getElementById("msfm-import-sport");
+    if (!sel) return; // panel not present (e.g. isolated test harness)
+    // Prefer the host helper so the option idiom matches the rest of the page.
+    if (typeof fillSportSelect === "function" && typeof SPORTS !== "undefined"){
+      fillSportSelect(sel);
+    } else if (typeof SPORTS !== "undefined" && Array.isArray(SPORTS)){
+      sel.replaceChildren();
+      for (var k = 0; k < SPORTS.length; k++){
+        var opt = document.createElement("option");
+        opt.value = SPORTS[k];
+        opt.textContent = SPORTS[k];
+        sel.appendChild(opt);
+      }
+    }
+    // Task 14.2: wire the Process File button and the Show-unmatched toggle.
+    wireImportHandlers();
+  }
+
+  // Run after the DOM is ready so the panel markup exists. If the document has
+  // already finished parsing (this script is at the end of <body>), run now.
+  if (document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", initImportUI);
+  } else {
+    initImportUI();
+  }
+
+})();
 </script>
 </body>
 </html>

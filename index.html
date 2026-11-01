@@ -1633,9 +1633,20 @@ const BulkTab = {
     </div>`;
 
     if (news.length) {
+      const extraHead = p.type==='team' ? `<th>Match</th><th>Review</th>` : ``;
       html += `<div style="font-size:12.5px;font-weight:700;margin:10px 0 6px;color:var(--success);">New entries</div>
-      <div class="table-wrap"><table><thead><tr><th class="checkbox-cell"><input type="checkbox" checked onchange="BulkTab.toggleAll(this.checked)"></th>${cols.map(c=>`<th>${c[1]}</th>`).join('')}</tr></thead><tbody>`;
-      p.rows.forEach((r,i)=>{ if (r.isDup) return; html += `<tr><td class="checkbox-cell"><input type="checkbox" ${r.checked?'checked':''} onchange="BulkTab.toggleRow(${i}, this.checked)"></td>${cols.map(c=>`<td>${escapeHtml(r.data[c[0]])}</td>`).join('')}</tr>`; });
+      <div class="table-wrap"><table><thead><tr><th class="checkbox-cell"><input type="checkbox" checked onchange="BulkTab.toggleAll(this.checked)"></th>${cols.map(c=>`<th>${c[1]}</th>`).join('')}${extraHead}</tr></thead><tbody>`;
+      p.rows.forEach((r,i)=>{ if (r.isDup) return;
+        let extraCells = ``;
+        if (p.type==='team'){
+          const prov = this.providerTeam(r.data);
+          const score = this.fuzzyScore(r.data.bcm_team, prov.value);
+          const col = score>=90 ? '#16a34a' : score>=70 ? '#ca8a04' : '#dc2626';
+          const badge = prov.value ? `<span style="font-weight:700;color:${col}">${score}%</span>` : `<span style="color:var(--text-faint)">\u2014</span>`;
+          extraCells = `<td style="text-align:center">${badge}</td><td style="text-align:center"><button type="button" class="btn btn-sm btn-ghost" title="Copy review prompt for this fixture" onclick="BulkTab.copyPrompt(${i}, this)">\uD83D\uDCCB Copy</button></td>`;
+        }
+        html += `<tr><td class="checkbox-cell"><input type="checkbox" ${r.checked?'checked':''} onchange="BulkTab.toggleRow(${i}, this.checked)"></td>${cols.map(c=>`<td>${escapeHtml(r.data[c[0]])}</td>`).join('')}${extraCells}</tr>`;
+      });
       html += `</tbody></table></div>`;
     }
     if (dups.length) {
@@ -1645,6 +1656,49 @@ const BulkTab = {
       html += `</tbody></table></div>`;
     }
     document.getElementById('bulk-preview').innerHTML = html;
+  },
+  // --- Fuzzy team-name matching + one-click review-prompt copy (team bulk upload) ---
+  normTeam(s){
+    return String(s==null?'':s)
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/\(women\)|\bwomen\b|\bw\b/g,' ')
+      .replace(/[^a-z0-9]+/g,' ')
+      .replace(/\s+/g,' ').trim();
+  },
+  fuzzyScore(a, b){
+    const x = this.normTeam(a), y = this.normTeam(b);
+    if (!x || !y) return 0;
+    if (x === y) return 100;
+    const m = x.length, n = y.length;
+    const d = Array.from({length:m+1}, (_,i)=>[i].concat(new Array(n).fill(0)));
+    for (let j=0;j<=n;j++) d[0][j]=j;
+    for (let i=1;i<=m;i++){
+      for (let j=1;j<=n;j++){
+        const cost = x[i-1]===y[j-1] ? 0 : 1;
+        d[i][j] = Math.min(d[i-1][j]+1, d[i][j-1]+1, d[i-1][j-1]+cost);
+      }
+    }
+    const dist = d[m][n], maxLen = Math.max(m,n);
+    return Math.round((1 - dist/maxLen) * 100);
+  },
+  isNAish(v){ const s = String(v==null?'':v).trim().toLowerCase(); return s==='' || s==='n/a' || s==='na' || s==='-'; },
+  providerTeam(data){
+    if (!this.isNAish(data.betradar_team)) return { label:'BR TEAM', value:String(data.betradar_team).trim() };
+    if (!this.isNAish(data.bg_team))       return { label:'BG TEAM', value:String(data.bg_team).trim() };
+    return { label:'BR TEAM', value:'' };
+  },
+  copyPrompt(i, btn){
+    const r = state.bulkParsed && state.bulkParsed.rows[i];
+    if (!r) return;
+    const bcm = String(r.data.bcm_team==null?'':r.data.bcm_team).trim();
+    const prov = this.providerTeam(r.data);
+    const prompt = "Please review the image of the data mapping table. Confirm if the entries listed under 'BCM TEAM' ("
+      + bcm + ") and '" + prov.label + "' (" + prov.value + ") refer to the exact same sports team entity. "
+      + "Provide a brief explanation supporting your conclusion.";
+    const done = ()=>{ if(btn){ const t=btn.textContent; btn.textContent='\u2713 Copied'; setTimeout(()=>{ btn.textContent=t; }, 1400); } };
+    const fallback = ()=>{ const ta=document.createElement('textarea'); ta.value=prompt; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); }catch(e){} document.body.removeChild(ta); done(); };
+    if (navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(prompt).then(done, fallback); } else { fallback(); }
   },
   toggleRow(i, checked){ state.bulkParsed.rows[i].checked = checked; },
   toggleAll(checked){ state.bulkParsed.rows.forEach(r=>{ if(!r.isDup) r.checked = checked; }); this.renderPreview(); },
