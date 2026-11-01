@@ -1709,9 +1709,11 @@ const BulkTab = {
     if (!r) return;
     const bcm = String(r.data.bcm_team==null?'':r.data.bcm_team).trim();
     const prov = this.providerTeam(r.data);
-    const prompt = "Please review the image of the data mapping table. Confirm if the entries listed under 'BCM TEAM' ("
-      + bcm + ") and '" + prov.label + "' (" + prov.value + ") refer to the exact same sports team entity. "
-      + "Provide a brief explanation supporting your conclusion.";
+    const prompt = "Please review the entries listed under 'BCM TEAM' ("
+      + bcm + ") and '" + prov.label + "' (" + prov.value + ") from the data mapping table. "
+      + "Perform a neutral analysis to determine whether these two strings refer to the exact same sports team entity "
+      + "or if they represent two different teams entirely. Provide a brief explanation detailing the branding, "
+      + "geographical, or structural data that supports your conclusion.";
     const done = ()=>{ if(btn){ const t=btn.textContent; btn.textContent='\u2713 Copied'; setTimeout(()=>{ btn.textContent=t; }, 1400); } };
     const fallback = ()=>{ const ta=document.createElement('textarea'); ta.value=prompt; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); }catch(e){} document.body.removeChild(ta); done(); };
     if (navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(prompt).then(done, fallback); } else { fallback(); }
