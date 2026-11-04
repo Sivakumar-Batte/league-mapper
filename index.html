@@ -519,6 +519,11 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
     </div>
 
     <!-- ---------- MULTI-SPORT FIXTURES (embedded standalone tool) ---------- -->
+    <!-- ---------- PRIORITY FIXTURES (PLFM, embedded standalone tool) ---------- -->
+    <div class="tab-panel" data-panel="plfm">
+      <iframe id="plfm-frame" src="about:blank" data-src="priority-league-fixture-manager.html" style="width:100%;height:calc(100vh - 160px);min-height:700px;border:1px solid var(--border);border-radius:10px;background:#fff;"></iframe>
+    </div>
+
     <div class="tab-panel" data-panel="fixtures">
       <iframe id="fixtures-frame" src="about:blank" data-src="multi-sport-fixtures-manager.html" style="width:100%;height:calc(100vh - 160px);min-height:700px;border:1px solid var(--border);border-radius:10px;background:#fff;"></iframe>
     </div>
@@ -836,6 +841,7 @@ const UI = {
     if (id==='dashboard') DashboardTab.render();
     if (id==='mappings') MappingsTab.enter(subView);
     if (id==='lbc') { const f = document.getElementById('lbc-frame'); if (f && f.src.indexOf('lbc-matcher.html') === -1) f.src = f.dataset.src; }
+    if (id==='plfm') { const f = document.getElementById('plfm-frame'); if (f && f.src.indexOf('priority-league-fixture-manager.html') === -1) f.src = f.dataset.src; }
     if (id==='fixtures') { const f = document.getElementById('fixtures-frame'); if (f && f.src.indexOf('multi-sport-fixtures-manager.html') === -1) f.src = f.dataset.src; }
     if (id==='training') TrainingTab.enter();
     if (id==='history') HistoryTab.render();
